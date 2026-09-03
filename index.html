@@ -53,7 +53,13 @@
   .cat-amt{font-weight:600;font-size:14.5px;white-space:nowrap}
   .caret{color:var(--ink-3);font-size:11px;margin-left:5px}
   .track{height:3px;background:var(--line-2);border-radius:2px;margin-top:8px;overflow:hidden}
+  .track{position:relative}
   .track i{display:block;height:100%;border-radius:2px}
+  .track u{position:absolute;top:-2px;width:2px;height:calc(100% + 4px);background:var(--ink-3);text-decoration:none}
+  .pace{position:relative;height:9px;background:#DFE4DE;border-radius:5px;overflow:visible;margin:9px 0 7px}
+  .pace i{display:block;height:100%;border-radius:5px}
+  .pace u{position:absolute;top:-3px;width:2px;height:15px;background:var(--ink);text-decoration:none}
+  .tick-legend{display:inline-block;width:2px;height:11px;background:var(--ink-3);vertical-align:-1px;margin-right:5px}
   .cat-meta{font-size:12px;color:var(--ink-3);margin-top:5px;display:flex;justify-content:space-between;gap:8px}
   .over{color:var(--amber);font-weight:500}
   .sub{display:flex;justify-content:space-between;gap:10px;padding:9px 14px 9px 42px;background:#F7F9F6;border-bottom:1px solid var(--line-2);font-size:13.5px}
@@ -145,24 +151,24 @@
 /* ==================== CÂY NHÓM — mã cố định vĩnh viễn ==================== */
 const GROUPS=[
  {id:'an', k:'chi', n:'Ăn uống', c:'#0E6B5C', subs:[['an_sang','Ăn sáng'],['an_ngoai','Ăn ngoài'],['an_cafe','Cà phê, trà chiều']]},
- {id:'cho',k:'chi', n:'Chợ & siêu thị', c:'#4E8C5A', subs:[['cho_vat','Ăn vặt'],['cho_giavi','Gia vị'],['cho_mi','Mì gói']]},
+ {id:'cho',sn:'Chợ, siêu thị', k:'chi', n:'Chợ & siêu thị', c:'#4E8C5A', subs:[['cho_vat','Ăn vặt'],['cho_giavi','Gia vị'],['cho_mi','Mì gói']]},
  {id:'di', k:'chi', n:'Di chuyển', c:'#2F7A93', subs:[['di_xang','Xăng xe'],['di_grab','Grab, taxi'],['di_guixe','Gửi xe'],['di_suaxe','Sửa xe'],['di_ve','Vé xe, vé máy bay']]},
- {id:'hd', k:'chi', n:'Hóa đơn & tiện ích', c:'#3D5A80', subs:[['hd_dt','Điện thoại'],['hd_ai','A.I']]},
- {id:'qa', k:'chi', n:'Quần áo & giày dép', c:'#7A5C9E', subs:[['qa_ao','Quần áo'],['qa_giay','Giày dép'],['qa_tui','Túi xách, phụ kiện']]},
- {id:'gdu',k:'chi', n:'Đồ gia dụng', c:'#5B6E8C', subs:[]},
- {id:'ld', k:'chi', n:'Làm đẹp & chăm sóc bản thân', c:'#B4557A', subs:[]},
+ {id:'hd', sn:'Hóa đơn', k:'chi', n:'Hóa đơn & tiện ích', c:'#3D5A80', subs:[['hd_dt','Điện thoại'],['hd_ai','A.I']]},
+ {id:'qa', sn:'Quần áo', k:'chi', n:'Quần áo & giày dép', c:'#7A5C9E', subs:[['qa_ao','Quần áo'],['qa_giay','Giày dép'],['qa_tui','Túi xách, phụ kiện']]},
+ {id:'gdu',sn:'Gia dụng', k:'chi', n:'Đồ gia dụng', c:'#5B6E8C', subs:[]},
+ {id:'ld', sn:'Làm đẹp', k:'chi', n:'Làm đẹp & chăm sóc bản thân', c:'#B4557A', subs:[]},
  {id:'sk', k:'chi', n:'Sức khỏe', c:'#C05A55', subs:[['sk_thuoc','Thuốc'],['sk_tpcn','Thực phẩm chức năng'],['sk_kham','Khám bệnh']]},
  {id:'gt', k:'chi', n:'Giải trí', c:'#C8792B', subs:[['gt_dichoi','Đi chơi, du lịch'],['gt_phim','Phim, sách, game'],['gt_ban','Đi ăn với bạn bè']]},
- {id:'gd', k:'chi', n:'Gia đình & hiếu hỉ', c:'#9C4A3C', subs:[['gd_bome','Biếu bố mẹ'],['gd_cuoi','Cưới hỏi'],['gd_ma','Ma chay'],['gd_qua','Quà tặng']]},
+ {id:'gd', sn:'Gia đình', k:'chi', n:'Gia đình & hiếu hỉ', c:'#9C4A3C', subs:[['gd_bome','Biếu bố mẹ'],['gd_cuoi','Cưới hỏi'],['gd_ma','Ma chay'],['gd_qua','Quà tặng']]},
  {id:'ht', k:'chi', n:'Học tập', c:'#6B7B2E', subs:[['ht_khoa','Khóa học'],['ht_sach','Sách'],['ht_thi','Thi chứng chỉ']]},
- {id:'tk', k:'chi', n:'Tiết kiệm & đầu tư', c:'#2E7D6B', subs:[['tk_gui','Gửi tiết kiệm'],['tk_vang','Mua vàng']]},
- {id:'muon',k:'chi',n:'Cho mượn', c:'#8C7B4A', subs:[]},
- {id:'trano',k:'chi',n:'Trả nợ', c:'#7A6A55', subs:[['trano_cn','Trả nợ cá nhân'],['trano_gop','Trả góp']]},
+ {id:'tk', sn:'Tiết kiệm', k:'chi', n:'Tiết kiệm & đầu tư', c:'#2E7D6B', subs:[['tk_gui','Gửi tiết kiệm'],['tk_vang','Mua vàng']]},
+ {id:'muon',sn:'Cho mượn', k:'chi',n:'Cho mượn', c:'#8C7B4A', subs:[]},
+ {id:'trano',sn:'Trả nợ', k:'chi',n:'Trả nợ', c:'#7A6A55', subs:[['trano_cn','Trả nợ cá nhân'],['trano_gop','Trả góp']]},
  {id:'luong', k:'thu', n:'Lương', c:'#0E6B5C', subs:[]},
- {id:'thuong',k:'thu', n:'Thưởng', c:'#4E8C5A', subs:[['thuong_tet','Thưởng lễ Tết'],['thuong_hq','Thưởng hiệu quả']]},
- {id:'thuno', k:'thu', n:'Thu nợ', c:'#8C7B4A', subs:[]},
- {id:'divay', k:'thu', n:'Đi vay', c:'#B4557A', subs:[]},
- {id:'tkhac', k:'thu', n:'Thu khác', c:'#7C8A92', subs:[['tkhac_hoan','Hoàn tiền'],['tkhac_ban','Bán đồ cũ'],['tkhac_cho','Người nhà cho'],['tkhac_lai','Lãi tiết kiệm, cổ tức']]}
+ {id:'thuong',sn:'Thưởng', k:'thu', n:'Thưởng', c:'#4E8C5A', subs:[['thuong_tet','Thưởng lễ Tết'],['thuong_hq','Thưởng hiệu quả']]},
+ {id:'thuno', sn:'Thu nợ', k:'thu', n:'Thu nợ', c:'#8C7B4A', subs:[]},
+ {id:'divay', sn:'Đi vay', k:'thu', n:'Đi vay', c:'#B4557A', subs:[]},
+ {id:'tkhac', sn:'Thu khác', k:'thu', n:'Thu khác', c:'#7C8A92', subs:[['tkhac_hoan','Hoàn tiền'],['tkhac_ban','Bán đồ cũ'],['tkhac_cho','Người nhà cho'],['tkhac_lai','Lãi tiết kiệm, cổ tức']]}
 ];
 const SRC=[{id:'bidv',n:'BIDV'},{id:'vi',n:'Ví điện tử'},{id:'tm',n:'Tiền mặt'}];
 const srcOf=id=>SRC.find(s=>s.id===id)||SRC[0];
@@ -179,7 +185,7 @@ function labelOf(code){
 const validCode=(code,kind)=>{const g=groupOf(code);return !!code&&g.id&&(!kind||g.k===kind);};
 
 const KEY='sochi:data';
-const VERSION='4.0';
+const VERSION='5.0';
 let DB={txns:[],debts:[],budgets:{},rules:{},opens:{bidv:0,vi:0,tm:0},checks:{},opts:{ab:'off'},lastBackup:0,v:4};
 let tab='home', cursor=new Date(), pending=null, msg='', msgType='err', open={};
 
@@ -533,33 +539,94 @@ function bySub(list,gid){
   return Object.entries(m).sort((a,b)=>b[1]-a[1]);
 }
 
-/* ==================== biểu đồ tròn ==================== */
-function arcPath(cx,cy,r1,r2,a0,a1){
-  const P=(r,a)=>[(cx+r*Math.cos(a)).toFixed(2),(cy+r*Math.sin(a)).toFixed(2)];
-  const big=(a1-a0)>Math.PI?1:0;
-  const [x0,y0]=P(r2,a0),[x1,y1]=P(r2,a1),[x2,y2]=P(r1,a1),[x3,y3]=P(r1,a0);
-  return `M${x0} ${y0}A${r2} ${r2} 0 ${big} 1 ${x1} ${y1}L${x2} ${y2}A${r1} ${r1} 0 ${big} 0 ${x3} ${y3}Z`;
-}
-function donut(list,groups,total,deep){
-  const S=200, cx=S/2, cy=S/2, TAU=Math.PI*2-0.0001;
-  let a=-Math.PI/2, out='';
-  groups.forEach(([gid,v])=>{
-    const g=groupOf(gid), span=Math.min(TAU,v/total*Math.PI*2);
-    out+=`<path d="${arcPath(cx,cy,deep?46:52,deep?66:74,a,a+span)}" fill="${g.c}"></path>`;
-    if(deep){
-      const subs=bySub(list,gid); let sa=a;
-      subs.forEach(([code,sv],i)=>{
-        const ss=Math.min(TAU,sv/total*Math.PI*2);
-        out+=`<path d="${arcPath(cx,cy,69,86,sa,sa+ss)}" fill="${g.c}" opacity="${(0.85-i*0.16).toFixed(2)}"></path>`;
-        sa+=ss;
-      });
+/* ==================== bản đồ khối ==================== */
+/* Ô lớn nhất chiếm cột trái, phần còn lại xếp chồng bên phải.
+   Ô nào mỏng dưới 22px thì gộp dần vào "Khác" để lúc nào cũng đọc được chữ. */
+function layoutBlocks(items,W,H){
+  if(!items.length)return [];
+  if(items.length===1)return [Object.assign({},items[0],{x:0,y:0,w:W,h:H})];
+  let list=items.slice().sort((a,b)=>b.v-a.v);
+  const MINH=22;
+  while(list.length>2){
+    const total=list.reduce((s,i)=>s+i.v,0), rest=total-list[0].v;
+    if(!rest)break;
+    if(list[list.length-1].v/rest*H>=MINH)break;
+    const a=list.pop(), b=list.pop();
+    list.push({id:'__o',name:'Khác',v:a.v+b.v,col:'#8FA0A7',sub:false});
+    list.sort((x,y)=>y.v-x.v);
+  }
+  /* ô "Khác" luôn xuống cuối cho dễ đọc */
+  const oi=list.findIndex(x=>x.id==='__o');
+  if(oi>0)list.push(list.splice(oi,1)[0]);
+  const total=list.reduce((s,i)=>s+i.v,0), share=list[0].v/total, rest=total-list[0].v;
+  const out=[];
+
+  if(share>0.66){
+    /* một nhóm áp đảo: cắt ngang. Phần còn lại quá nhỏ nên gộp thành một ô,
+       nếu chia tiếp thì ô nào cũng mỏng không đọc nổi. */
+    let tail=list.slice(1);
+    if(tail.length>1){
+      const v=tail.reduce((s,x)=>s+x.v,0);
+      tail=[{id:'__o',name:'Khác',v,col:'#8FA0A7',sub:false}];
     }
-    a+=span;
+    const h0=Math.min(Math.round(Math.min(0.88,share)*H), H-tail.length*MINH);
+    out.push(Object.assign({},list[0],{x:0,y:0,w:W,h:h0}));
+    out.push(Object.assign({},tail[0],{x:0,y:h0,w:W,h:H-h0}));
+    return out;
+  }
+  let w0=Math.round(Math.max(0.22,share)*W);
+  out.push(Object.assign({},list[0],{x:0,y:0,w:w0,h:H}));
+  const tail=list.slice(1); let y=0;
+  tail.forEach((it,i)=>{
+    const hh=i===tail.length-1?H-y:Math.round(it.v/rest*H);
+    out.push(Object.assign({},it,{x:w0,y,w:W-w0,h:hh})); y+=hh;
   });
-  return `<svg viewBox="0 0 ${S} ${S}" width="100%" style="max-width:230px;display:block;margin:0 auto" role="img">
-    <title>Cơ cấu chi tiêu theo nhóm</title>${out}
-    <text x="${cx}" y="${cy-4}" text-anchor="middle" font-size="19" font-weight="700" fill="#1B2A33">${short(total)}</text>
-    <text x="${cx}" y="${cy+14}" text-anchor="middle" font-size="11" fill="#8FA0A7">đồng đã chi</text></svg>`;
+  return out;
+}
+function shade(hex,k){
+  const n=parseInt(hex.slice(1),16);
+  const r=Math.round(((n>>16)&255)*(1-k)+255*k), g=Math.round(((n>>8)&255)*(1-k)+255*k), b=Math.round((n&255)*(1-k)+255*k);
+  return '#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+}
+function treemap(list,chi){
+  const W=350,H=178,G=3;
+  let items,back='';
+  if(open.zoom){
+    const g=groupOf(open.zoom), subs=bySub(list,open.zoom);
+    const tot=subs.reduce((s,x)=>s+x[1],0);
+    items=subs.map(([code,v],i)=>({id:code,name:code===open.zoom?'chưa phân chi tiết':labelOf(code),
+      v,pc:Math.round(v/tot*100),col:shade(g.c,i*0.17),amt:v}));
+    back=`<div class="stack-note" style="margin-bottom:8px"><span><button style="background:none;border:0;padding:0;color:var(--jade);font-weight:600;font-size:12.5px" onclick="zoomOut()">‹ tất cả nhóm</button> · ${esc(g.n)}</span></div>`;
+  }else{
+    const gs=byGroup(list); let big=[],小=0;
+    gs.forEach(([id,v])=>{ if(v/chi>=0.03)big.push({id,name:groupOf(id).sn||groupOf(id).n,v,col:groupOf(id).c,amt:v,
+      pc:Math.round(v/chi*100),sub:groupOf(id).subs.length>0}); else 小+=v; });
+    if(小>0)big.push({id:'__o',name:'Khác',v:小,col:'#8FA0A7',amt:小,pc:Math.max(1,Math.round(小/chi*100)),sub:false});
+    items=big;
+  }
+  if(!items.length)return '';
+  const boxes=layoutBlocks(items,W,H);
+  const tt=boxes.reduce((a,b)=>a+b.v,0);
+  let sv='';
+  boxes.forEach(b=>{
+    b.pc=Math.max(1,Math.round(b.v/tt*100)); b.amt=b.v;
+    const w=Math.max(0,b.w-G), h=Math.max(0,b.h-G);
+    sv+=`<g${b.sub||open.zoom?'':''} style="cursor:pointer" onclick="${b.sub&&!open.zoom?`zoomIn('${b.id}')`:'0'}">
+      <rect x="${b.x.toFixed(1)}" y="${b.y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="4" fill="${b.col}"></rect>`;
+    if(w>=64&&h>=52){
+      sv+=`<text x="${(b.x+11).toFixed(1)}" y="${(b.y+24).toFixed(1)}" font-size="13" fill="#fff">${esc(b.name)}</text>
+        <text x="${(b.x+11).toFixed(1)}" y="${(b.y+45).toFixed(1)}" font-size="18" font-weight="600" fill="#fff">${b.pc}%</text>`;
+      if(h>=70)sv+=`<text x="${(b.x+11).toFixed(1)}" y="${(b.y+63).toFixed(1)}" font-size="11.5" fill="#ffffffcc">${money(b.amt)}</text>`;
+    }else if(w>=56&&h>=32){
+      sv+=`<text x="${(b.x+9).toFixed(1)}" y="${(b.y+17).toFixed(1)}" font-size="11" fill="#fff">${esc(b.name)}</text>
+        <text x="${(b.x+9).toFixed(1)}" y="${(b.y+32).toFixed(1)}" font-size="13" font-weight="600" fill="#fff">${b.pc}%</text>`;
+    }else if(w>=46&&h>=18){
+      sv+=`<text x="${(b.x+7).toFixed(1)}" y="${(b.y+14).toFixed(1)}" font-size="11" fill="#fff">${esc(b.name)} ${b.pc}%</text>`;
+    }
+    sv+=`</g>`;
+  });
+  return back+`<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block" role="img">
+    <title>Cơ cấu chi tiêu, diện tích tỷ lệ với số tiền</title>${sv}</svg>`;
 }
 function vDebt(){
   const tot=debtTotals();
@@ -625,10 +692,20 @@ function vHome(){
       <div class="sum">${money(chi)}<small>₫</small></div>
       <div class="sub">${list.filter(t=>t.t==='chi').length} giao dịch · trung bình <b>${short(chi/passed)}₫</b> mỗi ngày`
       +(thuNhap?` · thu nhập <b>${short(thuNhap)}₫</b>`:'')+`</div></div>`;
-    if(groups.length&&chi){
-      h+=`<div class="sp"></div>${donut(list,groups,chi,!!open.deep)}
-        <div class="sp"></div>
-        <button class="btn ghost" onclick="toggle('deep')">${open.deep?'Thu gọn về nhóm lớn':'Xem chi tiết cấp 2'}</button>`;
+
+    if(totalBudget>0){
+      const pT=Math.min(100,passed/nd*100), pS=Math.min(100,chi/totalBudget*100), fast=chi/totalBudget>passed/nd;
+      h+=`<div class="sp"></div><div class="panel" style="padding:13px 14px">
+        <div class="cat-top"><span class="src-m">Nhịp tiêu tháng này</span>
+          <span style="font-size:12.5px;font-weight:500;color:${fast?'var(--amber)':'var(--jade)'}">${fast?'nhanh hơn nhịp':'đang trong nhịp'}</span></div>
+        <div class="pace"><i style="width:${pS}%;background:${fast?'var(--amber)':'var(--jade)'}"></i>
+          <u style="left:${pT}%"></u></div>
+        <div class="cat-meta"><span>đã tiêu ${Math.round(chi/totalBudget*100)}% hạn mức</span>
+          <span>mới qua ${Math.round(passed/nd*100)}% tháng</span></div></div>`;
+    }
+    if(chi){
+      h+=`<h2>Cơ cấu chi tiêu</h2>${treemap(list,chi)}
+        <div class="sp"></div><div class="stack-note"><span>Ô càng lớn càng tốn nhiều tiền${open.zoom?'':'. Bấm vào ô để xem chi tiết bên trong.'}</span></div>`;
     }
   }
 
@@ -672,22 +749,29 @@ function vHome(){
     +gaps.slice(0,3).map(g=>`Trước giao dịch ${g.d.slice(8,10)}/${g.d.slice(5,7)}${g.tm?' '+g.tm:''} còn thiếu một khoản ${g.gap<0?'chi':'thu'} khoảng ${money(Math.abs(g.gap))}₫.`).join('<br>')+`</div>`;
 
   if(groups.length){
-    h+=`<h2>Chi theo nhóm</h2><div class="panel">`;
+    const prevL=monthTx(new Date(cursor.getFullYear(),cursor.getMonth()-1,1));
+    const pMap=Object.fromEntries(byGroup(prevL));
+    const mxV=Math.max(groups[0][1],...groups.map(([id])=>pMap[id]||0));
+    h+=`<h2>Nhóm chi, so với tháng trước</h2><div class="panel">`;
     groups.forEach(([id,v])=>{
-      const g=groupOf(id), b=DB.budgets[id]||0, pct=b?Math.min(100,v/b*100):v/groups[0][1]*100, ov=b&&v>b;
+      const g=groupOf(id), b=DB.budgets[id]||0, ov=b&&v>b;
+      const pv=pMap[id]||0, dd=pv?(v-pv)/pv*100:null;
+      const col=dd===null?'var(--ink-3)':Math.abs(dd)<10?'var(--ink-3)':dd>0?'var(--amber)':'var(--jade)';
       const subs=bySub(list,id), can=g.subs.length&&subs.length;
       h+=`<button class="cat" onclick="${can?`toggle('${id}')`:`tab='list';render()`}">
         <span class="spine" style="background:${g.c}"></span><span class="cat-body">
-        <span class="cat-top"><span class="cat-name">${esc(g.n)}${can?`<span class="caret">${open[id]?'▲':'▼'}</span>`:''}</span><span class="cat-amt">${money(v)}</span></span>
-        <span class="track"><i style="width:${pct}%;background:${ov?'var(--amber)':g.c}"></i></span>
-        <span class="cat-meta"><span>${b?'hạn mức '+short(b)+'₫':Math.round(v/chi*100)+'% tổng chi'}</span>
-        <span class="${ov?'over':''}">${b?(ov?'vượt '+short(v-b)+'₫':'còn '+short(b-v)+'₫'):''}</span></span>
+        <span class="cat-top"><span class="cat-name">${esc(g.n)}${can?`<span class="caret">${open[id]?'▲':'▼'}</span>`:''}</span>
+          <span class="cat-amt">${money(v)} <span style="font-size:12px;font-weight:500;color:${col}">${dd===null?'mới':(dd>0?'+':'')+Math.round(dd)+'%'}</span></span></span>
+        <span class="track" style="height:7px"><i style="width:${v/mxV*100}%;background:${g.c}"></i>
+          ${pv?`<u style="left:${Math.min(100,pv/mxV*100)}%"></u>`:''}</span>
+        <span class="cat-meta"><span>${Math.round(v/chi*100)}% tổng chi${b?' · hạn mức '+short(b)+'₫':''}</span>
+          <span class="${ov?'over':''}">${b?(ov?'vượt '+short(v-b)+'₫':'còn '+short(b-v)+'₫'):''}</span></span>
         </span></button>`;
       if(can&&open[id]) subs.forEach(([code,sv])=>{
         h+=`<div class="sub"><span>${esc(code===id?'chưa phân chi tiết':labelOf(code))}</span>
           <span><b>${money(sv)}</b><em>${Math.round(sv/v*100)}%</em></span></div>`;});
     });
-    h+=`</div>`;
+    h+=`</div><div class="sp"></div><div class="stack-note"><span><span class="tick-legend"></span> vạch dọc là mức tháng trước</span></div>`;
 
     const dayTot=Array(nd).fill(0);
     list.filter(t=>t.t==='chi').forEach(t=>{const i=+t.d.slice(8,10)-1;if(i>=0&&i<nd)dayTot[i]+=t.a});
@@ -876,6 +960,8 @@ function vSet(){
 
 /* ==================== hành động ==================== */
 function toggle(id){open[id]=!open[id];render()}
+function zoomIn(id){open.zoom=id;render()}
+function zoomOut(){open.zoom=null;render()}
 /* ---- khoản nợ ---- */
 function newDebt(kind,name,amount){
   const k=kind||(confirm('Đây là khoản Vy đi vay?\nOK = tôi đi vay · Hủy = tôi cho người khác mượn')?'no':'cho');

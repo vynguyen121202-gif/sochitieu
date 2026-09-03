@@ -102,6 +102,8 @@
   .ask button{margin:8px 8px 0 0;padding:7px 12px;border-radius:7px;border:1px solid #DCC3A0;background:#fff;font-size:12.5px;font-weight:600;color:#8A5418}
   .ask button:first-of-type{background:var(--jade);border-color:var(--jade);color:#fff}
   .rename{width:100%;margin-top:8px;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:#FAFBF9;font-size:14px}
+  .hint{font-size:12px;color:var(--amber);margin-top:6px;font-weight:500}
+  .tag{display:inline-block;font-size:11.5px;color:var(--ink-3);margin-top:6px}
 
   .bars{display:flex;align-items:flex-end;gap:9px;height:132px;padding:0 4px}
   .bcol{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%}
@@ -157,7 +159,7 @@ const CATS=[
 ];
 const catOf=id=>CATS.find(c=>c.id===id)||CATS[CATS.length-1];
 const KEY='sochi:data';
-const VERSION='1.3';
+const VERSION='1.4';
 let DB={txns:[],budgets:{},rules:{},opts:{ab:'off'},lastBackup:0,v:1};
 let tab='home', cursor=new Date(), pending=null, msg='', msgType='err';
 
@@ -174,7 +176,7 @@ function merchantKey(s){
   return noAccent(s).replace(/[^a-z0-9\s]/g,' ').replace(/\d+/g,' ').replace(/\s+/g,' ').trim()
     .split(' ').filter(w=>w.length>1).slice(0,4).join(' ');
 }
-const fid=t=>t.d+'|'+t.a+'|'+merchantKey(t.n).slice(0,24);
+const fid=t=>t.d+'|'+t.a+'|'+merchantKey(t.n0||t.n).slice(0,24);
 function parseAmt(v){
   let s=noAccent(v).replace(/[\s₫+]/g,'').replace(/vnd|dong/g,'').replace(/d$/,'').replace(/^[-−–—]/,'');
   if(/^\d{1,3}(,\d{3})+/.test(s)) s=s.replace(/,/g,'');        // 85,000
@@ -247,12 +249,13 @@ Quy ước:
 - Số tiền màu đỏ hoặc có dấu trừ ghi "chi"; màu xanh hoặc có dấu cộng ghi "thu".
 - Nội dung: rút gọn thành nơi nhận hoặc mục đích dễ hiểu, bỏ số tài khoản và mã tham chiếu dài. Nếu chỉ có mã QR không rõ nơi bán thì ghi "Thanh toán QR".
 - Mã nhóm chọn một trong: ${CATS.map(c=>c.id+'='+c.n).join(', ')}
-- Riêng khoản nạp ví điện tử (MoMo, ZaloPay, ShopeePay, VNPay) xếp nhóm ck.
+- Nếu nội dung có tên ví điện tử (MoMo, ZaloPay, ShopeePay, VNPay, ViettelPay), giữ nguyên tên ví đó trong phần nội dung, ví dụ "Ví MoMo".
+- Nếu nội dung chỉ có mã QR không rõ nơi bán, phần nội dung ghi đúng chữ "Thanh toán QR".
 - Sắp các dòng theo thời gian tăng dần.
 
 Ví dụ:
-2026-09-02 07:32 | 50000 | chi | Nạp ví MoMo | ck | 918490
-2026-09-02 11:41 | 33000 | chi | Thanh toán QR | an | 885490`;
+2026-09-02 07:32 | 50000 | chi | Ví MoMo | kh | 918490
+2026-09-02 11:41 | 33000 | chi | Thanh toán QR | kh | 885490`;
 }
 async function copyPrompt(){
   const t=promptText();
@@ -269,7 +272,7 @@ function parsePaste(raw){
   if(txt.startsWith('[')){
     try{JSON.parse(txt).forEach(r=>{if(r&&r.d&&r.a){const o={d:String(r.d).slice(0,10),tm:r.tm||'',a:Math.abs(+r.a)||0,
       t:r.t==='thu'?'thu':'chi',n:String(r.n||'Giao dịch').slice(0,60),c:CATS.some(c=>c.id===r.c)?r.c:'kh'};
-      if(r.b)o.b=Math.abs(+r.b); out.push(o);}});
+      o.n0=o.n; if(r.b)o.b=Math.abs(+r.b); out.push(o);}});
       return out;}catch(e){}
   }
   const today=new Date();
@@ -303,15 +306,22 @@ function parsePaste(raw){
       c=hit?hit.id:'kh';
     }
     const b=p[5]?parseAmt(p[5]):NaN;
-    const row={d,tm,a,t,n,c};
+    const row={d,tm,a,t,n,n0:n,c};
     if(!isNaN(b)&&b)row.b=b;
     out.push(row);
   });
   return out;
 }
-/* ví điện tử: tiền mới sang ví, chưa hẳn đã tiêu */
-const WALLET=/momo|zalopay|zalo pay|shopeepay|viettelpay|vnpay|cashin|vi dien tu|moca|payoo/;
-const isWallet=t=>t.t==='chi'&&WALLET.test(noAccent(t.n));
+/* ví điện tử và quét QR: hai loại app không được tự đoán */
+const WALLETS=[[/momo/,'MoMo'],[/zalo ?pay/,'ZaloPay'],[/shopee ?pay/,'ShopeePay'],
+  [/viettel ?pay/,'ViettelPay'],[/vnpay/,'VNPay'],[/moca/,'Moca'],[/payoo/,'Payoo']];
+function walletOf(t){
+  if(t.t!=='chi')return '';
+  const s=noAccent(t.n0||t.n);
+  for(const [re,name] of WALLETS) if(re.test(s)) return name;
+  return '';
+}
+const isQR=t=>t.t==='chi'&&/(^|[^a-z])v?qr([^a-z]|$)|quet ma/.test(noAccent(t.n0||t.n));
 
 /* chuỗi số dư: phát hiện giao dịch bị bỏ sót */
 function chainGaps(list){
@@ -332,10 +342,13 @@ function doPaste(){
   const seen=new Set(DB.txns.map(fid)), have=new Set();
   pending=[];
   rows.forEach(t=>{
-    const k=merchantKey(t.n); if(DB.rules[k])t.c=DB.rules[k];
+    t.w=walletOf(t); t.q=isQR(t);
+    const k=merchantKey(t.n0||t.n);
+    if(DB.rules[k]&&!t.w&&!t.q)t.c=DB.rules[k];   // ví và QR không bao giờ tự gán
     const f=fid(t); if(have.has(f))return; have.add(f);
     t.dup=seen.has(f); t.keep=!t.dup;
-    if(isWallet(t)){t.ask=true;t.c0=(t.c==='ck'?'kh':t.c);t.c='ck';t.x=true;}
+    if(t.w){t.ask=true;t.c0=(t.c==='ck'?'kh':t.c);t.c='ck';t.x=true;}
+    else if(t.q){t.spend=true;t.c='kh';}
     pending.push(t);
   });
   pending.sort((a,b)=>(b.d+' '+(b.tm||'')).localeCompare(a.d+' '+(a.tm||'')));
@@ -345,6 +358,7 @@ function commit(){
   const add=pending.filter(t=>t.keep).map(t=>{
     const o={d:t.d,a:t.a,t:t.t,n:t.n,c:t.c,id:Date.now()+Math.random()};
     if(t.tm)o.tm=t.tm; if(t.b)o.b=t.b; if(t.x)o.x=1;
+    if(t.w)o.w=t.w; if(t.q)o.q=1; if(t.n0&&t.n0!==t.n)o.n0=t.n0;
     return o;});
   DB.txns=DB.txns.concat(add); save();
   pending=null; msg=''; tab='home'; cursor=new Date(); render();
@@ -421,12 +435,14 @@ function vImport(){
         <div class="tx-body"><div class="tx-n">${esc(t.n)}</div>
           <div class="tx-m">${t.d.slice(8,10)}/${t.d.slice(5,7)}${t.tm?' '+t.tm:''} · ${t.t==='thu'?'tiền vào':'tiền ra'}</div>
           ${t.ask?`<div class="ask">
-              <div>Tiền mới chuyển sang ví, chưa chắc đã tiêu. Khoản này là gì?</div>
+              <div>Trả qua ví ${esc(t.w)}. Khoản này đã tiêu vào việc gì chưa?</div>
               <button onclick="askSpend(${i})">Đã tiêu rồi</button>
-              <button onclick="askKeep(${i})">Chỉ nạp ví</button>
+              <button onclick="askKeep(${i})">Chỉ nạp ví, chưa tiêu</button>
             </div>`
-          :t.t==='chi'?`${t.spend?`<input class="rename" value="${esc(t.n)}" placeholder="Tiêu vào việc gì?" onchange="setName(${i},this.value)">`:''}
+          :t.t==='chi'?`${t.q&&!t.named?`<div class="hint">Quét QR nên ngân hàng không ghi tên nơi bán — cô điền giúp.</div>`:''}
+            ${(t.spend||t.q)?`<input class="rename" value="${esc(t.named?t.n:'')}" placeholder="${t.w?'Mua gì qua ví '+esc(t.w)+'?':'Mua gì, ở đâu?'}" onchange="setName(${i},this.value)">`:''}
             <select class="pill" onchange="setCat(${i},this.value)">${CATS.map(x=>`<option value="${x.id}" ${x.id===t.c?'selected':''}>${x.n}</option>`).join('')}</select>
+            ${t.w&&!t.x?`<div class="tag">qua ví ${esc(t.w)}</div>`:''}
             ${t.x?`<div class="dup">Không cộng vào tổng chi</div>`:''}`:''}
           ${t.dup?`<div class="dup">Đã có trong sổ, bỏ chọn sẵn</div>`:''}
         </div>
@@ -473,7 +489,7 @@ function vList(){
     const c=catOf(t.c);
     h+=`<div class="tx"><span class="spine" style="background:${t.t==='thu'?'var(--jade)':t.x?'#C3CCC4':c.c}"></span>
       <div class="tx-body"><div class="tx-n">${esc(t.n)}</div>
-      <div class="tx-m">${t.tm?t.tm+' · ':''}${t.t==='thu'?'Tiền vào':esc(c.n)}${t.x?' · không tính':''}</div>
+      <div class="tx-m">${t.tm?t.tm+' · ':''}${t.t==='thu'?'Tiền vào':esc(c.n)}${t.w?' · qua ví '+esc(t.w):''}${t.x?' · không tính':''}</div>
       ${t.t==='chi'?`<select class="pill" onchange="reCat('${t.id}',this.value)">${CATS.map(x=>`<option value="${x.id}" ${x.id===t.c?'selected':''}>${x.n}</option>`).join('')}</select>`:''}</div>
       <div style="text-align:right"><div class="tx-a ${t.t==='thu'?'in':''}" ${t.x?'style="color:var(--ink-3)"':''}>${t.t==='thu'?'+':'−'}${money(t.a)}</div>
       ${t.t==='chi'?`<button style="background:none;border:0;color:var(--ink-3);font-size:12px;padding:6px 0 0" onclick="toggleX('${t.id}')">${t.x?'tính lại':'bỏ tính'}</button><br>`:''}
@@ -562,11 +578,14 @@ function vSet(){
 function tog(i){pending[i].keep=!pending[i].keep;render()}
 function askSpend(i){const t=pending[i];t.ask=false;t.spend=true;t.x=false;t.c=t.c0||'kh';render()}
 function askKeep(i){const t=pending[i];t.ask=false;t.spend=false;t.x=true;t.c='ck';render()}
-function setName(i,v){const s=String(v).trim().slice(0,60);if(s)pending[i].n=s;}
+function setName(i,v){const t=pending[i],s=String(v).trim().slice(0,60);
+  if(s){t.n=s;t.named=true;}else{t.n=t.n0||t.n;t.named=false;}}
 function toggleX(id){const t=DB.txns.find(x=>String(x.id)===id);if(!t)return;
   if(t.x)delete t.x;else t.x=1;save();render()}
-function setCat(i,v){pending[i].c=v;DB.rules[merchantKey(pending[i].n)]=v;save()}
-function reCat(id,v){const t=DB.txns.find(x=>String(x.id)===id);if(!t)return;t.c=v;DB.rules[merchantKey(t.n)]=v;save();render()}
+const canLearn=t=>!t.w&&!t.q;
+function setCat(i,v){const t=pending[i];t.c=v;if(canLearn(t)){DB.rules[merchantKey(t.n0||t.n)]=v;save();}}
+function reCat(id,v){const t=DB.txns.find(x=>String(x.id)===id);if(!t)return;
+  t.c=v;if(canLearn(t))DB.rules[merchantKey(t.n0||t.n)]=v;save();render()}
 function del(id){DB.txns=DB.txns.filter(x=>String(x.id)!==id);save();render()}
 function delRule(k){delete DB.rules[k];save();render()}
 function setB(id,v){const n=parseAmt(v);if(!String(v).trim())delete DB.budgets[id];else if(!isNaN(n))DB.budgets[id]=n;save()}

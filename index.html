@@ -159,7 +159,7 @@ const CATS=[
 ];
 const catOf=id=>CATS.find(c=>c.id===id)||CATS[CATS.length-1];
 const KEY='sochi:data';
-const VERSION='1.4';
+const VERSION='1.5';
 let DB={txns:[],budgets:{},rules:{},opts:{ab:'off'},lastBackup:0,v:1};
 let tab='home', cursor=new Date(), pending=null, msg='', msgType='err';
 
@@ -240,18 +240,23 @@ function autoBackup(){const m=(DB.opts&&DB.opts.ab)||'off';if(m!=='off')runBacku
 
 /* ---------- câu lệnh để cô đưa cho Claude ---------- */
 function promptText(){
-  return `Mỗi ảnh dưới đây là màn hình "Chi tiết giao dịch" của app BIDV. Với mỗi ảnh trả về đúng một dòng theo định dạng sau, không viết thêm gì khác:
+  return `Tôi là người dùng BIDV, mỗi ngày gửi vào đây vài ảnh chụp màn hình "Chi tiết giao dịch" của app BIDV. Với mỗi ảnh, trả về đúng một dòng theo định dạng sau, không viết gì thêm:
 
 YYYY-MM-DD HH:MM | số tiền | chi hoặc thu | nội dung ngắn gọn | mã nhóm | số dư
 
 Quy ước:
 - Số tiền và số dư chỉ giữ chữ số, bỏ dấu phân cách và chữ VND. Số tiền lấy giá trị dương.
 - Số tiền màu đỏ hoặc có dấu trừ ghi "chi"; màu xanh hoặc có dấu cộng ghi "thu".
-- Nội dung: rút gọn thành nơi nhận hoặc mục đích dễ hiểu, bỏ số tài khoản và mã tham chiếu dài. Nếu chỉ có mã QR không rõ nơi bán thì ghi "Thanh toán QR".
+- Nội dung: rút gọn thành nơi nhận hoặc mục đích dễ hiểu, bỏ số tài khoản và mã tham chiếu dài.
+- Nếu nội dung chỉ có mã QR không rõ nơi bán, ghi đúng chữ "Thanh toán QR" và để mã nhóm là kh.
+- Nếu nội dung có tên ví điện tử (MoMo, ZaloPay, ShopeePay, VNPay, ViettelPay), giữ nguyên tên ví trong phần nội dung, ví dụ "Ví MoMo", mã nhóm để kh.
 - Mã nhóm chọn một trong: ${CATS.map(c=>c.id+'='+c.n).join(', ')}
-- Nếu nội dung có tên ví điện tử (MoMo, ZaloPay, ShopeePay, VNPay, ViettelPay), giữ nguyên tên ví đó trong phần nội dung, ví dụ "Ví MoMo".
-- Nếu nội dung chỉ có mã QR không rõ nơi bán, phần nội dung ghi đúng chữ "Thanh toán QR".
 - Sắp các dòng theo thời gian tăng dần.
+
+Cách làm việc:
+- Mỗi lần tôi gửi ảnh, chỉ trả về các dòng của đúng những ảnh vừa gửi, không nhắc lại dòng cũ.
+- Không chào hỏi, không giải thích, không hỏi lại.
+- Nếu một ảnh mờ hoặc thiếu thông tin, thay dòng đó bằng: KHÔNG ĐỌC ĐƯỢC | lý do ngắn gọn. Tuyệt đối không đoán số.
 
 Ví dụ:
 2026-09-02 07:32 | 50000 | chi | Ví MoMo | kh | 918490
@@ -452,17 +457,10 @@ function vImport(){
       <div class="sp"></div><button class="btn ghost" onclick="pending=null;render()">Quay lại</button>`;
     return h;
   }
-  let h=`<h2>Từ ảnh chụp màn hình</h2>
-    <ol class="steps">
-      <li>Chụp màn hình lịch sử giao dịch trong app BIDV.</li>
-      <li><b>Chép câu lệnh</b> bên dưới, mở Claude, dán câu lệnh kèm ảnh.</li>
-      <li>Chép kết quả Claude trả về, dán vào ô dưới cùng, bấm <b>Đọc kết quả</b>.</li>
-    </ol>
-    <button class="btn ghost" onclick="copyPrompt()">Chép câu lệnh</button>
+  let h=`<h2>Dán kết quả từ Claude</h2>
+    <div class="stack-note"><span>Thả ảnh chụp chi tiết giao dịch vào chat của tháng này, chép mấy dòng nó trả về rồi dán xuống đây.</span></div>
     <div class="sp"></div>
-    <textarea id="pmt" class="mono" rows="4" readonly onclick="this.select()">${esc(promptText())}</textarea>
-    <div class="sp"></div>
-    <textarea id="paste" rows="5" placeholder="Dán kết quả Claude trả về vào đây"></textarea>
+    <textarea id="paste" rows="7" placeholder="2026-09-02 07:32 | 50000 | chi | Ví MoMo | kh | 918490"></textarea>
     <div class="sp"></div>
     <button class="btn" onclick="doPaste()">Đọc kết quả</button>`;
   if(msg)h+=`<div class="${msgType==='ok'?'ok':'err'}">${esc(msg)}</div>`;
@@ -567,6 +565,13 @@ function vSet(){
       <div class="sp"></div><button class="btn ghost" onclick="doRestore()">Khôi phục từ đoạn đã dán</button>
     </details>`;
   if(msg)h+=`<div class="${msgType==='ok'?'ok':'err'}">${esc(msg)}</div>`;
+
+  h+=`<h2>Câu lệnh cho AI</h2>
+    <details><summary style="font-size:13px;color:var(--ink-3);padding:4px 0">Xem lại câu lệnh đặt trong project</summary>
+      <div class="sp"></div>
+      <textarea class="mono" rows="4" readonly onclick="this.select()">${esc(promptText())}</textarea>
+      <div class="sp"></div><button class="btn ghost" onclick="copyPrompt()">Chép câu lệnh</button>
+    </details>`;
 
   h+=`<h2>Dữ liệu</h2><div class="empty" style="text-align:left">${DB.txns.length} giao dịch đang lưu.<br>
     <span style="font-size:12.5px;color:var(--ink-3)">Phiên bản ${VERSION} · lưu tại ${window.storage?'kho của Claude':'trình duyệt máy này'}</span></div>

@@ -62,6 +62,15 @@
   .cat-meta{font-size:12px;color:var(--ink-3);margin-top:5px;display:flex;justify-content:space-between;gap:8px}
   .over{color:var(--amber);font-weight:500}
 
+  .src{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 14px;border-bottom:1px solid var(--line-2)}
+  .src:last-child{border-bottom:0}
+  .src-n{font-size:14.5px;font-weight:500}
+  .src-m{font-size:12px;color:var(--ink-3);margin-top:3px}
+  .src-a{font-size:15px;font-weight:600;white-space:nowrap}
+  .src-a.neg{color:var(--brick)}
+  .lech{color:var(--amber);font-weight:500}
+  .khop{color:var(--jade)}
+
   .days{display:flex;align-items:flex-end;gap:2px;height:64px;padding:12px 12px 0;background:var(--card);border:1px solid var(--line);border-radius:var(--r) var(--r) 0 0;border-bottom:0}
   .days i{flex:1;background:var(--jade);border-radius:2px 2px 0 0;min-height:2px;opacity:.85}
   .days i.today{background:var(--amber);opacity:1}
@@ -74,6 +83,7 @@
   .tx-m{font-size:12px;color:var(--ink-3);margin-top:3px}
   .tx-a{font-weight:600;font-size:14.5px;white-space:nowrap;text-align:right}
   .tx-a.in{color:var(--jade)}
+  .tx-a.mv{color:var(--ink-3)}
   .daygroup{font-size:12.5px;color:var(--ink-2);font-weight:500;padding:11px 14px 7px;background:#F7F9F6;border-bottom:1px solid var(--line-2)}
 
   .btn{display:block;width:100%;padding:14px;border-radius:var(--r);border:0;background:var(--jade);color:#fff;font-weight:600;font-size:15px;text-align:center}
@@ -83,11 +93,6 @@
   .btn.ghost:active{background:#F2F4F1}
   .btn.danger{background:var(--card);color:var(--brick);border:1px solid var(--line);font-weight:500}
 
-  .steps{counter-reset:s;list-style:none;padding:0;margin:0 0 14px}
-  .steps li{counter-increment:s;position:relative;padding:0 0 12px 30px;font-size:13.5px;color:var(--ink-2)}
-  .steps li:before{content:counter(s);position:absolute;left:0;top:0;width:20px;height:20px;border-radius:50%;background:var(--jade);color:#fff;font-size:11.5px;font-weight:600;display:grid;place-items:center}
-  .steps li b{color:var(--ink);font-weight:600}
-
   textarea{width:100%;padding:11px;border:1px solid var(--line);border-radius:var(--r);background:var(--card);resize:vertical;line-height:1.45;font-size:13.5px}
   .mono{font-size:12.5px;line-height:1.5;color:var(--ink-2);background:#F7F9F6}
 
@@ -96,7 +101,8 @@
   .rev.off{opacity:.42}
   .chk{width:22px;height:22px;flex:none;border-radius:6px;border:1.5px solid #C3CCC4;background:var(--card);margin-top:2px;display:grid;place-items:center;color:#fff;font-size:13px;padding:0}
   .chk.on{background:var(--jade);border-color:var(--jade)}
-  .pill{font-size:12.5px;padding:5px 9px;border-radius:20px;background:#F1F4F0;border:1px solid var(--line);margin-top:7px;font-weight:500;max-width:100%}
+  .pill{font-size:12.5px;padding:6px 9px;border-radius:8px;background:#F1F4F0;border:1px solid var(--line);margin-top:7px;max-width:100%;font-weight:500}
+  .pill.need{border-color:var(--amber);background:#FBF0E6;color:#8A5418}
   .dup{font-size:11.5px;color:var(--amber);font-weight:500;margin-top:5px}
   .ask{margin-top:8px;padding:10px 11px;border:1px solid #E8CDA9;background:#FBF0E6;border-radius:8px;font-size:12.5px;color:#8A5418}
   .ask button{margin:8px 8px 0 0;padding:7px 12px;border-radius:7px;border:1px solid #DCC3A0;background:#fff;font-size:12.5px;font-weight:600;color:#8A5418}
@@ -115,7 +121,7 @@
   .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line-2)}
   .row:last-child{border-bottom:0}
   .row label{font-size:14.5px;display:flex;align-items:center;gap:9px;min-width:0}
-  .row input{width:112px;text-align:right;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:#FAFBF9}
+  .row input{width:118px;text-align:right;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:#FAFBF9}
   .fld{padding:12px 14px;border-bottom:1px solid var(--line-2)}
   .fld:last-child{border-bottom:0}
   .fld span{display:block;font-size:12.5px;color:var(--ink-2);margin-bottom:6px}
@@ -144,28 +150,40 @@
 <nav><div class="nav-in" id="nav"></div></nav>
 
 <script>
+/* ============ ĐỊNH NGHĨA CỐ ĐỊNH — mã không bao giờ đổi ============ */
 const CATS=[
- {id:'an', n:'Ăn uống',                c:'#0E6B5C'},
- {id:'cho',n:'Chợ & siêu thị',         c:'#4E8C5A'},
- {id:'di', n:'Di chuyển',              c:'#2F7A93'},
- {id:'hd', n:'Hóa đơn & tiện ích',     c:'#3D5A80'},
- {id:'ms', n:'Mua sắm',                c:'#7A5C9E'},
- {id:'sk', n:'Sức khỏe',               c:'#B4557A'},
- {id:'gt', n:'Giải trí',               c:'#C8792B'},
- {id:'gd', n:'Gia đình & hiếu hỉ',     c:'#9C4A3C'},
- {id:'ht', n:'Học tập',                c:'#6B7B2E'},
- {id:'ck', n:'Chuyển khoản & rút tiền',c:'#7C8A92'},
- {id:'kh', n:'Khác',                   c:'#9AA5A9'}
+ {id:'an',   k:'chi', n:'Ăn uống',                    c:'#0E6B5C'},
+ {id:'cho',  k:'chi', n:'Chợ & siêu thị',             c:'#4E8C5A'},
+ {id:'di',   k:'chi', n:'Di chuyển',                  c:'#2F7A93'},
+ {id:'hd',   k:'chi', n:'Hóa đơn & tiện ích',         c:'#3D5A80'},
+ {id:'qa',   k:'chi', n:'Quần áo & giày dép',         c:'#7A5C9E'},
+ {id:'gdu',  k:'chi', n:'Đồ gia dụng',                c:'#5B6E8C'},
+ {id:'ld',   k:'chi', n:'Làm đẹp & chăm sóc bản thân',c:'#B4557A'},
+ {id:'sk',   k:'chi', n:'Sức khỏe',                   c:'#C05A55'},
+ {id:'gt',   k:'chi', n:'Giải trí',                   c:'#C8792B'},
+ {id:'gd',   k:'chi', n:'Gia đình & hiếu hỉ',         c:'#9C4A3C'},
+ {id:'ht',   k:'chi', n:'Học tập',                    c:'#6B7B2E'},
+ {id:'tk',   k:'chi', n:'Tiết kiệm & đầu tư',         c:'#2E7D6B'},
+ {id:'vay',  k:'chi', n:'Cho vay & trả nợ',           c:'#8C7B4A'},
+ {id:'luong',k:'thu', n:'Lương',                      c:'#0E6B5C'},
+ {id:'thuong',k:'thu',n:'Thưởng',                     c:'#4E8C5A'},
+ {id:'no',   k:'thu', n:'Thu nợ & vay mượn',          c:'#8C7B4A'},
+ {id:'tkhac',k:'thu', n:'Thu khác',                   c:'#7C8A92'}
 ];
-const catOf=id=>CATS.find(c=>c.id===id)||CATS[CATS.length-1];
+const CHI=CATS.filter(c=>c.k==='chi'), THU=CATS.filter(c=>c.k==='thu');
+const catOf=id=>CATS.find(c=>c.id===id)||{id:'',n:'Chưa chọn nhóm',c:'#C3CCC4'};
+const SRC=[{id:'bidv',n:'BIDV'},{id:'vi',n:'Ví điện tử'},{id:'tm',n:'Tiền mặt'}];
+const srcOf=id=>SRC.find(s=>s.id===id)||SRC[0];
 const KEY='sochi:data';
-const VERSION='1.5';
-let DB={txns:[],budgets:{},rules:{},opts:{ab:'off'},lastBackup:0,v:1};
+const VERSION='2.0';
+
+let DB={txns:[],budgets:{},rules:{},opens:{bidv:0,vi:0,tm:0},opts:{ab:'off'},lastBackup:0,v:2};
 let tab='home', cursor=new Date(), pending=null, msg='', msgType='err';
 
-/* ---------- tiện ích ---------- */
+/* ============ tiện ích ============ */
 const money=n=>new Intl.NumberFormat('vi-VN').format(Math.round(n));
-const short=n=>n>=1e9?(n/1e9).toFixed(n%1e9?1:0)+' tỷ':n>=1e6?(n/1e6).toFixed(n>=1e7?0:1)+' tr':n>=1e3?Math.round(n/1e3)+'k':String(Math.round(n));
+const short=n=>{const s=n<0?'-':'';n=Math.abs(n);
+  return s+(n>=1e9?(n/1e9).toFixed(n%1e9?1:0)+' tỷ':n>=1e6?(n/1e6).toFixed(n>=1e7?0:1)+' tr':n>=1e3?Math.round(n/1e3)+'k':String(Math.round(n)));};
 const ym=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
 const iso=d=>ym(d)+'-'+String(d.getDate()).padStart(2,'0');
 const esc=s=>String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
@@ -179,18 +197,17 @@ function merchantKey(s){
 const fid=t=>t.d+'|'+t.a+'|'+merchantKey(t.n0||t.n).slice(0,24);
 function parseAmt(v){
   let s=noAccent(v).replace(/[\s₫+]/g,'').replace(/vnd|dong/g,'').replace(/d$/,'').replace(/^[-−–—]/,'');
-  if(/^\d{1,3}(,\d{3})+/.test(s)) s=s.replace(/,/g,'');        // 85,000
-  else if(/^\d{1,3}(\.\d{3})+/.test(s)) s=s.replace(/\./g,''); // 1.200.000
-  else s=s.replace(/,/g,'.');                                  // 1,5tr → 1.5tr
+  if(/^\d{1,3}(,\d{3})+/.test(s)) s=s.replace(/,/g,'');
+  else if(/^\d{1,3}(\.\d{3})+/.test(s)) s=s.replace(/\./g,'');
+  else s=s.replace(/,/g,'.');
   const m=s.match(/^(\d+(?:\.\d+)?)(tr|trieu|k|m)?(\d*)$/); if(!m)return NaN;
-  let b=parseFloat(m[1]); if(isNaN(b))return NaN;
-  const u=m[2];
+  let b=parseFloat(m[1]); if(isNaN(b))return NaN; const u=m[2];
   if(u==='tr'||u==='trieu'||u==='m'){b*=1e6; if(m[3])b+=parseFloat(m[3])*1e6/Math.pow(10,m[3].length);}
   else if(u==='k'){b*=1e3; if(m[3])b+=parseFloat(m[3])*1e3/Math.pow(10,m[3].length);}
   return Math.round(b);
 }
 
-/* ---------- lưu trữ: dùng kho của Claude nếu có, không thì bộ nhớ trình duyệt ---------- */
+/* ============ lưu trữ ============ */
 const store={
   async get(){
     if(window.storage){try{const r=await window.storage.get(KEY);return r&&r.value;}catch(e){}}
@@ -201,44 +218,92 @@ const store={
     try{localStorage.setItem(KEY,v);return true;}catch(e){return false;}
   }
 };
-async function load(){try{const raw=await store.get();if(raw){const d=JSON.parse(raw);
+/* chuyển dữ liệu bản 1.x sang cấu trúc mới, không làm mất giao dịch cũ */
+function migrate(d){
+  const OLD={ms:'qa',ck:'',kh:''};
+  (d.txns||[]).forEach(t=>{
+    if(!t.s)t.s='bidv';
+    if(t.x){t.t='mv';t.s2=t.w?'vi':'tm';delete t.x;delete t.c;}
+    else if(t.c&&OLD.hasOwnProperty(t.c))t.c=OLD[t.c];
+    if(t.t==='thu'&&!CATS.some(c=>c.id===t.c&&c.k==='thu'))t.c='tkhac';
+  });
+  d.v=2; return d;
+}
+async function load(){try{const raw=await store.get();if(raw){let d=JSON.parse(raw);
+  if((d.v||1)<2)d=migrate(d);
   DB=Object.assign({},d,{txns:Array.isArray(d.txns)?d.txns:[],budgets:d.budgets||{},rules:d.rules||{},
-      opts:Object.assign({ab:'off'},d.opts||{}),lastBackup:d.lastBackup||0,v:d.v||1});}}catch(e){}}
+    opens:Object.assign({bidv:0,vi:0,tm:0},d.opens||{}),
+    opts:Object.assign({ab:'off'},d.opts||{}),lastBackup:d.lastBackup||0,v:2});}}catch(e){}}
 let saveT=null;
 function save(){clearTimeout(saveT);saveT=setTimeout(()=>store.set(JSON.stringify(DB)),200);}
 
-/* ---------- sao lưu ---------- */
+/* ============ sao lưu ============ */
 const backupName=()=>'so-chi-tieu-'+iso(new Date())+'.json';
-function daysSinceBackup(){return DB.lastBackup?Math.floor((Date.now()-DB.lastBackup)/864e5):null;}
-function backupFile(){
-  const body=JSON.stringify(DB);
+const daysSinceBackup=()=>DB.lastBackup?Math.floor((Date.now()-DB.lastBackup)/864e5):null;
+function backupFile(){const body=JSON.stringify(DB);
   try{return new File([body],backupName(),{type:'application/json'});}
-  catch(e){return new Blob([body],{type:'application/json'});}
-}
-function download(f){
-  const url=URL.createObjectURL(f), a=document.createElement('a');
-  a.href=url; a.download=f.name||backupName(); document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),3000);
-}
-/* gọi thẳng trong lúc bấm nút, không await trước, để trình duyệt còn cho phép chia sẻ */
+  catch(e){return new Blob([body],{type:'application/json'});}}
+function download(f){const url=URL.createObjectURL(f),a=document.createElement('a');
+  a.href=url;a.download=f.name||backupName();document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),3000);}
 function runBackup(mode,quiet){
   const f=backupFile();
   const done=()=>{DB.lastBackup=Date.now();save();if(!quiet)flash('Đã tạo bản sao lưu.','ok');else render();};
   if(mode==='share'&&navigator.canShare&&navigator.share){
-    try{
-      if(navigator.canShare({files:[f]})){
-        navigator.share({files:[f],title:'Sao lưu sổ chi tiêu'})
-          .then(done).catch(e=>{if(e&&e.name!=='AbortError'){try{download(f);done();}catch(_){}}});
-        return;
-      }
-    }catch(e){}
+    try{if(navigator.canShare({files:[f]})){
+      navigator.share({files:[f],title:'Sao lưu sổ chi tiêu'}).then(done)
+        .catch(e=>{if(e&&e.name!=='AbortError'){try{download(f);done();}catch(_){}}});
+      return;}}catch(e){}
   }
-  try{download(f);done();}
-  catch(e){if(!quiet)flash('Trình duyệt chặn tải file. Cô chép tay đoạn sao lưu bên dưới.','err');}
+  try{download(f);done();}catch(e){if(!quiet)flash('Trình duyệt chặn tải file. Vy chép tay đoạn sao lưu bên dưới nhé.','err');}
 }
 function autoBackup(){const m=(DB.opts&&DB.opts.ab)||'off';if(m!=='off')runBackup(m,true);}
+function flash(t,k){msg=t;msgType=k||'err';render();}
 
-/* ---------- câu lệnh để cô đưa cho Claude ---------- */
+/* ============ số dư từng nguồn ============ */
+function balances(){
+  const b={bidv:+DB.opens.bidv||0, vi:+DB.opens.vi||0, tm:+DB.opens.tm||0};
+  DB.txns.forEach(t=>{
+    const s=t.s||'bidv';
+    if(t.t==='thu') b[s]=(b[s]||0)+t.a;
+    else if(t.t==='mv'){ b[s]=(b[s]||0)-t.a; const to=t.s2||'tm'; b[to]=(b[to]||0)+t.a; }
+    else b[s]=(b[s]||0)-t.a;
+  });
+  return b;
+}
+/* số dư BIDV mà ngân hàng báo, lấy từ giao dịch mới nhất có số dư */
+function reportedBidv(){
+  const rows=DB.txns.filter(t=>t.b&&(t.s||'bidv')==='bidv')
+    .sort((x,y)=>(x.d+' '+(x.tm||'00:00')).localeCompare(y.d+' '+(y.tm||'00:00')));
+  return rows.length?rows[rows.length-1]:null;
+}
+/* so số dư app tính TẠI thời điểm ngân hàng báo, không phải số dư hôm nay,
+   vì có thể có giao dịch ghi tay sau đó chưa kèm số dư ngân hàng */
+function bidvCheck(){
+  const rep=reportedBidv(); if(!rep)return null;
+  const cut=rep.d+' '+(rep.tm||'00:00');
+  let v=+DB.opens.bidv||0;
+  DB.txns.forEach(t=>{
+    if((t.d+' '+(t.tm||'00:00'))>cut)return;
+    const s=t.s||'bidv';
+    if(t.t==='mv'){ if(s==='bidv')v-=t.a; if(t.s2==='bidv')v+=t.a; }
+    else if(s==='bidv') v+=(t.t==='thu'?t.a:-t.a);
+  });
+  return {computed:v,reported:rep.b,diff:v-rep.b,at:rep};
+}
+function chainGaps(){
+  const rows=DB.txns.filter(t=>t.b&&(t.s||'bidv')==='bidv')
+    .sort((x,y)=>(x.d+' '+(x.tm||'00:00')).localeCompare(y.d+' '+(y.tm||'00:00')));
+  const out=[];
+  for(let i=1;i<rows.length;i++){
+    const p=rows[i-1],c=rows[i];
+    const expect=p.b+(c.t==='thu'?c.a:-c.a);
+    if(Math.abs(expect-c.b)>=1) out.push({d:c.d,tm:c.tm,gap:c.b-expect});
+  }
+  return out;
+}
+
+/* ============ câu lệnh cho AI ============ */
 function promptText(){
   return `Tôi là người dùng BIDV, mỗi ngày gửi vào đây vài ảnh chụp màn hình "Chi tiết giao dịch" của app BIDV. Với mỗi ảnh, trả về đúng một dòng theo định dạng sau, không viết gì thêm:
 
@@ -248,9 +313,11 @@ Quy ước:
 - Số tiền và số dư chỉ giữ chữ số, bỏ dấu phân cách và chữ VND. Số tiền lấy giá trị dương.
 - Số tiền màu đỏ hoặc có dấu trừ ghi "chi"; màu xanh hoặc có dấu cộng ghi "thu".
 - Nội dung: rút gọn thành nơi nhận hoặc mục đích dễ hiểu, bỏ số tài khoản và mã tham chiếu dài.
-- Nếu nội dung chỉ có mã QR không rõ nơi bán, ghi đúng chữ "Thanh toán QR" và để mã nhóm là kh.
-- Nếu nội dung có tên ví điện tử (MoMo, ZaloPay, ShopeePay, VNPay, ViettelPay), giữ nguyên tên ví trong phần nội dung, ví dụ "Ví MoMo", mã nhóm để kh.
-- Mã nhóm chọn một trong: ${CATS.map(c=>c.id+'='+c.n).join(', ')}
+- Nếu nội dung chỉ có mã QR không rõ nơi bán, ghi đúng chữ "Thanh toán QR" và để trống mã nhóm.
+- Nếu nội dung có tên ví điện tử (MoMo, ZaloPay, ShopeePay, VNPay, ViettelPay), giữ nguyên tên ví trong nội dung, ví dụ "Ví MoMo", và để trống mã nhóm.
+- Mã nhóm chi: ${CHI.map(c=>c.id+'='+c.n).join(', ')}
+- Mã nhóm thu: ${THU.map(c=>c.id+'='+c.n).join(', ')}
+- Nếu không chắc nhóm nào thì để trống, đừng đoán.
 - Sắp các dòng theo thời gian tăng dần.
 
 Cách làm việc:
@@ -259,24 +326,33 @@ Cách làm việc:
 - Nếu một ảnh mờ hoặc thiếu thông tin, thay dòng đó bằng: KHÔNG ĐỌC ĐƯỢC | lý do ngắn gọn. Tuyệt đối không đoán số.
 
 Ví dụ:
-2026-09-02 07:32 | 50000 | chi | Ví MoMo | kh | 918490
-2026-09-02 11:41 | 33000 | chi | Thanh toán QR | kh | 885490`;
+2026-09-02 07:32 | 50000 | chi | Ví MoMo |  | 918490
+2026-09-02 14:23 | 950000 | chi | Đi chơi Phước Hải | gt | 235490`;
 }
 async function copyPrompt(){
-  const t=promptText();
-  try{await navigator.clipboard.writeText(t);flash('Đã chép câu lệnh. Mở Claude, dán câu lệnh kèm ảnh chụp.','ok');}
-  catch(e){const el=document.getElementById('pmt');if(el){el.select();}flash('Trình duyệt chặn chép tự động — câu lệnh đã bôi đen sẵn, cô chép tay.','err');}
+  try{await navigator.clipboard.writeText(promptText());flash('Đã chép câu lệnh.','ok');}
+  catch(e){flash('Trình duyệt chặn chép tự động, Vy chép tay trong ô nhé.','err');}
 }
-function flash(t,k){msg=t;msgType=k||'err';render();}
 
-/* ---------- đọc kết quả dán vào ---------- */
+/* ============ đọc kết quả dán ============ */
+const WALLETS=[[/momo/,'MoMo'],[/zalo ?pay/,'ZaloPay'],[/shopee ?pay/,'ShopeePay'],
+  [/viettel ?pay/,'ViettelPay'],[/vnpay/,'VNPay'],[/moca/,'Moca'],[/payoo/,'Payoo']];
+function walletOf(t){
+  if(t.t!=='chi')return '';
+  const s=noAccent(t.n0||t.n);
+  for(const [re,name] of WALLETS) if(re.test(s)) return name;
+  return '';
+}
+const isQR=t=>t.t==='chi'&&/(^|[^a-z])v?qr([^a-z]|$)|quet ma/.test(noAccent(t.n0||t.n));
+
 function parsePaste(raw){
   const out=[];
   let txt=String(raw).replace(/```[a-z]*|```/g,'').trim();
-  // hỗ trợ cả khi Claude trả về JSON
   if(txt.startsWith('[')){
-    try{JSON.parse(txt).forEach(r=>{if(r&&r.d&&r.a){const o={d:String(r.d).slice(0,10),tm:r.tm||'',a:Math.abs(+r.a)||0,
-      t:r.t==='thu'?'thu':'chi',n:String(r.n||'Giao dịch').slice(0,60),c:CATS.some(c=>c.id===r.c)?r.c:'kh'};
+    try{JSON.parse(txt).forEach(r=>{if(r&&r.d&&r.a){
+      const o={d:String(r.d).slice(0,10),tm:r.tm||'',a:Math.abs(+r.a)||0,
+        t:r.t==='thu'?'thu':'chi',n:String(r.n||'Giao dịch').slice(0,60),
+        c:CATS.some(c=>c.id===r.c)?r.c:''};
       o.n0=o.n; if(r.b)o.b=Math.abs(+r.b); out.push(o);}});
       return out;}catch(e){}
   }
@@ -286,10 +362,9 @@ function parsePaste(raw){
     if(!s||!s.includes('|'))return;
     const p=s.split('|').map(x=>x.trim());
     if(p.length<2)return;
-    if(/^[-: ]+$/.test(p[0]))return;                       // dòng kẻ của bảng
-    if(/ngay|ngày|date|so tien/.test(noAccent(p[0])))return; // dòng tiêu đề
+    if(/^[-: ]+$/.test(p[0]))return;
+    if(/ngay|ngày|date|so tien/.test(noAccent(p[0])))return;
 
-    // ngày
     let d=null, dm=p[0].match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
     if(dm) d=dm[1]+'-'+dm[2].padStart(2,'0')+'-'+dm[3].padStart(2,'0');
     else{
@@ -306,63 +381,42 @@ function parsePaste(raw){
     const t=(kind.includes('thu')||kind.includes('vao')||/^\+/.test(p[1]))?'thu':'chi';
     const n=(p[3]||'Giao dịch').slice(0,60);
     let c=(p[4]||'').trim().toLowerCase();
-    if(!CATS.some(x=>x.id===c)){
-      const hit=CATS.find(x=>noAccent(x.n)===noAccent(p[4]||''));
-      c=hit?hit.id:'kh';
+    if(!CATS.some(x=>x.id===c&&x.k===t)){
+      const hit=CATS.find(x=>x.k===t&&noAccent(x.n)===noAccent(p[4]||''));
+      c=hit?hit.id:'';
     }
     const b=p[5]?parseAmt(p[5]):NaN;
-    const row={d,tm,a,t,n,n0:n,c};
+    const row={d,tm,a,t,n,n0:n,c,s:'bidv'};
     if(!isNaN(b)&&b)row.b=b;
     out.push(row);
   });
   return out;
 }
-/* ví điện tử và quét QR: hai loại app không được tự đoán */
-const WALLETS=[[/momo/,'MoMo'],[/zalo ?pay/,'ZaloPay'],[/shopee ?pay/,'ShopeePay'],
-  [/viettel ?pay/,'ViettelPay'],[/vnpay/,'VNPay'],[/moca/,'Moca'],[/payoo/,'Payoo']];
-function walletOf(t){
-  if(t.t!=='chi')return '';
-  const s=noAccent(t.n0||t.n);
-  for(const [re,name] of WALLETS) if(re.test(s)) return name;
-  return '';
-}
-const isQR=t=>t.t==='chi'&&/(^|[^a-z])v?qr([^a-z]|$)|quet ma/.test(noAccent(t.n0||t.n));
-
-/* chuỗi số dư: phát hiện giao dịch bị bỏ sót */
-function chainGaps(list){
-  const rows=list.filter(t=>t.b).slice()
-    .sort((x,y)=>(x.d+' '+(x.tm||'00:00')).localeCompare(y.d+' '+(y.tm||'00:00')));
-  const out=[];
-  for(let i=1;i<rows.length;i++){
-    const p=rows[i-1], c=rows[i];
-    const expect=p.b+(c.t==='thu'?c.a:-c.a);
-    if(Math.abs(expect-c.b)>=1) out.push({d:c.d,tm:c.tm,gap:c.b-expect});
-  }
-  return out;
-}
 function doPaste(){
   const raw=document.getElementById('paste').value;
   const rows=parsePaste(raw);
-  if(!rows.length){flash('Chưa đọc được dòng nào. Mỗi dòng cần có dạng: ngày | số tiền | chi | nội dung | mã nhóm','err');return;}
+  if(!rows.length){flash('Chưa đọc được dòng nào. Mỗi dòng cần dạng: ngày | số tiền | chi | nội dung | nhóm | số dư','err');return;}
   const seen=new Set(DB.txns.map(fid)), have=new Set();
   pending=[];
   rows.forEach(t=>{
     t.w=walletOf(t); t.q=isQR(t);
     const k=merchantKey(t.n0||t.n);
-    if(DB.rules[k]&&!t.w&&!t.q)t.c=DB.rules[k];   // ví và QR không bao giờ tự gán
+    if(!t.c&&DB.rules[k]&&!t.w&&!t.q)t.c=DB.rules[k];
     const f=fid(t); if(have.has(f))return; have.add(f);
     t.dup=seen.has(f); t.keep=!t.dup;
-    if(t.w){t.ask=true;t.c0=(t.c==='ck'?'kh':t.c);t.c='ck';t.x=true;}
-    else if(t.q){t.spend=true;t.c='kh';}
+    if(t.w)t.ask=true;
     pending.push(t);
   });
   pending.sort((a,b)=>(b.d+' '+(b.tm||'')).localeCompare(a.d+' '+(a.tm||'')));
   msg=''; render();
 }
+const needCat=t=>t.keep&&!t.ask&&t.t!=='mv'&&!t.c;
 function commit(){
   const add=pending.filter(t=>t.keep).map(t=>{
-    const o={d:t.d,a:t.a,t:t.t,n:t.n,c:t.c,id:Date.now()+Math.random()};
-    if(t.tm)o.tm=t.tm; if(t.b)o.b=t.b; if(t.x)o.x=1;
+    const o={d:t.d,a:t.a,t:t.t,n:t.n,s:t.s||'bidv',id:Date.now()+Math.random()};
+    if(t.t!=='mv')o.c=t.c;
+    if(t.t==='mv')o.s2=t.s2||'vi';
+    if(t.tm)o.tm=t.tm; if(t.b)o.b=t.b;
     if(t.w)o.w=t.w; if(t.q)o.q=1; if(t.n0&&t.n0!==t.n)o.n0=t.n0;
     return o;});
   DB.txns=DB.txns.concat(add); save();
@@ -370,111 +424,156 @@ function commit(){
   autoBackup();
 }
 
-/* ---------- tính toán ---------- */
+/* ============ tính toán ============ */
 const monthTx=d=>{const k=ym(d);return DB.txns.filter(t=>t.d.slice(0,7)===k)};
 const sum=l=>l.reduce((s,t)=>s+t.a,0);
-const isChi=t=>t.t==='chi'&&!t.x;
-const sumChi=l=>sum(l.filter(isChi));
-const sumMove=l=>sum(l.filter(t=>t.t==='chi'&&t.x));
-function byCat(list){const m={};list.filter(isChi).forEach(t=>m[t.c]=(m[t.c]||0)+t.a);
+const sumChi=l=>sum(l.filter(t=>t.t==='chi'));
+const sumThu=l=>sum(l.filter(t=>t.t==='thu'));
+function byCat(list){const m={};list.filter(t=>t.t==='chi').forEach(t=>m[t.c||'']=(m[t.c||'']||0)+t.a);
   return Object.entries(m).sort((a,b)=>b[1]-a[1]);}
 
-/* ---------- màn hình ---------- */
+/* ============ màn hình ============ */
 function vHome(){
-  const list=monthTx(cursor), chi=sumChi(list), thu=sum(list.filter(t=>t.t==='thu')), mv=sumMove(list);
+  const list=monthTx(cursor), chi=sumChi(list), thu=sumThu(list);
   const cats=byCat(list), now=new Date(), cur=ym(cursor)===ym(now);
   const nd=daysIn(cursor), passed=cur?now.getDate():nd;
   const totalBudget=Object.values(DB.budgets).reduce((s,v)=>s+(v||0),0);
-  if(!chi&&!thu&&!mv)return `<div class="empty"><b>Tháng này chưa có gì</b>Chụp màn hình chi tiết giao dịch BIDV, nhờ Claude đọc, rồi dán kết quả ở tab Nhập.</div>`;
+  let h='';
 
-  let h=`<div class="hero"><div class="lead">Đã chi trong ${MONTH(cursor.getMonth()).toLowerCase()}</div>
-    <div class="sum">${money(chi)}<small>₫</small></div>
-    <div class="sub">${list.filter(isChi).length} giao dịch · trung bình <b>${short(chi/passed)}₫</b> mỗi ngày`
-    +(thu?` · nhận vào <b>${short(thu)}₫</b>`:'')
-    +(mv?` · chuyển sang ví <b>${short(mv)}₫</b> chưa tính`:'')+`</div>`;
-  if(cats.length){
-    h+=`<div class="stack">`+cats.map(([id,v])=>`<i style="width:${v/chi*100}%;background:${catOf(id).c}"></i>`).join('')+`</div>
-      <div class="stack-note"><span>${esc(catOf(cats[0][0]).n)} dẫn đầu, ${Math.round(cats[0][1]/chi*100)}%</span>`
-      +(totalBudget?`<span>${totalBudget-chi>=0?'còn '+short(totalBudget-chi)+'₫':'vượt '+short(chi-totalBudget)+'₫'}</span>`:'')+`</div>`;
+  if(!list.length){
+    h+=`<div class="empty"><b>Tháng này chưa có gì</b>Gửi ảnh chụp chi tiết giao dịch vào chat của tháng, chép kết quả rồi dán ở tab Nhập.</div>`;
+  }else{
+    h+=`<div class="hero"><div class="lead">Đã chi trong ${MONTH(cursor.getMonth()).toLowerCase()}</div>
+      <div class="sum">${money(chi)}<small>₫</small></div>
+      <div class="sub">${list.filter(t=>t.t==='chi').length} giao dịch · trung bình <b>${short(chi/passed)}₫</b> mỗi ngày`
+      +(thu?` · nhận vào <b>${short(thu)}₫</b>`:'')+`</div>`;
+    if(cats.length&&chi){
+      h+=`<div class="stack">`+cats.map(([id,v])=>`<i style="width:${v/chi*100}%;background:${catOf(id).c}"></i>`).join('')+`</div>
+        <div class="stack-note"><span>${esc(catOf(cats[0][0]).n)} dẫn đầu, ${Math.round(cats[0][1]/chi*100)}%</span>`
+        +(totalBudget?`<span>${totalBudget-chi>=0?'còn '+short(totalBudget-chi)+'₫':'vượt '+short(chi-totalBudget)+'₫'}</span>`:'')+`</div>`;
+    }
+    h+=`</div>`;
   }
-  h+=`</div><h2>Chi theo nhóm</h2><div class="panel">`;
-  cats.forEach(([id,v])=>{
-    const c=catOf(id), b=DB.budgets[id]||0, pct=b?Math.min(100,v/b*100):v/cats[0][1]*100, ov=b&&v>b;
-    h+=`<button class="cat" onclick="tab='list';render()">
-      <span class="spine" style="background:${c.c}"></span><span class="cat-body">
-      <span class="cat-top"><span class="cat-name">${esc(c.n)}</span><span class="cat-amt">${money(v)}</span></span>
-      <span class="track"><i style="width:${pct}%;background:${ov?'var(--amber)':c.c}"></i></span>
-      <span class="cat-meta"><span>${b?'hạn mức '+short(b)+'₫':Math.round(v/chi*100)+'% tổng chi'}</span>
-      <span class="${ov?'over':''}">${b?(ov?'vượt '+short(v-b)+'₫':'còn '+short(b-v)+'₫'):''}</span></span>
-      </span></button>`;
+
+  /* nguồn tiền */
+  const bal=balances(), chk=bidvCheck();
+  h+=`<h2>Số dư hiện tại</h2><div class="panel">`;
+  SRC.forEach(s=>{
+    const v=bal[s.id]||0;
+    let note='';
+    if(s.id==='bidv'){
+      note=!chk?'chưa có số dư ngân hàng để đối chiếu'
+        :chk.diff===0?`<span class="khop">khớp ngân hàng lúc ${chk.at.d.slice(8,10)}/${chk.at.d.slice(5,7)}${chk.at.tm?' '+chk.at.tm:''}</span>`
+        :`<span class="lech">lệch ${short(Math.abs(chk.diff))}₫ so với ngân hàng</span>`;
+    }else{note='tự tính từ giao dịch đã ghi';}
+    h+=`<div class="src"><div><div class="src-n">${s.n}</div><div class="src-m">${note}</div></div>
+      <div class="src-a ${v<0?'neg':''}">${money(v)} ₫</div></div>`;
   });
   h+=`</div>`;
-  const dayTot=Array(nd).fill(0);
-  list.filter(isChi).forEach(t=>{const i=+t.d.slice(8,10)-1;if(i>=0&&i<nd)dayTot[i]+=t.a});
-  const mx=Math.max(...dayTot,1);
-  h+=`<h2>Từng ngày</h2><div class="days">`+dayTot.map((v,i)=>
-    `<i class="${cur&&i===now.getDate()-1?'today':''}" style="height:${v/mx*100}%" title="Ngày ${i+1}: ${money(v)}₫"></i>`).join('')
-    +`</div><div class="days-x"><span>1</span><span>${Math.ceil(nd/2)}</span><span>${nd}</span></div>`;
 
-  const gaps=chainGaps(DB.txns).filter(g=>g.d.slice(0,7)===ym(cursor));
+  const gaps=chainGaps().filter(g=>g.d.slice(0,7)===ym(cursor));
   if(gaps.length){
-    h+=`<div class="sp"></div><div class="err"><b>Chuỗi số dư bị đứt</b><br>`
-      +gaps.slice(0,3).map(g=>`Trước giao dịch ${g.d.slice(8,10)}/${g.d.slice(5,7)}${g.tm?' '+g.tm:''} còn thiếu một khoản ${g.gap<0?'chi':'thu'} khoảng ${money(Math.abs(g.gap))}₫.`).join('<br>')
-      +`</div>`;
+    h+=`<div class="sp"></div><div class="err"><b>Chuỗi số dư BIDV bị đứt</b><br>`
+      +gaps.slice(0,3).map(g=>`Trước giao dịch ${g.d.slice(8,10)}/${g.d.slice(5,7)}${g.tm?' '+g.tm:''} còn thiếu một khoản ${g.gap<0?'chi':'thu'} khoảng ${money(Math.abs(g.gap))}₫.`).join('<br>')+`</div>`;
   }
+
+  if(cats.length){
+    h+=`<h2>Chi theo nhóm</h2><div class="panel">`;
+    cats.forEach(([id,v])=>{
+      const c=catOf(id), b=DB.budgets[id]||0, pct=b?Math.min(100,v/b*100):v/cats[0][1]*100, ov=b&&v>b;
+      h+=`<button class="cat" onclick="tab='list';render()">
+        <span class="spine" style="background:${c.c}"></span><span class="cat-body">
+        <span class="cat-top"><span class="cat-name">${esc(c.n)}</span><span class="cat-amt">${money(v)}</span></span>
+        <span class="track"><i style="width:${pct}%;background:${ov?'var(--amber)':c.c}"></i></span>
+        <span class="cat-meta"><span>${b?'hạn mức '+short(b)+'₫':Math.round(v/chi*100)+'% tổng chi'}</span>
+        <span class="${ov?'over':''}">${b?(ov?'vượt '+short(v-b)+'₫':'còn '+short(b-v)+'₫'):''}</span></span>
+        </span></button>`;
+    });
+    h+=`</div>`;
+
+    const dayTot=Array(nd).fill(0);
+    list.filter(t=>t.t==='chi').forEach(t=>{const i=+t.d.slice(8,10)-1;if(i>=0&&i<nd)dayTot[i]+=t.a});
+    const mx=Math.max(...dayTot,1);
+    h+=`<h2>Từng ngày</h2><div class="days">`+dayTot.map((v,i)=>
+      `<i class="${cur&&i===now.getDate()-1?'today':''}" style="height:${v/mx*100}%" title="Ngày ${i+1}: ${money(v)}₫"></i>`).join('')
+      +`</div><div class="days-x"><span>1</span><span>${Math.ceil(nd/2)}</span><span>${nd}</span></div>`;
+  }
+
   const ds=daysSinceBackup();
   if(DB.txns.length>=10&&(ds===null||ds>30))
     h+=`<div class="sp"></div><div class="stack-note"><span>${ds===null?'Sổ chưa từng được sao lưu.':'Đã '+ds+' ngày chưa sao lưu.'}
-      <button style="background:none;border:0;padding:0;color:var(--jade);font-weight:600;font-size:12.5px;text-decoration:underline"
-        onclick="tab='set';render()">Sao lưu</button></span></div>`;
+      <button style="background:none;border:0;padding:0;color:var(--jade);font-weight:600;font-size:12.5px;text-decoration:underline" onclick="tab='set';render()">Sao lưu</button></span></div>`;
   return h;
+}
+
+function catSelect(val,kind,handler,extra){
+  const list=kind==='thu'?THU:CHI;
+  return `<select class="pill ${val?'':'need'}" ${extra||''} onchange="${handler}">
+    <option value="" ${val?'':'selected'}>— chọn nhóm —</option>
+    ${list.map(x=>`<option value="${x.id}" ${x.id===val?'selected':''}>${x.n}</option>`).join('')}</select>`;
 }
 
 function vImport(){
   if(pending){
-    const on=pending.filter(t=>t.keep);
+    const on=pending.filter(t=>t.keep), miss=pending.filter(needCat).length;
     let h=`<h2>Kiểm tra trước khi lưu</h2><div class="panel">`;
     pending.forEach((t,i)=>{
       h+=`<div class="rev ${t.keep?'':'off'}">
         <button class="chk ${t.keep?'on':''}" onclick="tog(${i})" aria-label="Chọn giao dịch">${t.keep?'✓':''}</button>
         <div class="tx-body"><div class="tx-n">${esc(t.n)}</div>
-          <div class="tx-m">${t.d.slice(8,10)}/${t.d.slice(5,7)}${t.tm?' '+t.tm:''} · ${t.t==='thu'?'tiền vào':'tiền ra'}</div>
+          <div class="tx-m">${t.d.slice(8,10)}/${t.d.slice(5,7)}${t.tm?' '+t.tm:''} · ${t.t==='thu'?'tiền vào':t.t==='mv'?'chuyển tiền':'tiền ra'}</div>
           ${t.ask?`<div class="ask">
-              <div>Trả qua ví ${esc(t.w)}. Khoản này đã tiêu vào việc gì chưa?</div>
+              <div>Trả qua ví ${esc(t.w)}. Tiền này đã tiêu vào việc gì chưa?</div>
               <button onclick="askSpend(${i})">Đã tiêu rồi</button>
-              <button onclick="askKeep(${i})">Chỉ nạp ví, chưa tiêu</button>
+              <button onclick="askKeep(${i})">Mới nạp, chưa tiêu</button>
             </div>`
-          :t.t==='chi'?`${t.q&&!t.named?`<div class="hint">Quét QR nên ngân hàng không ghi tên nơi bán — cô điền giúp.</div>`:''}
+          :t.t==='mv'?`<div class="tag">BIDV → ${esc(srcOf(t.s2).n)} · không tính vào chi tiêu</div>`
+          :`${t.q&&!t.named?`<div class="hint">Quét QR nên ngân hàng không ghi tên nơi bán — Vy điền giúp.</div>`:''}
             ${(t.spend||t.q)?`<input class="rename" value="${esc(t.named?t.n:'')}" placeholder="${t.w?'Mua gì qua ví '+esc(t.w)+'?':'Mua gì, ở đâu?'}" onchange="setName(${i},this.value)">`:''}
-            <select class="pill" onchange="setCat(${i},this.value)">${CATS.map(x=>`<option value="${x.id}" ${x.id===t.c?'selected':''}>${x.n}</option>`).join('')}</select>
-            ${t.w&&!t.x?`<div class="tag">qua ví ${esc(t.w)}</div>`:''}
-            ${t.x?`<div class="dup">Không cộng vào tổng chi</div>`:''}`:''}
+            ${catSelect(t.c,t.t,'setCat('+i+',this.value)')}
+            ${t.w?`<div class="tag">qua ví ${esc(t.w)}</div>`:''}`}
           ${t.dup?`<div class="dup">Đã có trong sổ, bỏ chọn sẵn</div>`:''}
         </div>
-        <div class="tx-a ${t.t==='thu'?'in':''}">${t.t==='thu'?'+':''}${money(t.a)}</div></div>`;
+        <div class="tx-a ${t.t==='thu'?'in':t.t==='mv'?'mv':''}">${t.t==='thu'?'+':''}${money(t.a)}</div></div>`;
     });
-    h+=`</div><div class="sp"></div><button class="btn" ${on.length?'':'disabled'} onclick="commit()">Lưu ${on.length} giao dịch</button>
+    h+=`</div><div class="sp"></div>`;
+    if(miss)h+=`<div class="err">Còn ${miss} giao dịch chưa chọn nhóm.</div><div class="sp"></div>`;
+    h+=`<button class="btn" ${on.length&&!miss?'':'disabled'} onclick="commit()">Lưu ${on.length} giao dịch</button>
       <div class="sp"></div><button class="btn ghost" onclick="pending=null;render()">Quay lại</button>`;
     return h;
   }
   let h=`<h2>Dán kết quả từ Claude</h2>
     <div class="stack-note"><span>Thả ảnh chụp chi tiết giao dịch vào chat của tháng này, chép mấy dòng nó trả về rồi dán xuống đây.</span></div>
     <div class="sp"></div>
-    <textarea id="paste" rows="7" placeholder="2026-09-02 07:32 | 50000 | chi | Ví MoMo | kh | 918490"></textarea>
+    <textarea id="paste" rows="7" placeholder="2026-09-02 07:32 | 50000 | chi | Ví MoMo |  | 918490"></textarea>
     <div class="sp"></div>
     <button class="btn" onclick="doPaste()">Đọc kết quả</button>`;
   if(msg)h+=`<div class="${msgType==='ok'?'ok':'err'}">${esc(msg)}</div>`;
 
-  h+=`<h2>Hoặc ghi tay</h2><div class="panel">
-    <div class="fld"><span>Số tiền — gõ được 50k hoặc 1tr2</span><input id="ma" inputmode="text" placeholder="0"></div>
-    <div class="fld"><span>Nội dung</span><input id="mn" placeholder="Cà phê sáng"></div>
+  h+=`<h2>Ghi tay</h2><div class="panel">
     <div class="two">
-      <div class="fld"><span>Nhóm</span><select id="mc">${CATS.map(c=>`<option value="${c.id}">${c.n}</option>`).join('')}</select></div>
-      <div class="fld"><span>Ngày</span><input id="md" type="date" value="${iso(new Date())}"></div>
-    </div></div><div class="sp"></div>
-    <button class="btn ghost" onclick="addManual()">Thêm khoản chi</button>`;
+      <div class="fld"><span>Loại</span><select id="mt" onchange="render()">
+        <option value="chi" ${mt()==='chi'?'selected':''}>Chi</option>
+        <option value="thu" ${mt()==='thu'?'selected':''}>Thu</option>
+        <option value="mv" ${mt()==='mv'?'selected':''}>Chuyển tiền</option></select></div>
+      <div class="fld"><span>Số tiền</span><input id="ma" inputmode="text" placeholder="50k"></div>
+    </div>
+    <div class="fld"><span>Nội dung</span><input id="mn" placeholder="${mt()==='mv'?'Rút tiền mặt':'Cà phê sáng'}"></div>
+    <div class="two">
+      <div class="fld"><span>${mt()==='mv'?'Từ nguồn':'Nguồn tiền'}</span>
+        <select id="ms">${SRC.map(s=>`<option value="${s.id}" ${s.id===(mt()==='chi'?'tm':'bidv')?'selected':''}>${s.n}</option>`).join('')}</select></div>
+      <div class="fld"><span>${mt()==='mv'?'Sang nguồn':'Nhóm'}</span>
+        ${mt()==='mv'
+          ? `<select id="ms2">${SRC.map(s=>`<option value="${s.id}" ${s.id==='tm'?'selected':''}>${s.n}</option>`).join('')}</select>`
+          : `<select id="mc">${(mt()==='thu'?THU:CHI).map(c=>`<option value="${c.id}">${c.n}</option>`).join('')}</select>`}</div>
+    </div>
+    <div class="fld"><span>Ngày</span><input id="md" type="date" value="${iso(new Date())}"></div>
+  </div><div class="sp"></div>
+  <button class="btn ghost" onclick="addManual()">Thêm giao dịch</button>`;
   return h;
 }
+let _mt='chi';
+function mt(){const el=document.getElementById('mt');if(el)_mt=el.value;return _mt;}
 
 function vList(){
   const list=monthTx(cursor).slice().sort((a,b)=>(b.d+' '+(b.tm||'')).localeCompare(a.d+' '+(a.tm||'')));
@@ -484,14 +583,16 @@ function vList(){
   list.forEach(t=>{
     if(t.d!==last){last=t.d;const dd=new Date(t.d+'T00:00');
       h+=`<div class="daygroup">${DOW[dd.getDay()]}, ${dd.getDate()}/${dd.getMonth()+1} — ${money(sumChi(list.filter(x=>x.d===t.d)))}₫</div>`;}
-    const c=catOf(t.c);
-    h+=`<div class="tx"><span class="spine" style="background:${t.t==='thu'?'var(--jade)':t.x?'#C3CCC4':c.c}"></span>
+    const c=catOf(t.c), col=t.t==='thu'?'var(--jade)':t.t==='mv'?'#C3CCC4':c.c;
+    const meta=[t.tm,
+      t.t==='thu'?esc(c.n):t.t==='mv'?esc(srcOf(t.s).n)+' → '+esc(srcOf(t.s2).n):esc(c.n),
+      t.w?'qua ví '+esc(t.w):'', t.t!=='mv'?esc(srcOf(t.s).n):''].filter(Boolean).join(' · ');
+    h+=`<div class="tx"><span class="spine" style="background:${col}"></span>
       <div class="tx-body"><div class="tx-n">${esc(t.n)}</div>
-      <div class="tx-m">${t.tm?t.tm+' · ':''}${t.t==='thu'?'Tiền vào':esc(c.n)}${t.w?' · qua ví '+esc(t.w):''}${t.x?' · không tính':''}</div>
-      ${t.t==='chi'?`<select class="pill" onchange="reCat('${t.id}',this.value)">${CATS.map(x=>`<option value="${x.id}" ${x.id===t.c?'selected':''}>${x.n}</option>`).join('')}</select>`:''}</div>
-      <div style="text-align:right"><div class="tx-a ${t.t==='thu'?'in':''}" ${t.x?'style="color:var(--ink-3)"':''}>${t.t==='thu'?'+':'−'}${money(t.a)}</div>
-      ${t.t==='chi'?`<button style="background:none;border:0;color:var(--ink-3);font-size:12px;padding:6px 0 0" onclick="toggleX('${t.id}')">${t.x?'tính lại':'bỏ tính'}</button><br>`:''}
-      <button style="background:none;border:0;color:var(--ink-3);font-size:12px;padding:4px 0 0" onclick="del('${t.id}')">Xóa</button></div></div>`;
+      <div class="tx-m">${meta}</div>
+      ${t.t!=='mv'?catSelect(t.c,t.t,"reCat('"+t.id+"',this.value)"):''}</div>
+      <div style="text-align:right"><div class="tx-a ${t.t==='thu'?'in':t.t==='mv'?'mv':''}">${t.t==='thu'?'+':t.t==='mv'?'':'−'}${money(t.a)}</div>
+      <button style="background:none;border:0;color:var(--ink-3);font-size:12px;padding:6px 0 0" onclick="del('${t.id}')">Xóa</button></div></div>`;
   });
   return h+`</div>`;
 }
@@ -525,9 +626,16 @@ function vTrend(){
 }
 
 function vSet(){
-  const rules=Object.entries(DB.rules);
-  let h=`<h2>Hạn mức mỗi tháng</h2><div class="panel">`;
-  CATS.forEach(c=>{h+=`<div class="row"><label><span class="spine" style="background:${c.c};height:16px"></span>${esc(c.n)}</label>
+  const ab=(DB.opts&&DB.opts.ab)||'off', ds=daysSinceBackup(), rules=Object.entries(DB.rules);
+  let h=`<h2>Số dư ban đầu</h2>
+    <div class="stack-note"><span>Số tiền có trong mỗi nguồn ngay trước giao dịch đầu tiên ghi vào sổ. Điền một lần rồi thôi.</span></div>
+    <div class="sp"></div><div class="panel">`;
+  SRC.forEach(s=>{h+=`<div class="row"><label>${s.n}</label>
+    <input inputmode="text" value="${DB.opens[s.id]?money(DB.opens[s.id]):''}" placeholder="0" onchange="setOpen('${s.id}',this.value)"></div>`;});
+  h+=`</div>`;
+
+  h+=`<h2>Hạn mức mỗi tháng</h2><div class="panel">`;
+  CHI.forEach(c=>{h+=`<div class="row"><label><span class="spine" style="background:${c.c};height:16px"></span>${esc(c.n)}</label>
     <input inputmode="text" value="${DB.budgets[c.id]?short(DB.budgets[c.id]):''}" placeholder="—" onchange="setB('${c.id}',this.value)"></div>`;});
   h+=`</div><div class="sp"></div><div class="stack-note"><span>Để trống là không đặt hạn mức. Gõ được 2tr hoặc 500k.</span></div>`;
 
@@ -535,95 +643,86 @@ function vSet(){
   h+= rules.length
     ? `<div class="panel">`+rules.map(([k,v])=>`<div class="row"><label style="font-size:13.5px">${esc(k)} → ${esc(catOf(v).n)}</label>
         <button style="background:none;border:0;color:var(--ink-3);font-size:13px" onclick="delRule('${esc(k)}')">Bỏ</button></div>`).join('')+`</div>`
-    : `<div class="empty">Mỗi lần cô sửa nhóm của một giao dịch, app ghi nhớ để lần sau xếp đúng.</div>`;
+    : `<div class="empty">Mỗi lần Vy sửa nhóm của một giao dịch có tên nơi nhận rõ ràng, app ghi nhớ để lần sau xếp đúng.</div>`;
 
-  const ab=(DB.opts&&DB.opts.ab)||'off', ds=daysSinceBackup();
   const MODES=[['off','Tắt'],['share','Mở bảng chia sẻ'],['file','Tải file về máy']];
   h+=`<h2>Sao lưu</h2>
     <div class="panel"><div class="fld"><span>Sau mỗi lần lưu giao dịch</span>
       <select onchange="setAB(this.value)">${MODES.map(([v,n])=>`<option value="${v}" ${v===ab?'selected':''}>${n}</option>`).join('')}</select></div>
       <div class="row"><label style="font-size:13.5px;color:var(--ink-2)">Sao lưu gần nhất</label>
-        <span style="font-size:13.5px;color:${ds===null||ds>30?'var(--amber)':'var(--ink-2)'}">${
-          ds===null?'chưa lần nào':ds===0?'hôm nay':ds+' ngày trước'}</span></div>
-    </div>
-    <div class="sp"></div>
-    <div class="stack-note"><span>${ab==='share'
-      ? 'Bảng chia sẻ của điện thoại sẽ mở ra, cô gửi file vào Drive, Zalo hay email cho chính mình.'
-      : ab==='file' ? 'File sao lưu tự tải xuống thư mục Tải về sau mỗi lần lưu.'
-      : 'Đang tắt — cô tự bấm nút bên dưới khi cần.'}</span></div>
-    <div class="sp"></div>
+        <span style="font-size:13.5px;color:${ds===null||ds>30?'var(--amber)':'var(--ink-2)'}">${ds===null?'chưa lần nào':ds===0?'hôm nay':ds+' ngày trước'}</span></div>
+    </div><div class="sp"></div>
     <button class="btn ghost" onclick="runBackup('${ab==='off'?'share':ab}')">Sao lưu ngay</button>
     <div class="sp"></div>
     <div class="panel"><div class="fld"><span>Khôi phục từ file sao lưu</span>
       <input type="file" accept=".json,application/json" onchange="restoreFile(this)"></div></div>
     <div class="sp"></div>
     <details><summary style="font-size:13px;color:var(--ink-3);padding:4px 0">Chép tay bản sao lưu</summary>
-      <div class="sp"></div>
-      <textarea class="mono" rows="3" readonly onclick="this.select()">${esc(JSON.stringify(DB))}</textarea>
-      <div class="sp"></div>
-      <textarea id="restore" rows="2" placeholder="Dán bản sao lưu vào đây"></textarea>
-      <div class="sp"></div><button class="btn ghost" onclick="doRestore()">Khôi phục từ đoạn đã dán</button>
-    </details>`;
-  if(msg)h+=`<div class="${msgType==='ok'?'ok':'err'}">${esc(msg)}</div>`;
+      <div class="sp"></div><textarea class="mono" rows="3" readonly onclick="this.select()">${esc(JSON.stringify(DB))}</textarea>
+      <div class="sp"></div><textarea id="restore" rows="2" placeholder="Dán bản sao lưu vào đây"></textarea>
+      <div class="sp"></div><button class="btn ghost" onclick="doRestore()">Khôi phục từ đoạn đã dán</button></details>`;
 
   h+=`<h2>Câu lệnh cho AI</h2>
     <details><summary style="font-size:13px;color:var(--ink-3);padding:4px 0">Xem lại câu lệnh đặt trong project</summary>
-      <div class="sp"></div>
-      <textarea class="mono" rows="4" readonly onclick="this.select()">${esc(promptText())}</textarea>
-      <div class="sp"></div><button class="btn ghost" onclick="copyPrompt()">Chép câu lệnh</button>
-    </details>`;
+      <div class="sp"></div><textarea class="mono" rows="4" readonly onclick="this.select()">${esc(promptText())}</textarea>
+      <div class="sp"></div><button class="btn ghost" onclick="copyPrompt()">Chép câu lệnh</button></details>`;
 
+  if(msg)h+=`<div class="${msgType==='ok'?'ok':'err'}">${esc(msg)}</div>`;
   h+=`<h2>Dữ liệu</h2><div class="empty" style="text-align:left">${DB.txns.length} giao dịch đang lưu.<br>
     <span style="font-size:12.5px;color:var(--ink-3)">Phiên bản ${VERSION} · lưu tại ${window.storage?'kho của Claude':'trình duyệt máy này'}</span></div>
     <div class="sp"></div><button class="btn danger" onclick="wipe()">Xóa toàn bộ dữ liệu</button>`;
   return h;
 }
 
-/* ---------- hành động ---------- */
+/* ============ hành động ============ */
 function tog(i){pending[i].keep=!pending[i].keep;render()}
-function askSpend(i){const t=pending[i];t.ask=false;t.spend=true;t.x=false;t.c=t.c0||'kh';render()}
-function askKeep(i){const t=pending[i];t.ask=false;t.spend=false;t.x=true;t.c='ck';render()}
+function askSpend(i){const t=pending[i];t.ask=false;t.spend=true;render()}
+function askKeep(i){const t=pending[i];t.ask=false;t.spend=false;t.t='mv';t.s='bidv';t.s2='vi';t.c='';render()}
 function setName(i,v){const t=pending[i],s=String(v).trim().slice(0,60);
   if(s){t.n=s;t.named=true;}else{t.n=t.n0||t.n;t.named=false;}}
-function toggleX(id){const t=DB.txns.find(x=>String(x.id)===id);if(!t)return;
-  if(t.x)delete t.x;else t.x=1;save();render()}
 const canLearn=t=>!t.w&&!t.q;
-function setCat(i,v){const t=pending[i];t.c=v;if(canLearn(t)){DB.rules[merchantKey(t.n0||t.n)]=v;save();}}
+function setCat(i,v){const t=pending[i];t.c=v;
+  if(v&&canLearn(t)){DB.rules[merchantKey(t.n0||t.n)]=v;save();}
+  render();}
 function reCat(id,v){const t=DB.txns.find(x=>String(x.id)===id);if(!t)return;
-  t.c=v;if(canLearn(t))DB.rules[merchantKey(t.n0||t.n)]=v;save();render()}
+  t.c=v; if(v&&canLearn(t))DB.rules[merchantKey(t.n0||t.n)]=v; save();render()}
 function del(id){DB.txns=DB.txns.filter(x=>String(x.id)!==id);save();render()}
 function delRule(k){delete DB.rules[k];save();render()}
 function setB(id,v){const n=parseAmt(v);if(!String(v).trim())delete DB.budgets[id];else if(!isNaN(n))DB.budgets[id]=n;save()}
+function setOpen(id,v){const n=parseAmt(v);DB.opens[id]=(!String(v).trim()||isNaN(n))?0:n;save();render()}
+function setAB(v){DB.opts=Object.assign({},DB.opts,{ab:v});save();render()}
 function addManual(){
+  const type=document.getElementById('mt').value;
   const a=parseAmt(document.getElementById('ma').value), n=document.getElementById('mn').value.trim();
   if(!a||isNaN(a)){flash('Số tiền chưa hợp lệ.','err');return;}
-  DB.txns.push({d:document.getElementById('md').value||iso(new Date()),a,t:'chi',n:n||'Khoản chi',
-    c:document.getElementById('mc').value,id:Date.now()+Math.random()});
-  save();msg='';tab='home';cursor=new Date();render();autoBackup();
+  const o={d:document.getElementById('md').value||iso(new Date()),a,t:type,
+    n:n||(type==='mv'?'Chuyển tiền':'Giao dịch'),s:document.getElementById('ms').value,
+    id:Date.now()+Math.random()};
+  if(type==='mv'){o.s2=document.getElementById('ms2').value;
+    if(o.s2===o.s){flash('Hai nguồn phải khác nhau.','err');return;}}
+  else o.c=document.getElementById('mc').value;
+  DB.txns.push(o);save();msg='';tab='home';cursor=new Date();render();autoBackup();
 }
-function setAB(v){DB.opts=Object.assign({},DB.opts,{ab:v});save();render();}
 function applyBackup(d){
   if(!d||!Array.isArray(d.txns))throw 0;
+  if((d.v||1)<2)d=migrate(d);
   DB=Object.assign({},d,{txns:d.txns,budgets:d.budgets||{},rules:d.rules||{},
-      opts:Object.assign({ab:'off'},d.opts||{}),lastBackup:d.lastBackup||0,v:d.v||1});
+    opens:Object.assign({bidv:0,vi:0,tm:0},d.opens||{}),
+    opts:Object.assign({ab:'off'},d.opts||{}),lastBackup:d.lastBackup||0,v:2});
   save();flash('Đã khôi phục '+d.txns.length+' giao dịch.','ok');
 }
-function restoreFile(el){
-  const f=el.files&&el.files[0]; if(!f)return;
+function restoreFile(el){const f=el.files&&el.files[0];if(!f)return;
   const r=new FileReader();
   r.onload=()=>{try{applyBackup(JSON.parse(r.result));}catch(e){flash('File sao lưu không đọc được.','err');}};
   r.onerror=()=>flash('Không mở được file.','err');
-  r.readAsText(f);
-}
-function doRestore(){
-  try{applyBackup(JSON.parse(document.getElementById('restore').value));}
-  catch(e){flash('Bản sao lưu không đọc được.','err');}
-}
+  r.readAsText(f);}
+function doRestore(){try{applyBackup(JSON.parse(document.getElementById('restore').value));}
+  catch(e){flash('Bản sao lưu không đọc được.','err');}}
 function wipe(){if(confirm('Xóa hết giao dịch, hạn mức và quy tắc? Không khôi phục được.')){
-  DB={txns:[],budgets:{},rules:{},opts:DB.opts,lastBackup:0};save();msg='';tab='home';render();}}
+  DB={txns:[],budgets:{},rules:{},opens:DB.opens,opts:DB.opts,lastBackup:0,v:2};save();msg='';tab='home';render();}}
 function move(n){cursor=new Date(cursor.getFullYear(),cursor.getMonth()+n,1);render()}
 
-/* ---------- vẽ ---------- */
+/* ============ vẽ ============ */
 const TABS=[['home','Tổng quan','◉'],['add','Nhập','＋'],['list','Giao dịch','☰'],['trend','Xu hướng','◪']];
 function render(){
   const showMonth=tab==='home'||tab==='list';
@@ -640,8 +739,6 @@ function render(){
     `<button class="${tab===k?'on':''}" onclick="msg='';tab='${k}';render()"><b>${i}</b>${n}</button>`).join('');
   window.scrollTo(0,0);
 }
-
-/* thêm vào màn hình chính */
 try{
   const mf={name:'Sổ chi tiêu',short_name:'Sổ chi',display:'standalone',start_url:'.',
     background_color:'#ECEFEA',theme_color:'#ECEFEA',

@@ -193,7 +193,7 @@ function labelOf(code){
 const validCode=(code,kind)=>{const g=groupOf(code);return !!code&&g.id&&(!kind||g.k===kind);};
 
 const KEY='sochi:data';
-const VERSION='8.0';
+const VERSION='8.1';
 let DB={txns:[],debts:[],budgets:{},fixedItems:[],income:0,rules:{},opens:{bidv:0,vi:0,tm:0},checks:{},opts:{ab:'off'},lastBackup:0,v:5};
 let tab='home', cursor=new Date(), pending=null, msg='', msgType='err', open={};
 
@@ -844,17 +844,22 @@ function vBudget(){
       <div class="src-n">${esc(it.name)}</div>
       <div class="src-m">${esc(labelOf(it.code))}${it.day?' · ngày '+it.day:''}</div></div>
       <div style="text-align:right"><div class="src-a">${money(it.a)} ₫</div>
-      <button class="chk-btn" style="color:var(--brick)" onclick="delFixed('${it.id}')">xóa</button></div></div>`;});
+      <button class="chk-btn" onclick="editFixed('${it.id}')">sửa</button>
+      <button class="chk-btn" style="color:var(--brick);margin-left:10px" onclick="delFixed('${it.id}')">xóa</button></div></div>`;});
     h+=`</div><div class="sp"></div>`;
   }else h+=`<div class="empty">Chưa có khoản cố định nào.</div><div class="sp"></div>`;
+  const ed=fxEdit?fixedItems().find(x=>x.id===fxEdit):null;
   h+=`<div class="panel">
-    <div class="fld"><span>Tên khoản</span><input id="fxn" placeholder="Tiền ăn gửi bố mẹ"></div>
+    ${ed?`<div class="daygroup">Đang sửa: ${esc(ed.name)}</div>`:''}
+    <div class="fld"><span>Tên khoản</span><input id="fxn" value="${ed?esc(ed.name):''}" placeholder="Tiền ăn gửi bố mẹ"></div>
     <div class="two">
-      <div class="fld"><span>Số tiền</span><input id="fxa" inputmode="text" placeholder="3tr"></div>
-      <div class="fld"><span>Ngày trả (tùy chọn)</span><input id="fxd" inputmode="numeric" placeholder="5"></div>
+      <div class="fld"><span>Số tiền</span><input id="fxa" inputmode="text" value="${ed?money(ed.a):''}" placeholder="3tr"></div>
+      <div class="fld"><span>Ngày trả (tùy chọn)</span><input id="fxd" inputmode="numeric" value="${ed&&ed.day?ed.day:''}" placeholder="5"></div>
     </div>
-    <div class="fld"><span>Thuộc nhóm</span>${catSelect('','chi','0')}</div>
-  </div><div class="sp"></div><button class="btn ghost" onclick="addFixed()">Thêm khoản cố định</button>`;
+    <div class="fld"><span>Thuộc nhóm — chọn cả nhóm hoặc một mục chi tiết</span>${catSelect(ed?ed.code:'','chi','0')}</div>
+  </div><div class="sp"></div>
+  <button class="btn ghost" onclick="saveFixed()">${ed?'Lưu thay đổi':'Thêm khoản cố định'}</button>
+  ${ed?`<div class="sp"></div><button class="btn ghost" onclick="fxEdit=null;render()">Hủy sửa</button>`:''}`;
 
   /* ---- chia phần còn lại ---- */
   h+=`<h2>Hạn mức phần linh hoạt</h2>
@@ -939,8 +944,9 @@ function catSelect(val,kind,handler){
   gs.forEach(g=>{
     if(!g.subs.length) o+=`<option value="${g.id}" ${val===g.id?'selected':''}>${g.n}</option>`;
     else o+=`<optgroup label="${g.n}">`
+      +`<option value="${g.id}" ${val===g.id?'selected':''}>cả nhóm ${g.n}</option>`
       +g.subs.map(([id,n])=>`<option value="${id}" ${val===id?'selected':''}>${n}</option>`).join('')
-      +`<option value="${g.id}" ${val===g.id?'selected':''}>chưa rõ chi tiết</option></optgroup>`;
+      +`</optgroup>`;
   });
   return `<select class="pill ${val?'':'need'}" onchange="${handler}">${o}</select>`;
 }
@@ -1408,7 +1414,9 @@ function balanceToSavings(){
   DB.budgets.tk=Math.max(0,p.conLai-other);
 }
 function balanceNow(){balanceToSavings();save();render();}
-function addFixed(){
+let fxEdit=null;
+function editFixed(id){fxEdit=id;render();}
+function saveFixed(){
   const n=(document.getElementById('fxn').value||'').trim();
   const a=parseAmt(document.getElementById('fxa').value||'');
   const day=parseInt(document.getElementById('fxd').value,10);
@@ -1417,11 +1425,17 @@ function addFixed(){
   if(!n){flash('Chưa đặt tên khoản.','err');return;}
   if(!a||isNaN(a)){flash('Số tiền chưa hợp lệ.','err');return;}
   if(!code){flash('Chưa chọn nhóm cho khoản này.','err');return;}
-  DB.fixedItems=fixedItems().concat([{id:'f'+Date.now(),name:n.slice(0,40),a,code,
-    day:(day>=1&&day<=31)?day:0}]);
-  balanceToSavings(); save(); flash('Đã thêm khoản cố định.','ok');
+  const rec={name:n.slice(0,40),a,code,day:(day>=1&&day<=31)?day:0};
+  if(fxEdit){
+    DB.fixedItems=fixedItems().map(x=>x.id===fxEdit?Object.assign({},x,rec):x);
+    fxEdit=null; balanceToSavings(); save(); flash('Đã cập nhật khoản cố định.','ok');
+  }else{
+    DB.fixedItems=fixedItems().concat([Object.assign({id:'f'+Date.now()},rec)]);
+    balanceToSavings(); save(); flash('Đã thêm khoản cố định.','ok');
+  }
 }
 function delFixed(id){
+  if(fxEdit===id)fxEdit=null;
   DB.fixedItems=fixedItems().filter(x=>x.id!==id);
   balanceToSavings(); save(); render();
 }

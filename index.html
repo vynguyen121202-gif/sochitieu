@@ -144,7 +144,7 @@
 
   nav{position:fixed;left:0;right:0;bottom:0;background:#fffffff2;backdrop-filter:blur(12px);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
   .nav-in{max-width:480px;margin:0 auto;display:flex}
-  nav button{flex:1;background:none;border:0;padding:11px 4px 13px;font-size:11.5px;color:var(--ink-3);font-weight:500;display:flex;flex-direction:column;align-items:center;gap:4px}
+  nav button{flex:1;background:none;border:0;padding:11px 2px 13px;font-size:10.5px;white-space:nowrap;color:var(--ink-3);font-weight:500;display:flex;flex-direction:column;align-items:center;gap:4px}
   nav button b{font-size:17px;font-weight:400;line-height:1}
   nav button.on{color:var(--jade);font-weight:600}
   .sp{height:10px}
@@ -193,8 +193,8 @@ function labelOf(code){
 const validCode=(code,kind)=>{const g=groupOf(code);return !!code&&g.id&&(!kind||g.k===kind);};
 
 const KEY='sochi:data';
-const VERSION='6.3';
-let DB={txns:[],debts:[],budgets:{},fixed:{},income:0,rules:{},opens:{bidv:0,vi:0,tm:0},checks:{},opts:{ab:'off'},lastBackup:0,v:5};
+const VERSION='8.0';
+let DB={txns:[],debts:[],budgets:{},fixedItems:[],income:0,rules:{},opens:{bidv:0,vi:0,tm:0},checks:{},opts:{ab:'off'},lastBackup:0,v:5};
 let tab='home', cursor=new Date(), pending=null, msg='', msgType='err', open={};
 
 /* ==================== tiện ích ==================== */
@@ -243,15 +243,16 @@ function migrate(d){
       if(t.c&&!groupOf(t.c).id)t.c='';});
     const nb={}; Object.entries(d.budgets||{}).forEach(([k,v2])=>{nb[M[k]||k]=v2;}); d.budgets=nb;}
   if(v<4){ d.debts=d.debts||[]; }
-  if(v<5){ d.fixed=d.fixed||{hd:1,trano:1,di:1,gd:1}; d.income=d.income||0; }
-  d.v=5; return d;
+  if(v<5){ d.income=d.income||0; }
+  if(v<6){ d.fixedItems=d.fixedItems||[]; delete d.fixed; d.budgets=d.budgets||{}; }
+  d.v=6; return d;
 }
 async function load(){try{const raw=await store.get();if(raw){let d=JSON.parse(raw);
-  if((d.v||1)<5)d=migrate(d);
+  if((d.v||1)<6)d=migrate(d);
   DB=Object.assign({},d,{txns:Array.isArray(d.txns)?d.txns:[],debts:Array.isArray(d.debts)?d.debts:[],
-    budgets:d.budgets||{},fixed:d.fixed||{},income:d.income||0,rules:d.rules||{},
+    budgets:d.budgets||{},fixedItems:Array.isArray(d.fixedItems)?d.fixedItems:[],income:d.income||0,rules:d.rules||{},
     opens:Object.assign({bidv:0,vi:0,tm:0},d.opens||{}),checks:d.checks||{},
-    opts:Object.assign({ab:'off'},d.opts||{}),lastBackup:d.lastBackup||0,v:5});}}catch(e){}}
+    opts:Object.assign({ab:'off'},d.opts||{}),lastBackup:d.lastBackup||0,v:6});}}catch(e){}}
 let saveT=null;
 function save(){clearTimeout(saveT);saveT=setTimeout(()=>store.set(JSON.stringify(DB)),200);}
 
@@ -717,7 +718,7 @@ function vSplit(){
 }
 
 /* ==================== chỉ số tài chính ==================== */
-const isFixed=gid=>!!(DB.fixed&&DB.fixed[gid]);
+const isFixed=gid=>fixedInGroup(gid)>0;
 function metrics(d){
   const list=monthTx(d);
   const thu=sum(list.filter(t=>t.t==='thu'&&['luong','thuong','tkhac'].includes(groupOf(t.c).id)));
@@ -750,11 +751,9 @@ function avg3(gid,d){
   return used.length?used.reduce((a,b)=>a+b,0)/used.length:0;
 }
 function budgetTotals(){
-  let cd=0,tk=0,lh=0;
-  GROUPS.filter(g=>g.k==='chi').forEach(g=>{
-    const b=DB.budgets[g.id]||0; if(!b)return;
-    if(g.id==='tk')tk+=b; else if(isFixed(g.id))cd+=b; else lh+=b;
-  });
+  const cd=fixedTotal()+debtDue(cursor).tong;
+  const tk=DB.budgets.tk||0;
+  let lh=0; FLEX().forEach(g=>{if(g.id!=='tk')lh+=DB.budgets[g.id]||0;});
   return {cd,tk,lh,tong:cd+tk+lh};
 }
 
@@ -771,17 +770,125 @@ function forecast(){
      đưa bố mẹ đầu tháng sẽ bị nhân lên cho cả tháng. */
   let planConLai=0, cdConLai=0, lhDaChi=0, lhBudget=0;
   GROUPS.filter(g=>g.k==='chi').forEach(g=>{
-    const b=DB.budgets[g.id]||0;
+    const b=budgetOf(g.id,new Date());
     const v=sum(list.filter(t=>t.t==='chi'&&groupOf(t.c).id===g.id));
     if(b)planConLai+=Math.max(0,b-v);
-    if(g.id==='tk'||isFixed(g.id)){ if(b)cdConLai+=Math.max(0,b-v); }
-    else { lhDaChi+=v; if(b)lhBudget+=b; }
+    const codinh=fixedInGroup(g.id)+(g.id==='trano'?b:0)+(g.id==='tk'?(DB.budgets.tk||0):0);
+    if(codinh)cdConLai+=Math.max(0,codinh-v);
+    const lh=Math.max(0,b-codinh);
+    if(lh){ lhDaChi+=Math.max(0,v-codinh); lhBudget+=lh; }
   });
   const rate=passed?lhDaChi/passed:0, lhConLai=rate*conLai;
   const duocUoc=passed>=5;
   return {hienTai,thuConLai,planConLai,cdConLai,lhConLai,rate,conLai,duocUoc,
     keHoach:hienTai+thuConLai-planConLai,
     theoDa:hienTai+thuConLai-cdConLai-lhConLai};
+}
+
+/* ==================== ngân sách ====================
+   Thu nhập − khoản cố định − nợ phải trả tháng này = số còn lại để chia hạn mức.
+   Hạn mức Vy đặt là phần LINH HOẠT; hạn mức thật của một nhóm bằng
+   phần linh hoạt cộng các khoản cố định nằm trong nhóm đó. */
+const fixedItems=()=>Array.isArray(DB.fixedItems)?DB.fixedItems:[];
+const fixedTotal=()=>fixedItems().reduce((s,x)=>s+(x.a||0),0);
+const fixedInGroup=gid=>fixedItems().filter(x=>groupOf(x.code).id===gid).reduce((s,x)=>s+(x.a||0),0);
+/* các kỳ nợ rơi vào tháng đang xem */
+function debtDue(d){
+  const k=ym(d); let tong=0; const rows=[];
+  DB.debts.forEach(dt=>{
+    if(dt.kind==='cho')return;
+    const i=debtInfo(dt);
+    if(i.done||!i.nextDate)return;
+    if(i.nextDate.slice(0,7)===k){tong+=i.nextAmt;rows.push({name:dt.name,a:i.nextAmt,d:i.nextDate});}
+  });
+  return {tong,rows};
+}
+const FLEX=()=>GROUPS.filter(g=>g.k==='chi'&&g.id!=='trano');
+const flexTotal=()=>FLEX().reduce((s,g)=>s+(DB.budgets[g.id]||0),0);
+function budgetOf(gid,d){
+  if(gid==='trano')return debtDue(d||cursor).tong;
+  return (DB.budgets[gid]||0)+fixedInGroup(gid);
+}
+function budgetPlan(d){
+  const inc=DB.income||0, cd=fixedTotal(), no=debtDue(d||cursor).tong;
+  const conLai=inc-cd-no, daChia=flexTotal();
+  return {inc,cd,no,conLai,daChia,thua:conLai-daChia};
+}
+/* mẫu chia phần linh hoạt, tính theo % của số còn lại */
+const MAUFLEX={tk:33,an:12,cho:7,di:9,ld:7,gt:10,qa:6,sk:4,ht:6,tt:4,gdu:2};
+
+function vBudget(){
+  const p=budgetPlan(cursor), dd=debtDue(cursor), inc=p.inc;
+  const pc=v=>inc?Math.round(v/inc*100)+'%':'';
+  let h=`<div class="panel"><div class="fld"><span>Thu nhập tháng — lấy tháng thấp nhất cho chắc</span>
+    <input inputmode="text" value="${inc?money(inc):''}" placeholder="14.800.000" onchange="setIncome(this.value)"></div></div>`;
+  if(!inc)return h+`<div class="sp"></div><div class="empty"><b>Điền thu nhập trước</b>Mọi phép chia hạn mức đều dựa trên con số này.</div>`;
+
+  /* ---- dòng chảy tiền ---- */
+  h+=`<h2>Còn lại bao nhiêu để chia</h2><div class="panel">
+    <div class="src"><div><div class="src-n">Thu nhập</div></div><div class="src-a">${money(inc)} ₫</div></div>
+    <div class="src"><div><div class="src-n">Khoản cố định</div><div class="src-m">${fixedItems().length} khoản · ${pc(p.cd)}</div></div>
+      <div class="src-a neg">− ${money(p.cd)} ₫</div></div>
+    <div class="src"><div><div class="src-n">Nợ phải trả tháng này</div><div class="src-m">${dd.rows.length?dd.rows.map(r=>esc(r.name)).join(', '):'không có kỳ nào đến hạn'}</div></div>
+      <div class="src-a neg">− ${money(p.no)} ₫</div></div>
+    <div class="src total"><div><div class="src-n">CÒN LẠI ĐỂ CHIA HẠN MỨC</div><div class="src-m">${pc(p.conLai)} thu nhập</div></div>
+      <div class="src-a ${p.conLai<0?'neg':''}">${money(p.conLai)} ₫</div></div></div>`;
+
+  /* ---- khoản cố định ---- */
+  h+=`<h2>Khoản cố định</h2>
+    <div class="stack-note"><span>Khoản tháng nào cũng trả đúng một số, ví dụ tiền ăn gửi bố mẹ hay gói A.I. Mỗi khoản gắn vào một nhóm để báo cáo vẫn đúng.</span></div>
+    <div class="sp"></div>`;
+  if(fixedItems().length){
+    h+=`<div class="panel">`;
+    fixedItems().forEach(it=>{h+=`<div class="src"><div style="min-width:0">
+      <div class="src-n">${esc(it.name)}</div>
+      <div class="src-m">${esc(labelOf(it.code))}${it.day?' · ngày '+it.day:''}</div></div>
+      <div style="text-align:right"><div class="src-a">${money(it.a)} ₫</div>
+      <button class="chk-btn" style="color:var(--brick)" onclick="delFixed('${it.id}')">xóa</button></div></div>`;});
+    h+=`</div><div class="sp"></div>`;
+  }else h+=`<div class="empty">Chưa có khoản cố định nào.</div><div class="sp"></div>`;
+  h+=`<div class="panel">
+    <div class="fld"><span>Tên khoản</span><input id="fxn" placeholder="Tiền ăn gửi bố mẹ"></div>
+    <div class="two">
+      <div class="fld"><span>Số tiền</span><input id="fxa" inputmode="text" placeholder="3tr"></div>
+      <div class="fld"><span>Ngày trả (tùy chọn)</span><input id="fxd" inputmode="numeric" placeholder="5"></div>
+    </div>
+    <div class="fld"><span>Thuộc nhóm</span>${catSelect('','chi','0')}</div>
+  </div><div class="sp"></div><button class="btn ghost" onclick="addFixed()">Thêm khoản cố định</button>`;
+
+  /* ---- chia phần còn lại ---- */
+  h+=`<h2>Hạn mức phần linh hoạt</h2>
+    <div class="stack-note"><span>Đây là trần chi, miễn không vượt. Gõ được <b>800k</b>, <b>1tr2</b> hoặc <b>8%</b> (phần trăm của số còn lại).</span></div>
+    <div class="sp"></div>
+    <button class="btn ghost" onclick="fillSuggest()">Chia theo mẫu đề xuất</button><div class="sp"></div>`;
+  if(p.thua!==0)h+=`<button class="btn ghost" onclick="balanceNow()">${p.thua>0?'Dồn '+money(p.thua)+'₫ chưa chia vào Tiết kiệm':'Bớt '+money(-p.thua)+'₫ vượt ra khỏi Tiết kiệm'}</button><div class="sp"></div>`;
+  h+=`<div class="panel">`;
+  FLEX().forEach(g=>{
+    const fx=fixedInGroup(g.id), flex=DB.budgets[g.id]||0;
+    h+=`<div class="row">
+      <label style="flex:1;min-width:0"><span class="spine" style="background:${g.c};height:16px"></span>
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.n)}${fx?`<span style="color:var(--ink-3);font-size:12px"> +${short(fx)} cố định</span>`:''}</span></label>
+      <span style="font-size:12px;color:var(--ink-3);min-width:34px;text-align:right">${flex&&p.conLai>0?Math.round(flex/p.conLai*100)+'%':''}</span>
+      <input inputmode="text" value="${flex?short(flex):''}" placeholder="—" onchange="setB('${g.id}',this.value)"></div>`;
+  });
+  h+=`<div class="src total"><div><div class="src-n">${p.thua===0?'ĐÃ CHIA HẾT':p.thua>0?'CHƯA CHIA':'CHIA VƯỢT'}</div>
+      <div class="src-m">đã chia ${money(p.daChia)} / ${money(p.conLai)} ₫</div></div>
+      <div class="src-a ${p.thua<0?'neg':''}" style="${p.thua===0?'color:var(--jade)':''}">${p.thua===0?'0':(p.thua>0?'':'−')+money(Math.abs(p.thua))} ₫</div></div></div>`;
+
+  /* ---- hạn mức thật của từng nhóm ---- */
+  h+=`<h2>Hạn mức thật mỗi nhóm</h2>
+    <div class="stack-note"><span>Cộng phần cố định với phần linh hoạt. Đây là con số app dùng để đối chiếu chi tiêu.</span></div>
+    <div class="sp"></div><div class="panel">`;
+  GROUPS.filter(g=>g.k==='chi').forEach(g=>{
+    const b=budgetOf(g.id,cursor); if(!b)return;
+    const fx=g.id==='trano'?0:fixedInGroup(g.id);
+    h+=`<div class="src"><div style="min-width:0"><div class="src-n">${esc(g.n)}</div>
+      <div class="src-m">${g.id==='trano'?'theo kỳ nợ đến hạn':fx?money(fx)+' cố định + '+money(b-fx)+' linh hoạt':'toàn bộ linh hoạt'}</div></div>
+      <div class="src-a">${money(b)} ₫<div class="src-m" style="text-align:right">${pc(b)}</div></div></div>`;
+  });
+  h+=`</div>`;
+  if(msg)h+=`<div class="${msgType==='ok'?'ok':'err'}">${esc(msg)}</div>`;
+  return h;
 }
 
 function vDebt(){
@@ -843,7 +950,7 @@ function vHome(){
   const thuNhap=sum(list.filter(t=>t.t==='thu'&&['luong','thuong','tkhac'].includes(groupOf(t.c).id)));
   const groups=byGroup(list), now=new Date(), cur=ym(cursor)===ym(now);
   const nd=daysIn(cursor), passed=cur?now.getDate():nd;
-  const totalBudget=DB.income||Object.values(DB.budgets).reduce((s,v)=>s+(v||0),0);
+  const totalBudget=DB.income||0;
   let h='';
 
   if(!list.length) h+=`<div class="empty"><b>Tháng này chưa có gì</b>Mở BIDV và ví, chụp giao dịch trong ngày, gửi vào chat của tháng rồi dán kết quả ở tab Nhập.</div>`;
@@ -1070,21 +1177,28 @@ function vTrend(){
         <div style="text-align:right"><div class="src-a" style="color:${ok?'var(--jade)':'var(--amber)'}">${Math.round(k.v*100)}%</div>
         <div class="src-m">${ok?'đạt':'chưa đạt'}</div></div></div>`;
     });
+    const tkPlan=DB.budgets.tk||0;
+    const canThem=Math.max(0,ef.avg*3-ef.quy);
+    const thangNua=tkPlan?Math.ceil(canThem/tkPlan):0;
     h+=`<div class="src"><div style="min-width:0"><div class="src-n">Quỹ khẩn cấp</div>
       <div class="src-m">đã để dành ${money(ef.quy)}₫ · mục tiêu 3 tháng chi phí</div></div>
       <div style="text-align:right"><div class="src-a" style="color:${ef.thang>=3?'var(--jade)':'var(--amber)'}">${ef.thang?ef.thang.toFixed(1):'0'}</div>
-      <div class="src-m">tháng</div></div></div></div>`;
+      <div class="src-m">tháng</div></div></div>`;
+    if(ef.avg&&canThem>0&&tkPlan)h+=`<div class="src"><div style="min-width:0"><div class="src-n">Dự trù đủ quỹ</div>
+      <div class="src-m">còn thiếu ${money(canThem)}₫, mỗi tháng để ${short(tkPlan)}₫</div></div>
+      <div style="text-align:right"><div class="src-a">${thangNua}</div><div class="src-m">tháng nữa</div></div></div>`;
+    h+=`</div>`;
   }
 
   /* ---- kế hoạch so thực tế ---- */
-  const bgroups=GROUPS.filter(g=>g.k==='chi'&&(DB.budgets[g.id]||0)>0);
+  const bgroups=GROUPS.filter(g=>g.k==='chi'&&budgetOf(g.id,cursor)>0);
   if(bgroups.length){
     const list=monthTx(cursor);
     const now=new Date(), cur=ym(cursor)===ym(now);
     const nd=daysIn(cursor), passed=cur?now.getDate():nd, pace=passed/nd;
     h+=`<h2>Kế hoạch so thực tế</h2><div class="panel">`;
     bgroups.map(g=>{
-      const b=DB.budgets[g.id]||0;
+      const b=budgetOf(g.id,cursor);
       const v=sum(list.filter(t=>t.t==='chi'&&groupOf(t.c).id===g.id));
       return {g,b,v,r:b?v/b:0};
     }).sort((a,b)=>b.r-a.r).forEach(({g,b,v,r})=>{
@@ -1148,42 +1262,9 @@ function vSet(){
     <input inputmode="text" value="${DB.opens[s.id]?money(DB.opens[s.id]):''}" placeholder="0" onchange="setOpen('${s.id}',this.value)"></div>`;});
   h+=`</div>`;
 
-  const bt=budgetTotals(), inc=DB.income||0, chua=inc-bt.tong;
-  h+=`<h2>Ngân sách tháng</h2>
-    <div class="panel"><div class="fld"><span>Thu nhập tháng — lấy tháng thấp nhất cho chắc</span>
-      <input inputmode="text" value="${inc?money(inc):''}" placeholder="14.800.000" onchange="setIncome(this.value)"></div></div>`;
-  if(inc){
-    const pc=v=>Math.round(v/inc*100);
-    h+=`<div class="sp"></div><div class="panel">
-      <div class="src"><div><div class="src-n">Cố định</div><div class="src-m">${pc(bt.cd)}% thu nhập</div></div><div class="src-a">${money(bt.cd)} ₫</div></div>
-      <div class="src"><div><div class="src-n">Tiết kiệm & đầu tư</div><div class="src-m">${pc(bt.tk)}% · nên từ 25% trở lên</div></div>
-        <div class="src-a" style="color:${bt.tk/inc>=0.25?'var(--jade)':'var(--amber)'}">${money(bt.tk)} ₫</div></div>
-      <div class="src"><div><div class="src-n">Linh hoạt</div><div class="src-m">${pc(bt.lh)}% · phần cần theo dõi hằng ngày</div></div><div class="src-a">${money(bt.lh)} ₫</div></div>
-      <div style="padding:12px 14px;border-bottom:1px solid var(--line-2)">
-        <div class="stack" style="margin:0 0 7px">
-          <i style="width:${pc(bt.cd)}%;background:#3D5A80"></i>
-          <i style="width:${pc(bt.tk)}%;background:#0E6B5C"></i>
-          <i style="width:${pc(bt.lh)}%;background:#C8792B"></i></div>
-        <div class="cat-meta"><span>xanh đậm cố định · xanh lá tiết kiệm · cam linh hoạt</span></div></div>
-      <div class="src total"><div><div class="src-n">${chua===0?'ĐÃ PHÂN BỔ HẾT':chua>0?'CHƯA PHÂN BỔ':'PHÂN BỔ VƯỢT LƯƠNG'}</div>
-        <div class="src-m">tổng hạn mức ${money(bt.tong)} ₫</div></div>
-        <div class="src-a ${chua<0?'neg':''}" style="${chua===0?'color:var(--jade)':''}">${chua===0?'0':(chua>0?'':'−')+money(Math.abs(chua))} ₫</div></div>
-    </div>`;
-    if(chua>0)h+=`<div class="sp"></div><div class="warn">Còn ${money(chua)}₫ chưa có chỗ. Tiền không được giao nhiệm vụ là tiền dễ tiêu mất — đẩy vào Tiết kiệm & đầu tư nếu chưa biết dùng làm gì.</div>`;
-    if(chua<0)h+=`<div class="sp"></div><div class="err">Hạn mức đang vượt lương ${money(-chua)}₫. Phải cắt bớt ở đâu đó, nếu không thì tháng nào cũng âm.</div>`;
-  }
-
-  h+=`<h2>Hạn mức mỗi tháng</h2>
-    <div class="stack-note"><span>Tích ô vuông để đánh dấu nhóm cố định — khoản bắt buộc, không cần theo dõi hằng ngày.</span></div>
-    <div class="sp"></div><div class="panel">`;
-  GROUPS.filter(g=>g.k==='chi').forEach(g=>{h+=`<div class="row">
-    <label style="flex:1;min-width:0">
-      <button class="chk ${isFixed(g.id)?'on':''}" style="width:18px;height:18px;font-size:11px;margin:0" onclick="toggleFixed('${g.id}')" aria-label="Cố định">${isFixed(g.id)?'✓':''}</button>
-      <span class="spine" style="background:${g.c};height:16px"></span>
-      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.n)}</span></label>
-    <span style="font-size:12px;color:var(--ink-3);min-width:34px;text-align:right">${inc&&DB.budgets[g.id]?Math.round(DB.budgets[g.id]/inc*100)+'%':''}</span>
-    <input inputmode="text" value="${DB.budgets[g.id]?short(DB.budgets[g.id]):''}" placeholder="—" onchange="setB('${g.id}',this.value)"></div>`;});
-  h+=`</div><div class="sp"></div><div class="stack-note"><span>Cột giữa là tỷ lệ trên thu nhập. Để trống là không đặt hạn mức. Gõ được 2tr hoặc 500k.</span></div>`;
+  h+=`<h2>Ngân sách</h2>
+    <div class="empty" style="text-align:left">Thu nhập, khoản cố định và hạn mức đã chuyển sang tab <b>Ngân sách</b> ở thanh dưới.
+    <div class="sp"></div><button class="btn ghost" onclick="go('budget')">Mở tab Ngân sách</button></div>`;
 
   h+=`<h2>Quy tắc đã học (${rules.length})</h2>`;
   h+= rules.length
@@ -1296,11 +1377,55 @@ function editName(id){const t=DB.txns.find(x=>String(x.id)===id);if(!t)return;
   const v=prompt('Nội dung giao dịch:',t.n); if(v===null)return;
   const s2=v.trim().slice(0,60); if(s2){t.n=s2;save();render();}}
 function delRule(k){delete DB.rules[k];save();render()}
-function setB(id,v){const n=parseAmt(v);if(!String(v).trim())delete DB.budgets[id];else if(!isNaN(n))DB.budgets[id]=n;save()}
+function setB(id,v){
+  const raw=String(v).trim();
+  if(!raw){delete DB.budgets[id];save();render();return;}
+  if(raw.includes('%')){
+    const p=parseFloat(raw.replace('%','').replace(',','.'));
+    const base=budgetPlan(cursor).conLai;
+    if(!isNaN(p)&&base>0){DB.budgets[id]=Math.round(base*p/100/10000)*10000;save();render();return;}
+  }
+  const n=parseAmt(raw); if(!isNaN(n))DB.budgets[id]=n;
+  save();render();
+}
 function setOpen(id,v){const n=parseAmt(v);DB.opens[id]=(!String(v).trim()||isNaN(n))?0:n;save();render()}
 function setAB(v){DB.opts=Object.assign({},DB.opts,{ab:v});save();render()}
+/* mẫu phân bổ đề xuất, tính theo % thu nhập — hợp với người không phải trả tiền thuê nhà */
+function fillSuggest(){
+  const p=budgetPlan(cursor);
+  if(!p.inc){flash('Điền thu nhập trước đã.','err');return;}
+  if(p.conLai<=0){flash('Cố định và nợ đã ăn hết thu nhập, không còn gì để chia.','err');return;}
+  if(flexTotal()&&!confirm('Ghi đè toàn bộ hạn mức linh hoạt bằng mẫu đề xuất?'))return;
+  DB.budgets={};
+  Object.entries(MAUFLEX).forEach(([g,r])=>{DB.budgets[g]=Math.round(p.conLai*r/100/10000)*10000;});
+  balanceToSavings(); save(); flash('Đã chia theo mẫu. Vy chỉnh lại dòng nào thấy chưa hợp.','ok');
+}
+/* dồn phần chưa chia vào Tiết kiệm để tổng luôn khớp số còn lại */
+function balanceToSavings(){
+  const p=budgetPlan(cursor); if(!p.inc)return;
+  let other=0;
+  FLEX().forEach(g=>{if(g.id!=='tk')other+=DB.budgets[g.id]||0;});
+  DB.budgets.tk=Math.max(0,p.conLai-other);
+}
+function balanceNow(){balanceToSavings();save();render();}
+function addFixed(){
+  const n=(document.getElementById('fxn').value||'').trim();
+  const a=parseAmt(document.getElementById('fxa').value||'');
+  const day=parseInt(document.getElementById('fxd').value,10);
+  const sel=document.querySelector('#app select.pill');
+  const code=sel?sel.value:'';
+  if(!n){flash('Chưa đặt tên khoản.','err');return;}
+  if(!a||isNaN(a)){flash('Số tiền chưa hợp lệ.','err');return;}
+  if(!code){flash('Chưa chọn nhóm cho khoản này.','err');return;}
+  DB.fixedItems=fixedItems().concat([{id:'f'+Date.now(),name:n.slice(0,40),a,code,
+    day:(day>=1&&day<=31)?day:0}]);
+  balanceToSavings(); save(); flash('Đã thêm khoản cố định.','ok');
+}
+function delFixed(id){
+  DB.fixedItems=fixedItems().filter(x=>x.id!==id);
+  balanceToSavings(); save(); render();
+}
 function setIncome(v){const n=parseAmt(v);DB.income=(!String(v).trim()||isNaN(n))?0:n;save();render()}
-function toggleFixed(g){DB.fixed=DB.fixed||{};if(DB.fixed[g])delete DB.fixed[g];else DB.fixed[g]=1;save();render()}
 function addManual(){
   const type=document.getElementById('mt').value;
   const a=parseAmt(document.getElementById('ma').value), n=document.getElementById('mn').value.trim();
@@ -1315,11 +1440,11 @@ function addManual(){
 }
 function applyBackup(d){
   if(!d||!Array.isArray(d.txns))throw 0;
-  if((d.v||1)<5)d=migrate(d);
+  if((d.v||1)<6)d=migrate(d);
   DB=Object.assign({},d,{txns:d.txns,debts:Array.isArray(d.debts)?d.debts:[],budgets:d.budgets||{},
-    fixed:d.fixed||{},income:d.income||0,rules:d.rules||{},
+    fixedItems:Array.isArray(d.fixedItems)?d.fixedItems:[],income:d.income||0,rules:d.rules||{},
     opens:Object.assign({bidv:0,vi:0,tm:0},d.opens||{}),checks:d.checks||{},
-    opts:Object.assign({ab:'off'},d.opts||{}),lastBackup:d.lastBackup||0,v:5});
+    opts:Object.assign({ab:'off'},d.opts||{}),lastBackup:d.lastBackup||0,v:6});
   save();flash('Đã khôi phục '+d.txns.length+' giao dịch.','ok');
 }
 function restoreFile(el){const f=el.files&&el.files[0];if(!f)return;
@@ -1329,11 +1454,11 @@ function restoreFile(el){const f=el.files&&el.files[0];if(!f)return;
 function doRestore(){try{applyBackup(JSON.parse(document.getElementById('restore').value));}
   catch(e){flash('Bản sao lưu không đọc được.','err');}}
 function wipe(){if(confirm('Xóa hết giao dịch, hạn mức và quy tắc? Không khôi phục được.')){
-  DB={txns:[],debts:[],budgets:{},fixed:DB.fixed,income:DB.income,rules:{},opens:DB.opens,checks:{},opts:DB.opts,lastBackup:0,v:5};save();msg='';go('home');}}
+  DB={txns:[],debts:[],budgets:{},fixedItems:DB.fixedItems,income:DB.income,rules:{},opens:DB.opens,checks:{},opts:DB.opts,lastBackup:0,v:6};save();msg='';go('home');}}
 function move(n){cursor=new Date(cursor.getFullYear(),cursor.getMonth()+n,1);toTop=true;render()}
 
 /* ==================== vẽ ==================== */
-const TABS=[['home','Tổng quan','◉'],['add','Nhập','＋'],['list','Giao dịch','☰'],['debt','Nợ','◈'],['trend','Xu hướng','◪']];
+const TABS=[['home','Tổng quan','◉'],['add','Nhập','＋'],['list','Giao dịch','☰'],['debt','Nợ','◈'],['budget','Ngân sách','◐'],['trend','Xu hướng','◪']];
 let toTop=true;
 function render(){
   const y=window.scrollY||window.pageYOffset||0;
@@ -1343,11 +1468,11 @@ function render(){
     ? `<div class="month"><button class="arrow" onclick="move(-1)" aria-label="Tháng trước">‹</button>
        <h1>${MONTH(cursor.getMonth())}, ${cursor.getFullYear()}</h1>
        <button class="arrow" onclick="move(1)" ${ym(cursor)>=ym(new Date())?'disabled':''} aria-label="Tháng sau">›</button></div>`
-    : `<h1 style="font-size:17px;font-weight:600;margin:0">${tab==='add'?'Nhập chi tiêu':tab==='trend'?'Xu hướng':tab==='debt'?'Sổ nợ':'Cài đặt'}</h1>`;
+    : `<h1 style="font-size:17px;font-weight:600;margin:0">${tab==='add'?'Nhập chi tiêu':tab==='trend'?'Xu hướng':tab==='debt'?'Sổ nợ':tab==='budget'?'Ngân sách':'Cài đặt'}</h1>`;
   h+=`<button class="gear" onclick="go('${tab==='set'?'home':'set'}')" aria-label="Cài đặt">${tab==='set'?'✕':'⚙'}</button></div>`;
   h+=`<div class="view">`+(splitting?vSplit():
       tab==='home'?vHome():tab==='add'?vImport():tab==='list'?vList():
-      tab==='debt'?vDebt():tab==='trend'?vTrend():vSet())+`</div>`;
+      tab==='debt'?vDebt():tab==='budget'?vBudget():tab==='trend'?vTrend():vSet())+`</div>`;
   document.getElementById('app').innerHTML=h;
   document.getElementById('nav').innerHTML=TABS.map(([k,n,i])=>
     `<button class="${tab===k?'on':''}" onclick="go('${k}')"><b>${i}</b>${n}</button>`).join('');

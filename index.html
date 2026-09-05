@@ -201,8 +201,8 @@ function labelOf(code){
 const validCode=(code,kind)=>{const g=groupOf(code);return !!code&&g.id&&(!kind||g.k===kind);};
 
 const KEY='sochi:data';
-const VERSION='9.0';
-let DB={txns:[],debts:[],budgets:{},fixedItems:[],income:0,rules:{},opens:{bidv:0,vi:0,tm:0},checks:{},opts:{ab:'off'},lastBackup:0,v:5};
+const VERSION='10.0';
+let DB={txns:[],debts:[],budgets:{},fixedItems:[],roll:{},offsets:[],income:0,rules:{},opens:{bidv:0,vi:0,tm:0},checks:{},opts:{ab:'off'},lastBackup:0,v:5};
 let tab='home', cursor=new Date(), pending=null, msg='', msgType='err', open={};
 
 /* ==================== tiện ích ==================== */
@@ -253,14 +253,15 @@ function migrate(d){
   if(v<4){ d.debts=d.debts||[]; }
   if(v<5){ d.income=d.income||0; }
   if(v<6){ d.fixedItems=d.fixedItems||[]; delete d.fixed; d.budgets=d.budgets||{}; }
-  d.v=6; return d;
+  if(v<7){ d.roll=d.roll||{gt:1,gd:1,qa:1,gdu:1,ht:1,sk:1,tt:1}; d.offsets=d.offsets||[]; }
+  d.v=7; return d;
 }
 async function load(){try{const raw=await store.get();if(raw){let d=JSON.parse(raw);
-  if((d.v||1)<6)d=migrate(d);
+  if((d.v||1)<7)d=migrate(d);
   DB=Object.assign({},d,{txns:Array.isArray(d.txns)?d.txns:[],debts:Array.isArray(d.debts)?d.debts:[],
-    budgets:d.budgets||{},fixedItems:Array.isArray(d.fixedItems)?d.fixedItems:[],income:d.income||0,rules:d.rules||{},
+    budgets:d.budgets||{},fixedItems:Array.isArray(d.fixedItems)?d.fixedItems:[],roll:d.roll||{},offsets:Array.isArray(d.offsets)?d.offsets:[],income:d.income||0,rules:d.rules||{},
     opens:Object.assign({bidv:0,vi:0,tm:0},d.opens||{}),checks:d.checks||{},
-    opts:Object.assign({ab:'off'},d.opts||{}),lastBackup:d.lastBackup||0,v:6});}}catch(e){}}
+    opts:Object.assign({ab:'off'},d.opts||{}),lastBackup:d.lastBackup||0,v:7});}}catch(e){}}
 let saveT=null;
 function save(){clearTimeout(saveT);saveT=setTimeout(()=>store.set(JSON.stringify(DB)),200);}
 
@@ -732,7 +733,15 @@ const isFixed=gid=>fixedInGroup(gid)>0;
    Tử số  = chi thực tế cùng phạm vi, bỏ giao dịch đã khớp khoản cố định. */
 function pace(d){
   d=d||cursor;
-  const duTru=Math.max(0,flexTotal()-(DB.budgets.tk||0));
+  let duTru=Math.max(0,flexTotal()-(DB.budgets.tk||0));
+  /* chỉ nới mẫu số bằng đúng phần tích lũy nhóm đó thực sự tiêu tới trong tháng;
+     cộng hết tích lũy vào thì thanh nhịp mất tác dụng */
+  FLEX().forEach(g=>{
+    if(g.id==='tk'||!canRoll(g.id))return;
+    const ci=carryIn(g.id,d); if(ci<=0)return;
+    const vuot=spentOf(g.id,d)-budgetOf(g.id,d);
+    if(vuot>0)duTru+=Math.min(ci,vuot);
+  });
   const skip=fixedTxIds(d);
   const daChi=monthTx(d).filter(t=>t.t==='chi'&&!skip[t.id]
       &&groupOf(t.c).id!=='tk'&&groupOf(t.c).id!=='trano')
@@ -850,6 +859,61 @@ function debtDue(d){
   return {tong,rows};
 }
 const FLEX=()=>GROUPS.filter(g=>g.k==='chi'&&g.id!=='trano');
+/* ---- hạn mức cuốn chiếu ----
+   Dư của tháng trước cộng sang, vượt thì chuyển âm. Chỉ tính 6 tháng gần nhất
+   và chỉ những tháng thực sự có ghi chép, trần bằng 6 lần hạn mức tháng. */
+const canRoll=gid=>!!(DB.roll&&DB.roll[gid]);
+const spentOf=(gid,d)=>sum(monthTx(d).filter(t=>t.t==='chi'&&groupOf(t.c).id===gid));
+function offsetNet(gid,d){
+  const k=ym(d);
+  return (DB.offsets||[]).reduce((s2,o)=>s2+(o.m===k?(o.to===gid?o.a:(o.from===gid?-o.a:0)):0),0);
+}
+function carryIn(gid,d){
+  if(!canRoll(gid))return 0;
+  let tot=0;
+  for(let i=1;i<=6;i++){
+    const m=new Date(d.getFullYear(),d.getMonth()-i,1);
+    if(!monthTx(m).length)continue;              // tháng chưa dùng app thì bỏ qua
+    tot+=budgetOf(gid,m)+offsetNet(gid,m)-spentOf(gid,m);
+  }
+  const tran=budgetOf(gid,d)*6;
+  return tot>tran?tran:tot;
+}
+/* tổng hạn mức dùng được trong tháng */
+function avail(gid,d){ return budgetOf(gid,d)+offsetNet(gid,d)+carryIn(gid,d); }
+/* các nhóm đang vượt hạn mức trong tháng đang xem */
+function overGroups(d){
+  return GROUPS.filter(g=>g.k==='chi').map(g=>{
+    const a=avail(g.id,d), v=spentOf(g.id,d);
+    return {g,a,v,over:v-a};
+  }).filter(x=>x.over>0&&x.a>0);
+}
+/* các nhóm còn dư, dùng để bù */
+function roomGroups(d,exclude){
+  return GROUPS.filter(g=>g.k==='chi'&&g.id!==exclude&&g.id!=='tk'&&g.id!=='trano').map(g=>{
+    const a=avail(g.id,d), v=spentOf(g.id,d);
+    return {g,room:a-v};
+  }).filter(x=>x.room>0);
+}
+function addOffset(from,to,a){
+  DB.offsets=(DB.offsets||[]).concat([{m:ym(cursor),from,to,a}]);
+  save(); render();
+}
+/* phần tiết kiệm thật ra đang bị các nhóm cuốn chiếu giữ chỗ */
+function earmarked(d){
+  return GROUPS.filter(g=>g.k==='chi'&&canRoll(g.id))
+    .reduce((s2,g)=>s2+Math.max(0,carryIn(g.id,d)),0);
+}
+function rollTable(gid,d){
+  const rows=[];
+  for(let i=5;i>=0;i--){
+    const m=new Date(d.getFullYear(),d.getMonth()-i,1);
+    if(!monthTx(m).length)continue;
+    const b=budgetOf(gid,m)+offsetNet(gid,m), v=spentOf(gid,m);
+    rows.push({m,b,v,du:b-v});
+  }
+  return rows;
+}
 const flexTotal=()=>FLEX().reduce((s,g)=>s+(DB.budgets[g.id]||0),0);
 function budgetOf(gid,d){
   if(gid==='trano')return debtDue(d||cursor).tong;
@@ -940,6 +1004,8 @@ function vBudget(){
     const fx=fixedInGroup(g.id), flex=DB.budgets[g.id]||0, tot=fx+flex;
     h+=`<div style="padding:11px 14px;border-bottom:1px solid var(--line-2)">
       <div style="display:flex;align-items:center;gap:10px">
+        <button onclick="toggleRoll('${g.id}')" title="Cộng dồn sang tháng sau"
+          style="background:none;border:0;padding:0 2px;font-size:15px;color:${canRoll(g.id)?'var(--jade)':'#C3CCC4'}">&#8635;</button>
         <label style="flex:1;min-width:0;display:flex;align-items:center;gap:9px">
           <span class="spine" style="background:${g.c};height:16px"></span>
           <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14.5px">${esc(g.n)}</span></label>
@@ -955,6 +1021,36 @@ function vBudget(){
   h+=`<div class="src total"><div><div class="src-n">${p.thua===0?'ĐÃ CHIA HẾT':p.thua>0?'CHƯA CHIA':'CHIA VƯỢT'}</div>
       <div class="src-m">đã chia ${money(p.daChia)} / ${money(p.conLai)} ₫</div></div>
       <div class="src-a ${p.thua<0?'neg':''}" style="${p.thua===0?'color:var(--jade)':''}">${p.thua===0?'0':(p.thua>0?'':'−')+money(Math.abs(p.thua))} ₫</div></div></div>`;
+
+  /* ---- hạn mức cộng dồn ---- */
+  const rollGs=GROUPS.filter(g=>g.k==='chi'&&canRoll(g.id)&&budgetOf(g.id,cursor)>0);
+  if(rollGs.length){
+    h+=`<h2>Hạn mức cộng dồn</h2>
+      <div class="stack-note"><span>Dư tháng trước cộng sang, vượt thì trừ đi. Tính 6 tháng gần nhất, trần bằng 6 lần hạn mức tháng. Bấm nút vòng tròn ở trên để bật tắt từng nhóm.</span></div>
+      <div class="sp"></div><div class="panel">`;
+    rollGs.forEach(g=>{
+      const b=budgetOf(g.id,cursor), ci=carryIn(g.id,cursor), av=avail(g.id,cursor);
+      const dung=spentOf(g.id,cursor), rows=rollTable(g.id,cursor);
+      h+=`<button class="cat" onclick="toggle('r_${g.id}')">
+        <span class="spine" style="background:${g.c}"></span><span class="cat-body">
+        <span class="cat-top"><span class="cat-name">${esc(g.n)}<span class="caret">${open['r_'+g.id]?'&#9650;':'&#9660;'}</span></span>
+          <span class="cat-amt">${money(av-dung)} ₫</span></span>
+        <span class="cat-meta"><span>tháng này ${short(b)} ${ci>=0?'+ tích lũy '+short(ci):'− nợ tháng trước '+short(-ci)}</span>
+          <span>đã dùng ${short(dung)}</span></span>
+        </span></button>`;
+      if(open['r_'+g.id]){
+        if(!rows.length)h+=`<div class="sub"><span>chưa có tháng nào để tính</span><span></span></div>`;
+        rows.forEach(r=>{h+=`<div class="sub"><span>tháng ${r.m.getMonth()+1}: hạn mức ${short(r.b)}, tiêu ${short(r.v)}</span>
+          <span><b style="color:${r.du>=0?'var(--jade)':'var(--amber)'}">${r.du>=0?'+':''}${short(r.du)}</b></span></div>`;});
+      }
+    });
+    h+=`</div>`;
+    const em=earmarked(cursor), quy=emergencyFund().quy;
+    if(em>0){
+      if(em>quy)h+=`<div class="sp"></div><div class="err">Các nhóm trên đang giữ chỗ <b>${money(em)}₫</b> nhưng quỹ tiết kiệm mới có ${money(quy)}₫. Những khoản dành dụm này chưa có tiền thật đứng sau — nên tắt cuốn chiếu bớt vài nhóm ít dùng.</div>`;
+      else h+=`<div class="sp"></div><div class="warn">Quỹ tiết kiệm ${money(quy)}₫, trong đó <b>${money(em)}₫</b> là hạn mức các nhóm trên để dành. Tiết kiệm thật chỉ còn ${money(quy-em)}₫.</div>`;
+    }
+  }
 
   /* ---- hạn mức thật của từng nhóm ---- */
   h+=`<h2>Hạn mức thật mỗi nhóm</h2>
@@ -1108,6 +1204,27 @@ function vHome(){
     const xau=f.duocUoc?Math.min(f.keHoach,f.theoDa):f.keHoach;
     if(xau<0)h+=`<div class="sp"></div><div class="err">Theo đà này cuối tháng sẽ âm ${money(-xau)}₫. Cần cắt bớt ở nhóm linh hoạt ngay từ bây giờ.</div>`;
     else if(f.duocUoc&&f.theoDa<f.keHoach-100000)h+=`<div class="sp"></div><div class="warn">Đang tiêu nhanh hơn kế hoạch, cuối tháng hụt khoảng ${money(f.keHoach-f.theoDa)}₫ so với dự tính.</div>`;
+  }
+
+  const ov=overGroups(cursor);
+  if(ov.length){
+    h+=`<h2>Vượt hạn mức</h2><div class="panel">`;
+    ov.forEach(x=>{
+      const room=roomGroups(cursor,x.g.id);
+      h+=`<div style="padding:12px 14px;border-bottom:1px solid var(--line-2)">
+        <div style="display:flex;justify-content:space-between;gap:10px">
+          <div style="min-width:0"><div class="src-n">${esc(x.g.n)}</div>
+            <div class="src-m">đã tiêu ${money(x.v)} / hạn mức dùng được ${money(x.a)}</div></div>
+          <div class="src-a neg">vượt ${money(x.over)} ₫</div></div>
+        ${room.length?`<div class="cat-meta" style="margin-top:8px"><span>Bù từ nhóm nào? Không chọn thì khoản vượt tự trừ vào hạn mức tháng sau.</span></div>
+          <select class="pill" style="margin-top:7px" onchange="if(this.value)addOffset(this.value,'${x.g.id}',Math.min(${x.over},Number(this.selectedOptions[0].dataset.room)))">
+            <option value="">— để tự chuyển âm sang tháng sau —</option>
+            ${room.map(r=>`<option value="${r.g.id}" data-room="${Math.round(r.room)}">${esc(r.g.n)} — còn ${short(r.room)}₫</option>`).join('')}
+          </select>`
+        :`<div class="cat-meta" style="margin-top:8px"><span>Không nhóm nào còn dư để bù. Khoản vượt sẽ trừ vào hạn mức tháng sau.</span></div>`}
+      </div>`;
+    });
+    h+=`</div>`;
   }
 
   const dt=debtTotals();
@@ -1405,6 +1522,7 @@ function vSet(){
 
 /* ==================== hành động ==================== */
 function toggle(id){open[id]=!open[id];render()}
+function toggleRoll(g){DB.roll=DB.roll||{};if(DB.roll[g])delete DB.roll[g];else DB.roll[g]=1;save();render()}
 function zoomIn(id){open.zoom=id;render()}
 function zoomOut(){open.zoom=null;render()}
 /* ---- khoản nợ ---- */
@@ -1551,11 +1669,11 @@ function addManual(){
 }
 function applyBackup(d){
   if(!d||!Array.isArray(d.txns))throw 0;
-  if((d.v||1)<6)d=migrate(d);
+  if((d.v||1)<7)d=migrate(d);
   DB=Object.assign({},d,{txns:d.txns,debts:Array.isArray(d.debts)?d.debts:[],budgets:d.budgets||{},
-    fixedItems:Array.isArray(d.fixedItems)?d.fixedItems:[],income:d.income||0,rules:d.rules||{},
+    fixedItems:Array.isArray(d.fixedItems)?d.fixedItems:[],roll:d.roll||{},offsets:Array.isArray(d.offsets)?d.offsets:[],income:d.income||0,rules:d.rules||{},
     opens:Object.assign({bidv:0,vi:0,tm:0},d.opens||{}),checks:d.checks||{},
-    opts:Object.assign({ab:'off'},d.opts||{}),lastBackup:d.lastBackup||0,v:6});
+    opts:Object.assign({ab:'off'},d.opts||{}),lastBackup:d.lastBackup||0,v:7});
   save();flash('Đã khôi phục '+d.txns.length+' giao dịch.','ok');
 }
 function restoreFile(el){const f=el.files&&el.files[0];if(!f)return;
@@ -1565,7 +1683,7 @@ function restoreFile(el){const f=el.files&&el.files[0];if(!f)return;
 function doRestore(){try{applyBackup(JSON.parse(document.getElementById('restore').value));}
   catch(e){flash('Bản sao lưu không đọc được.','err');}}
 function wipe(){if(confirm('Xóa hết giao dịch, hạn mức và quy tắc? Không khôi phục được.')){
-  DB={txns:[],debts:[],budgets:{},fixedItems:DB.fixedItems,income:DB.income,rules:{},opens:DB.opens,checks:{},opts:DB.opts,lastBackup:0,v:6};save();msg='';go('home');}}
+  DB={txns:[],debts:[],budgets:{},fixedItems:DB.fixedItems,roll:DB.roll,offsets:[],income:DB.income,rules:{},opens:DB.opens,checks:{},opts:DB.opts,lastBackup:0,v:7};save();msg='';go('home');}}
 function move(n){cursor=new Date(cursor.getFullYear(),cursor.getMonth()+n,1);toTop=true;render()}
 
 /* ==================== vẽ ==================== */

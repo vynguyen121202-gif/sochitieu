@@ -43,6 +43,22 @@
     background:var(--card);border:1px solid var(--line);border-radius:var(--r);
     padding:10px 13px;margin-top:10px;font-size:12.5px;color:var(--ink-2);text-align:left}
   .strip b{color:var(--ink);font-weight:600}
+  .alerts{margin-top:9px;border-radius:var(--r);overflow:hidden}
+  .al{display:flex;justify-content:space-between;gap:10px;width:100%;text-align:left;
+    padding:10px 12px;font-size:12.5px;font-weight:500;border:0;border-left:3px solid;margin-bottom:2px}
+  .al.red{background:#F9E9E6;border-color:var(--brick);color:#8A3A2E}
+  .al.amber{background:#FBF0E6;border-color:var(--amber);color:#8A5418}
+  .al.grey{background:#F1F4F0;border-color:var(--ink-3);color:var(--ink-2)}
+  .fold{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;
+    background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:13px 14px;margin-top:10px;font-size:14px}
+  .fold.blue{border-left:3px solid #3D5A80}
+  .fold.brick{border-left:3px solid var(--brick)}
+  .fold b{font-weight:600}
+  .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:11px 12px}
+  .kpi-n{font-size:11.5px;color:var(--ink-2)}
+  .kpi-v{font-size:20px;font-weight:700;letter-spacing:-.02em;margin-top:2px}
+  .kpi-m{font-size:11px;color:var(--ink-3)}
   .chip{display:inline-flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--line);
     border-radius:20px;padding:7px 13px;font-size:13px;margin-top:14px;font-weight:500}
   .chip b{color:var(--ink-3);font-weight:600;margin-left:3px}
@@ -201,7 +217,7 @@ function labelOf(code){
 const validCode=(code,kind)=>{const g=groupOf(code);return !!code&&g.id&&(!kind||g.k===kind);};
 
 const KEY='sochi:data';
-const VERSION='10.1';
+const VERSION='11.0';
 let DB={txns:[],debts:[],budgets:{},fixedItems:[],roll:{},offsets:[],income:0,rules:{},opens:{bidv:0,vi:0,tm:0},checks:{},opts:{ab:'off'},lastBackup:0,v:5};
 let tab='home', cursor=new Date(), pending=null, msg='', msgType='err', open={};
 
@@ -317,8 +333,21 @@ function bidvCheck(){
   });
   return {computed:v,reported:rep.b,diff:v-rep.b,at:rep};
 }
+/* gộp các mảnh của một giao dịch đã tách lại thành một dòng */
+function chainRows(){
+  const map={}, out=[];
+  DB.txns.forEach(t=>{
+    if((t.s||'bidv')!=='bidv')return;
+    const k=t.sg||('x'+t.id);
+    if(!map[k]){map[k]={d:t.d,tm:t.tm||'',t:t.t,a:0,b:0};out.push(map[k]);}
+    map[k].a+=t.a;
+    if(t.b)map[k].b=t.b;
+    if(!map[k].tm&&t.tm)map[k].tm=t.tm;
+  });
+  return out.filter(r=>r.b);
+}
 function chainGaps(){
-  const rows=DB.txns.filter(t=>t.b&&(t.s||'bidv')==='bidv')
+  const rows=chainRows()
     .sort((x,y)=>(x.d+' '+(x.tm||'00:00')).localeCompare(y.d+' '+(y.tm||'00:00')));
   const out=[];
   for(let i=1;i<rows.length;i++){
@@ -549,7 +578,7 @@ function commit(){
     const o={id:Date.now()+Math.random(),d:t.d,a:t.a,t:t.t,n:t.n,s:t.s||'bidv'};
     if(t.t==='mv')o.s2=t.s2||'vi'; else o.c=t.c;
     if(t.tm)o.tm=t.tm; if(t.b)o.b=t.b; if(t.p)o.p=t.p;
-    if(t.w)o.w=t.w; if(t.q)o.q=1; if(t.n0&&t.n0!==t.n)o.n0=t.n0;
+    if(t.w)o.w=t.w; if(t.q)o.q=1; if(t.sg)o.sg=t.sg; if(t.n0&&t.n0!==t.n)o.n0=t.n0;
     return o;});
   DB.txns=DB.txns.concat(add);
   add.forEach(t=>{
@@ -693,11 +722,13 @@ function splitSave(){
   if(sum!==splitting.total){flash('Tổng các mục là '+money(sum)+'₫, phải bằng '+money(splitting.total)+'₫.','err');return;}
   if(splitting.mode==='pending'){
     const t=pending[splitting.ref];
-    const parts=on.map(r=>Object.assign({},t,{c:r.code,a:r.a,split:1}));
+    const sg='s'+Date.now();
+    const parts=on.map(r=>Object.assign({},t,{c:r.code,a:r.a,split:1,sg}));
     pending.splice(splitting.ref,1,...parts);
   }else{
     const t=DB.txns.find(x=>String(x.id)===splitting.ref);
-    const parts=on.map(r=>Object.assign({},t,{c:r.code,a:r.a,id:Date.now()+Math.random(),split:1,b:undefined}));
+    const sg=t.sg||('s'+Date.now());
+    const parts=on.map(r=>Object.assign({},t,{c:r.code,a:r.a,id:Date.now()+Math.random(),split:1,sg}));
     DB.txns=DB.txns.filter(x=>String(x.id)!==splitting.ref).concat(parts);
     save();
   }
@@ -930,7 +961,11 @@ const MAUFLEX={tk:33,an:12,cho:7,di:9,ld:7,gt:10,qa:6,sk:4,ht:6,tt:4,gdu:2};
 function vBudget(){
   const p=budgetPlan(cursor), dd=debtDue(cursor), inc=p.inc;
   const pc=v=>inc?Math.round(v/inc*100)+'%':'';
-  let h=`<div class="panel"><div class="fld"><span>Thu nhập tháng — lấy tháng thấp nhất cho chắc</span>
+  let h=`<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+    ${[['fx','Cố định'],['hm','Hạn mức'],['cd','Cộng dồn']].map(([k,n])=>
+      `<button class="chip" style="margin-top:0;padding:6px 12px;font-size:12px" onclick="jumpB('${k}')">${n}</button>`).join('')}
+  </div>
+  <div class="panel"><div class="fld"><span>Thu nhập tháng — lấy tháng thấp nhất cho chắc</span>
     <input inputmode="text" value="${inc?money(inc):''}" placeholder="14.800.000" onchange="setIncome(this.value)"></div></div>`;
   if(!inc)return h+`<div class="sp"></div><div class="empty"><b>Điền thu nhập trước</b>Mọi phép chia hạn mức đều dựa trên con số này.</div>`;
 
@@ -951,7 +986,7 @@ function vBudget(){
       <div class="cat-meta"><span>xanh đậm cố định · nâu nợ · xanh lá còn lại để chia</span></div></div></div>`;
 
   /* ---- khoản cố định ---- */
-  h+=`<h2>Khoản cố định</h2>
+  h+=`<h2 id="b-fx">Khoản cố định</h2>
     <div class="stack-note"><span>Khoản tháng nào cũng trả đúng một số, ví dụ tiền ăn gửi bố mẹ hay gói A.I. Mỗi khoản gắn vào một nhóm để báo cáo vẫn đúng.</span></div>
     <div class="sp"></div>`;
   if(fixedItems().length){
@@ -993,7 +1028,7 @@ function vBudget(){
   ${ed?`<div class="sp"></div><button class="btn ghost" onclick="fxEdit=null;render()">Hủy sửa</button>`:''}`;
 
   /* ---- chia phần còn lại ---- */
-  h+=`<h2>Hạn mức phần linh hoạt</h2>
+  h+=`<h2 id="b-hm">Hạn mức phần linh hoạt</h2>
     <div class="stack-note"><span>Đây là trần chi, miễn không vượt. Gõ được <b>800k</b>, <b>1tr2</b> hoặc <b>8%</b> (phần trăm của số còn lại).</span></div>
     <div class="sp"></div>
     <button class="btn ghost" onclick="fillSuggest()">Chia theo mẫu đề xuất</button><div class="sp"></div>`;
@@ -1025,7 +1060,7 @@ function vBudget(){
   /* ---- hạn mức cộng dồn ---- */
   const rollGs=GROUPS.filter(g=>g.k==='chi'&&canRoll(g.id)&&budgetOf(g.id,cursor)>0);
   if(rollGs.length){
-    h+=`<h2>Hạn mức cộng dồn</h2>
+    h+=`<h2 id="b-cd">Hạn mức cộng dồn</h2>
       <div class="stack-note"><span>Dư tháng trước cộng sang, vượt thì trừ đi. Tính 6 tháng gần nhất, trần bằng 6 lần hạn mức tháng. Bấm nút vòng tròn ở trên để bật tắt từng nhóm.</span></div>
       <div class="sp"></div><div class="panel">`;
     rollGs.forEach(g=>{
@@ -1123,6 +1158,30 @@ function catSelect(val,kind,handler){
   return `<select class="pill ${val?'':'need'}" onchange="${handler}">${o}</select>`;
 }
 
+/* những việc cần Vy để mắt, gom lên đầu Tổng quan */
+function alerts(){
+  const out=[], d=cursor;
+  overGroups(d).forEach(x=>out.push({cls:'red',t:esc(x.g.n)+' vượt hạn mức '+money(x.over)+'₫',k:'over'}));
+  DB.debts.forEach(dt=>{const i=debtInfo(dt), lv=dueLevel(i);
+    if(lv.k==='over'||lv.k==='now')out.push({cls:'red',t:esc(dt.name)+' — '+lv.txt,k:'debt'});
+    else if(lv.k==='soon')out.push({cls:'amber',t:esc(dt.name)+' — '+lv.txt,k:'debt'});});
+  const chk=bidvCheck();
+  if(chk&&chk.diff!==0)out.push({cls:'red',t:'Số dư BIDV lệch '+money(Math.abs(chk.diff))+'₫ so với ngân hàng',k:'bal'});
+  const gaps=chainGaps().filter(g=>g.d.slice(0,7)===ym(d));
+  gaps.slice(0,2).forEach(g=>out.push({cls:'amber',
+    t:'Thiếu một khoản '+(g.gap<0?'chi':'thu')+' khoảng '+money(Math.abs(g.gap))+'₫ trước '+g.d.slice(8,10)+'/'+g.d.slice(5,7),k:'bal'}));
+  const ds=daysSinceBackup();
+  if(DB.txns.length>=10&&(ds===null||ds>30))out.push({cls:'grey',t:ds===null?'Sổ chưa từng được sao lưu':'Đã '+ds+' ngày chưa sao lưu',k:'backup'});
+  return out;
+}
+function jumpB(k){const e=document.getElementById('b-'+k);if(e)e.scrollIntoView({block:'start'});}
+function jump(k){
+  if(k==='bal')open.bal=true;
+  if(k==='backup'){go('set');return;}
+  if(k==='debt'){go('debt');return;}
+  render();
+  setTimeout(()=>{const e=document.getElementById('sec-'+k);if(e)e.scrollIntoView({block:'start'});},30);
+}
 function vHome(){
   const list=monthTx(cursor), chi=sumChi(list);
   const thuNhap=sum(list.filter(t=>t.t==='thu'&&['luong','thuong','tkhac'].includes(groupOf(t.c).id)));
@@ -1180,12 +1239,20 @@ function vHome(){
     }
   }
 
+  const al=alerts();
+  if(al.length){
+    h+=`<div class="alerts">`+al.map(a=>`<button class="al ${a.cls}" onclick="jump('${a.k}')"><span>${a.t}</span><span>›</span></button>`).join('')+`</div>`;
+  }
+
   /* dự trù cuối tháng, chỉ có nghĩa khi đang xem tháng hiện tại */
   if(ym(cursor)===ym(new Date())&&(DB.income||0)>0){
     const f=forecast(), pa=pace(cursor);
     const daChiThang=sumChi(monthTx(new Date()));
     const tongDuKien=daChiThang+f.planConLai;
-    h+=`<h2>Dự trù cả tháng</h2><div class="panel">
+    h+=`<button class="fold blue" id="sec-fc" onclick="toggle('fc')">
+      <span>${open.fc?'▾':'▸'} Dự trù cả tháng</span>
+      <span style="font-size:13px;font-weight:600;color:${f.keHoach<0?'var(--brick)':'var(--jade)'}">${f.keHoach<0?'thiếu ':'còn '}${short(Math.abs(f.keHoach))}₫</span></button>`;
+    if(open.fc)h+=`<div class="panel" style="border-radius:0 0 var(--r) var(--r);border-top:0">
       <div class="src"><div><div class="src-n">Thu nhập tháng</div></div><div class="src-a">${money(DB.income)} ₫</div></div>
       <div class="src"><div><div class="src-n">Đã chi từ đầu tháng</div><div class="src-m">${f.conLai} ngày còn lại</div></div>
         <div class="src-a neg">${money(daChiThang)} ₫</div></div>
@@ -1208,7 +1275,7 @@ function vHome(){
 
   const ov=overGroups(cursor);
   if(ov.length){
-    h+=`<h2>Vượt hạn mức</h2><div class="panel">`;
+    h+=`<h2 id="sec-over">Vượt hạn mức</h2><div class="panel" style="border-left:3px solid var(--amber)">`;
     ov.forEach(x=>{
       const room=roomGroups(cursor,x.g.id);
       h+=`<div style="padding:12px 14px;border-bottom:1px solid var(--line-2)">
@@ -1230,7 +1297,7 @@ function vHome(){
   const dt=debtTotals();
   if(DB.debts.length){
     const nNo=DB.debts.filter(d=>d.kind!=='cho').length, nCho=DB.debts.filter(d=>d.kind==='cho').length;
-    h+=`<h2>Nợ</h2><div class="panel">`;
+    h+=`<h2 id="sec-debt">Nợ</h2><div class="panel" style="border-left:3px solid var(--brick)">`;
     if(nNo)h+=`<div class="src total"><div><div class="src-n">TỔNG VY ĐANG NỢ</div>
       <div class="src-m">${nNo} khoản</div></div><div class="src-a neg">${money(dt.no)} ₫</div></div>`;
     DB.debts.filter(d=>d.kind!=='cho').forEach(d=>h+=debtRow(d));
@@ -1272,11 +1339,14 @@ function vHome(){
     const dayTot=Array(nd).fill(0);
     list.filter(t=>t.t==='chi').forEach(t=>{const i=+t.d.slice(8,10)-1;if(i>=0&&i<nd)dayTot[i]+=t.a});
     const mx=Math.max(...dayTot,1), mxDay=dayTot.indexOf(mx)+1;
-    h+=`<h2>Chi từng ngày trong tháng</h2><div class="days">`+dayTot.map((v,i)=>
-      `<i class="${cur&&i===now.getDate()-1?'today':''}" style="height:${v/mx*100}%" title="Ngày ${i+1}: ${money(v)}₫"></i>`).join('')
-      +`</div><div class="days-x"><span>ngày 1</span><span>${Math.ceil(nd/2)}</span><span>${nd}</span></div>
-      <div class="sp"></div><div class="stack-note"><span>Mỗi cột là một ngày, cột càng cao càng tiêu nhiều${cur?', cột cam là hôm nay':''}.</span></div>
-      <div class="stack-note" style="margin-top:4px"><span>Tiêu nhiều nhất là ngày ${mxDay}, hết ${money(mx)}₫.</span></div>`;
+    h+=`<button class="fold" onclick="toggle('day')">
+      <span>${open.day?'▾':'▸'} Chi từng ngày</span>
+      <span style="font-size:12.5px;color:var(--ink-3)">cao nhất ngày ${mxDay}, ${short(mx)}₫</span></button>`;
+    if(open.day){
+      h+=`<div class="days" style="border-radius:0 0 var(--r) var(--r);border-top:0;margin-top:-1px">`+dayTot.map((v,i)=>
+        `<i class="${cur&&i===now.getDate()-1?'today':''}" style="height:${v/mx*100}%" title="Ngày ${i+1}: ${money(v)}₫"></i>`).join('')
+        +`</div><div class="days-x"><span>ngày 1</span><span>${Math.ceil(nd/2)}</span><span>${nd}</span></div>`;
+    }
   }
 
   const ds=daysSinceBackup();
@@ -1388,24 +1458,21 @@ function vTrend(){
       {n:'Gánh nặng nợ',    v:m.rNo, goal:0.20, up:false, note:'tiền trả nợ trên thu nhập'},
       {n:'Chi linh hoạt',   v:m.rLH, goal:0.35, up:false, note:'phần Vy chủ động điều chỉnh được'}
     ];
-    h+=`<h2>Chỉ số tháng ${cursor.getMonth()+1}</h2><div class="panel">`;
+    h+=`<h2>Chỉ số tháng ${cursor.getMonth()+1}</h2><div class="grid2">`;
     KPI.forEach(k=>{
       const ok=k.up?k.v>=k.goal:k.v<=k.goal;
-      h+=`<div class="src"><div style="min-width:0"><div class="src-n">${k.n}</div>
-        <div class="src-m">${k.note} · mục tiêu ${k.up?'≥':'≤'} ${Math.round(k.goal*100)}%</div></div>
-        <div style="text-align:right"><div class="src-a" style="color:${ok?'var(--jade)':'var(--amber)'}">${Math.round(k.v*100)}%</div>
-        <div class="src-m">${ok?'đạt':'chưa đạt'}</div></div></div>`;
+      h+=`<div class="kpi"><div class="kpi-n">${k.n}</div>
+        <div class="kpi-v" style="color:${ok?'var(--jade)':'var(--amber)'}">${Math.round(k.v*100)}%</div>
+        <div class="kpi-m">mục tiêu ${k.up?'≥':'≤'} ${Math.round(k.goal*100)}%</div></div>`;
     });
     const tkPlan=DB.budgets.tk||0;
     const canThem=Math.max(0,ef.avg*3-ef.quy);
     const thangNua=tkPlan?Math.ceil(canThem/tkPlan):0;
-    h+=`<div class="src"><div style="min-width:0"><div class="src-n">Quỹ khẩn cấp</div>
-      <div class="src-m">đã để dành ${money(ef.quy)}₫ · mục tiêu 3 tháng chi phí</div></div>
-      <div style="text-align:right"><div class="src-a" style="color:${ef.thang>=3?'var(--jade)':'var(--amber)'}">${ef.thang?ef.thang.toFixed(1):'0'}</div>
-      <div class="src-m">tháng</div></div></div>`;
-    if(ef.avg&&canThem>0&&tkPlan)h+=`<div class="src"><div style="min-width:0"><div class="src-n">Dự trù đủ quỹ</div>
-      <div class="src-m">còn thiếu ${money(canThem)}₫, mỗi tháng để ${short(tkPlan)}₫</div></div>
-      <div style="text-align:right"><div class="src-a">${thangNua}</div><div class="src-m">tháng nữa</div></div></div>`;
+    h+=`<div class="kpi"><div class="kpi-n">Quỹ khẩn cấp</div>
+      <div class="kpi-v" style="color:${ef.thang>=3?'var(--jade)':'var(--amber)'}">${ef.thang?ef.thang.toFixed(1):'0'}</div>
+      <div class="kpi-m">tháng · cần 3</div></div>`;
+    if(ef.avg&&canThem>0&&tkPlan)h+=`<div class="kpi"><div class="kpi-n">Đủ quỹ sau</div>
+      <div class="kpi-v">${thangNua}</div><div class="kpi-m">tháng nữa</div></div>`;
     h+=`</div>`;
   }
 
@@ -1415,7 +1482,11 @@ function vTrend(){
     const list=monthTx(cursor);
     const now=new Date(), cur=ym(cursor)===ym(now);
     const nd=daysIn(cursor), passed=cur?now.getDate():nd, pace=passed/nd;
-    h+=`<h2>Kế hoạch so thực tế</h2><div class="panel">`;
+    const soVuot=bgroups.filter(g=>sum(monthTx(cursor).filter(t=>t.t==='chi'&&groupOf(t.c).id===g.id))>budgetOf(g.id,cursor)).length;
+    h+=`<button class="fold" onclick="toggle('kh')">
+      <span>${open.kh?'▾':'▸'} Kế hoạch so thực tế</span>
+      <span style="font-size:12.5px;color:${soVuot?'var(--amber)':'var(--ink-3)'}">${soVuot?soVuot+' nhóm vượt':bgroups.length+' nhóm'}</span></button>`;
+    if(open.kh)h+=`<div class="panel" style="border-radius:0 0 var(--r) var(--r);border-top:0">`;
     bgroups.map(g=>{
       const b=budgetOf(g.id,cursor);
       const v=sum(list.filter(t=>t.t==='chi'&&groupOf(t.c).id===g.id));
@@ -1432,7 +1503,7 @@ function vTrend(){
           <span class="${over?'over':''}">${over?'vượt '+short(v-b)+'₫':offPace?'tiêu nhanh hơn nhịp':'còn '+short(b-v)+'₫'}</span></span>
         </span></div>`;
     });
-    h+=`</div><div class="sp"></div><div class="stack-note"><span><span class="tick-legend"></span> vạch dọc là mốc thời gian đã trôi qua trong tháng</span></div>`;
+    if(open.kh)h+=`</div><div class="sp"></div><div class="stack-note"><span><span class="tick-legend"></span> vạch dọc là mốc thời gian đã trôi qua trong tháng</span></div>`;
   }
 
   const months=[];
@@ -1450,7 +1521,11 @@ function vTrend(){
   const nowL=monthTx(months[5].d), prevL=monthTx(months[4].d);
   const a=byGroup(nowL), bMap=Object.fromEntries(byGroup(prevL));
   if(a.length){
-    h+=`<h2>So với tháng trước</h2><div class="panel">`;
+    h+=`<button class="fold" onclick="toggle('sos')">
+      <span>${open.sos?'▾':'▸'} So với tháng trước</span>
+      <span style="font-size:12.5px;color:var(--ink-3)">${a.length} nhóm</span></button>`;
+    if(!open.sos)return h;
+    h+=`<div class="panel" style="border-radius:0 0 var(--r) var(--r);border-top:0">`;
     a.forEach(([id,v])=>{
       const g=groupOf(id), p=bMap[id]||0, dd=p?(v-p)/p*100:null;
       const subs=bySub(nowL,id), can=g.subs.length&&subs.length;

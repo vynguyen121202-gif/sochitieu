@@ -201,7 +201,7 @@ function labelOf(code){
 const validCode=(code,kind)=>{const g=groupOf(code);return !!code&&g.id&&(!kind||g.k===kind);};
 
 const KEY='sochi:data';
-const VERSION='10.0';
+const VERSION='10.1';
 let DB={txns:[],debts:[],budgets:{},fixedItems:[],roll:{},offsets:[],income:0,rules:{},opens:{bidv:0,vi:0,tm:0},checks:{},opts:{ab:'off'},lastBackup:0,v:5};
 let tab='home', cursor=new Date(), pending=null, msg='', msgType='err', open={};
 
@@ -1525,6 +1525,9 @@ function toggle(id){open[id]=!open[id];render()}
 function toggleRoll(g){DB.roll=DB.roll||{};if(DB.roll[g])delete DB.roll[g];else DB.roll[g]=1;save();render()}
 function zoomIn(id){open.zoom=id;render()}
 function zoomOut(){open.zoom=null;render()}
+let filterCode='';
+function seeList(code){filterCode=code;go('list');}
+function clearFilter(){filterCode='';render();}
 /* ---- khoản nợ ---- */
 function newDebt(kind,name,amount){
   const k=kind||(confirm('Đây là khoản Vy đi vay?\nOK = tôi đi vay · Hủy = tôi cho người khác mượn')?'no':'cho');
@@ -1704,12 +1707,13 @@ function render(){
       tab==='debt'?vDebt():tab==='budget'?vBudget():tab==='trend'?vTrend():vSet())+`</div>`;
   document.getElementById('app').innerHTML=h;
   document.getElementById('nav').innerHTML=TABS.map(([k,n,i])=>
-    `<button class="${tab===k?'on':''}" onclick="go('${k}')"><b>${i}</b>${n}</button>`).join('');
+    `<button class="${tab===k?'on':''}" onclick="goTab('${k}')"><b>${i}</b>${n}</button>`).join('');
   window.scrollTo(0, toTop?0:y);
   toTop=false;
 }
 /* đổi tab hay đổi tháng mới cuộn lên đầu; bấm trong trang thì giữ nguyên chỗ đang xem */
 function go(t){msg='';tab=t;toTop=true;render();}
+function goTab(t){if(t!=='list')filterCode='';go(t);}
 try{
   const mf={name:'Sổ chi tiêu',short_name:'Sổ chi',display:'standalone',start_url:'.',
     background_color:'#ECEFEA',theme_color:'#ECEFEA',

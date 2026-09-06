@@ -220,7 +220,7 @@ function labelOf(code){
 const validCode=(code,kind)=>{const g=groupOf(code);return !!code&&g.id&&(!kind||g.k===kind);};
 
 const KEY='sochi:data';
-const VERSION='13.0';
+const VERSION='14.0';
 let DB={txns:[],debts:[],budgets:{},bm:{},goals:[],fixedItems:[],roll:{},offsets:[],draws:[],income:0,rules:{},opens:{bidv:0,vi:0,tm:0},checks:{},opts:{ab:'off'},lastBackup:0,v:5};
 let tab='home', cursor=new Date(), pending=null, msg='', msgType='err', open={};
 
@@ -343,7 +343,8 @@ function chainRows(){
   const map={}, out=[];
   DB.txns.forEach(t=>{
     if((t.s||'bidv')!=='bidv')return;
-    const k=t.sg||('x'+t.id);
+    /* mảnh cùng một giao dịch: có dấu sg, hoặc trùng cả ngày giờ lẫn số dư */
+    const k=t.sg||(t.b?('b'+t.d+(t.tm||'')+t.b):('x'+t.id));
     if(!map[k]){map[k]={d:t.d,tm:t.tm||'',t:t.t,a:0,b:0};out.push(map[k]);}
     map[k].a+=t.a;
     if(t.b)map[k].b=t.b;
@@ -1060,9 +1061,15 @@ function vBudPlan(p,dd,inc){
       <span style="font-size:11.5px;font-weight:600;color:var(--ink-2)">NGUỒN KHẢ DỤNG</span>
       <span style="font-size:18px;font-weight:600${p.conLai<0?';color:var(--brick)':''}">${money(p.conLai)}</span></div></div>`;
 
+  const km=ym(new Date(cursor.getFullYear(),cursor.getMonth()-1,1));
+  const coTruoc=!!(DB.bm&&DB.bm[km]);
+  const daDat=!!(DB.bm&&DB.bm[ym(cursor)]);
   h+=`<div class="sp"></div><div style="display:flex;gap:8px">
     <button class="btn ghost" style="padding:11px" onclick="go('fixed')">Quản lý chi phí cố định</button>
-    <button class="btn ghost" style="padding:11px" onclick="fillSuggest()">Phân bổ theo mẫu</button></div>`;
+    <button class="btn ghost" style="padding:11px" onclick="fillSuggest()">Phân bổ theo mẫu</button></div>
+    <div class="sp"></div><div style="display:flex;gap:8px">
+    ${coTruoc?`<button class="btn ghost" style="padding:11px" onclick="copyPrevBudget()">Lấy y hệt tháng ${km.slice(5)}</button>`:''}
+    ${daDat?`<button class="btn ghost" style="padding:11px;color:var(--brick)" onclick="resetBudget()">Đặt lại hạn mức</button>`:''}</div>`;
 
   /* dải cơ cấu chi tiêu dự kiến, không gồm tiết kiệm */
   const spend=FLEX().filter(g=>g.id!=='tk').map(g=>({g,v:bud(g.id,cursor)})).filter(x=>x.v>0).sort((a,b)=>b.v-a.v);
@@ -1294,7 +1301,16 @@ function catBtn(val,kind,mode,ref){
 /* những việc cần Vy để mắt, gom lên đầu Tổng quan */
 function alerts(){
   const out=[], d=cursor;
-  overGroups(d).forEach(x=>out.push({cls:'red',t:esc(x.g.n)+' vượt hạn mức '+money(x.over)+'₫',k:'over'}));
+  const nd=daysIn(d), nw=new Date(), qua=ym(d)===ym(nw)?nw.getDate():nd, moc=qua/nd;
+  /* Tiết kiệm, Trả nợ, Cho mượn trả một lần đầu tháng nên không đo theo nhịp */
+  const KHONGNHIP={tk:1,trano:1,muon:1};
+  FLEX().forEach(g=>{
+    if(KHONGNHIP[g.id])return;
+    const b=avail(g.id,d); if(!b)return;
+    const v=spentOf(g.id,d), r=v/b;
+    if(v>b)out.push({cls:'red',t:esc(g.sn||g.n)+' vượt hạn mức '+money(v-b)+'₫',k:'over',g:g.id});
+    else if(r>moc+0.15)out.push({cls:'amber',t:esc(g.sn||g.n)+' tiêu nhanh hơn nhịp · đã dùng '+Math.round(r*100)+'% khi mới qua '+Math.round(moc*100)+'% tháng',k:'over',g:g.id});
+  });
   DB.debts.forEach(dt=>{const i=debtInfo(dt), lv=dueLevel(i);
     if(lv.k==='over'||lv.k==='now')out.push({cls:'red',t:esc(dt.name)+' — '+lv.txt,k:'debt'});
     else if(lv.k==='soon')out.push({cls:'amber',t:esc(dt.name)+' — '+lv.txt,k:'debt'});});
@@ -1309,6 +1325,7 @@ function alerts(){
   return out;
 }
 function jump(k){
+  if(k==='over'){go('list');return;}
   if(k==='bal')open.bal=true;
   if(k==='backup'){go('set');return;}
   if(k==='budget'){go('budget');return;}
@@ -1441,51 +1458,30 @@ function vHome(){
 
   const dt=debtTotals();
   if(DB.debts.length){
-    const nNo=DB.debts.filter(d=>d.kind!=='cho').length, nCho=DB.debts.filter(d=>d.kind==='cho').length;
-    h+=`<h2 id="sec-debt">Nợ</h2><div class="panel" style="border-left:3px solid var(--brick)">`;
-    if(nNo)h+=`<div class="src total"><div><div class="src-n">TỔNG VY ĐANG NỢ</div>
-      <div class="src-m">${nNo} khoản</div></div><div class="src-a neg">${money(dt.no)} ₫</div></div>`;
-    DB.debts.filter(d=>d.kind!=='cho').forEach(d=>h+=debtRow(d));
-    if(nCho)h+=`<div class="src total"><div><div class="src-n">TỔNG NGƯỜI KHÁC NỢ VY</div>
-      <div class="src-m">${nCho} khoản</div></div><div class="src-a">${money(dt.cho)} ₫</div></div>`;
-    DB.debts.filter(d=>d.kind==='cho').forEach(d=>h+=debtRow(d));
-    h+=`</div><div class="sp"></div><button class="btn ghost" onclick="go('debt')">Mở sổ nợ</button>`;
+    const soon=DB.debts.map(d=>({d,i:debtInfo(d),lv:dueLevel(debtInfo(d))}))
+      .filter(x=>x.lv.k==='over'||x.lv.k==='now'||x.lv.k==='soon').length;
+    h+=`<button class="fold brick" id="sec-debt" onclick="toggle('nono')">
+      <span>${open.nono?'▾':'▸'} Nợ</span>
+      <span style="font-size:12.5px"><b style="color:var(--brick)">${short(dt.no)}₫</b> phải trả${dt.cho?' · '+short(dt.cho)+'₫ phải thu':''}${soon?' · '+soon+' sắp hạn':''}</span></button>`;
+    if(open.nono){
+      h+=`<div class="panel" style="border-radius:0 0 var(--r) var(--r);border-top:0;border-left:3px solid var(--brick)">`;
+      DB.debts.forEach(d=>h+=debtRow(d));
+      h+=`</div><div class="sp"></div><button class="btn ghost" onclick="go('debt')">Mở sổ nợ</button>`;
+    }
   }
 
-  const gaps=chainGaps().filter(g=>g.d.slice(0,7)===ym(cursor));
-  if(gaps.length) h+=`<div class="sp"></div><div class="err"><b>Chuỗi số dư BIDV bị đứt</b><br>`
-    +gaps.slice(0,3).map(g=>`Trước giao dịch ${g.d.slice(8,10)}/${g.d.slice(5,7)}${g.tm?' '+g.tm:''} còn thiếu một khoản ${g.gap<0?'chi':'thu'} khoảng ${money(Math.abs(g.gap))}₫.`).join('<br>')+`</div>`;
-
-  if(groups.length){
-    const rows=GROUPS.filter(g=>g.k==='chi').map(g=>{
-      const b=avail(g.id,cursor), v=spentOf(g.id,cursor);
-      return {g,b,v,left:b-v,r:b?v/b:0};
-    }).filter(x=>x.b>0||x.v>0).sort((a,b)=>b.r-a.r);
-    h+=`<h2 id="sec-over">Hạn mức còn lại</h2>
-      <div class="stack-note" style="margin-bottom:8px"><span>Nhóm sắp cạn xếp trên</span></div><div class="panel">`;
-    rows.forEach(({g,b,v,left,r})=>{
-      const het=left<0, gan=!het&&r>=0.8;
-      h+=`<button class="cat" onclick="seeList('${g.id}')">
-        <span class="spine" style="background:${g.c}"></span><span class="cat-body">
-        <span class="cat-top"><span class="cat-name">${esc(g.n)}</span>
-          <span class="cat-amt" style="${het?'color:var(--brick)':gan?'color:var(--amber)':''}">${het?'vượt '+money(-left):'còn '+money(left)}</span></span>
-        <span class="track" style="height:5px"><i style="width:${Math.min(100,r*100)}%;background:${het?'var(--brick)':gan?'var(--amber)':g.c}"></i></span>
-        <span class="cat-meta"><span>đã dùng ${money(v)} / ${money(b)}</span><span>${Math.round(r*100)}%</span></span>
-        </span></button>`;
-    });
+  const gp=goalProgress().filter(x=>x.thieu>0).slice(0,2);
+  if(gp.length){
+    h+=`<h2 class="hl"><span>Mục tiêu đang thực hiện</span>
+      <button style="background:none;border:0;padding:0;font-size:11.5px;font-weight:600;color:#0B4A40" onclick="go('trend')">xem tất cả</button></h2><div class="panel">`;
+    gp.forEach(x=>{const pct=x.g.target?Math.min(100,x.co/x.g.target*100):0;
+      h+=`<div style="padding:12px;border-bottom:1px solid var(--line-2)">
+        <div class="cat-top"><span style="font-size:13.5px;font-weight:500">${esc(x.g.name)}</span>
+          <span style="font-size:13px;font-weight:500">${money(x.co)}</span></div>
+        <div class="track" style="height:6px;margin:8px 0 6px"><i style="width:${pct}%;background:#2E7D6B"></i></div>
+        <div class="cat-meta"><span>mục tiêu ${money(x.g.target)}</span>
+          <span>${x.eta?'đủ vào '+x.eta.slice(5,7)+'/'+x.eta.slice(0,4):'chưa đặt mức tiết kiệm'}</span></div></div>`;});
     h+=`</div>`;
-
-    const dayTot=Array(nd).fill(0);
-    list.filter(t=>t.t==='chi').forEach(t=>{const i=+t.d.slice(8,10)-1;if(i>=0&&i<nd)dayTot[i]+=t.a});
-    const mx=Math.max(...dayTot,1), mxDay=dayTot.indexOf(mx)+1;
-    h+=`<button class="fold" onclick="toggle('day')">
-      <span>${open.day?'▾':'▸'} Chi từng ngày</span>
-      <span style="font-size:12.5px;color:var(--ink-3)">cao nhất ngày ${mxDay}, ${short(mx)}₫</span></button>`;
-    if(open.day){
-      h+=`<div class="days" style="border-radius:0 0 var(--r) var(--r);border-top:0;margin-top:-1px">`+dayTot.map((v,i)=>
-        `<i class="${cur&&i===now.getDate()-1?'today':''}" style="height:${v/mx*100}%" title="Ngày ${i+1}: ${money(v)}₫"></i>`).join('')
-        +`</div><div class="days-x"><span>ngày 1</span><span>${Math.ceil(nd/2)}</span><span>${nd}</span></div>`;
-    }
   }
 
   const ds=daysSinceBackup();
@@ -1693,8 +1689,10 @@ function vTrend(){
         <div class="fld"><span>Mong muốn đạt</span><input id="gd" type="month"></div></div>
     </div><button class="btn ghost" onclick="addGoal()">Thêm mục tiêu</button><div class="sp"></div>`;
   }
+  const xong=gp.filter(x=>x.thieu<=0), dang=gp.filter(x=>x.thieu>0);
+  if(dang.length)h+=`<div class="stack-note" style="margin-bottom:6px"><span>ĐANG THỰC HIỆN</span></div>`;
   h+=`<div class="panel">`;
-  gp.forEach((x,k)=>{
+  gp.sort((a,b)=>(a.thieu>0?0:1)-(b.thieu>0?0:1)).forEach((x,k)=>{
     const g=x.g, pct=g.target?Math.min(100,x.co/g.target*100):0, xong=x.thieu<=0;
     const tre=g.due&&x.eta&&x.eta.slice(0,7)>g.due;
     h+=`<div style="padding:12px;border-bottom:1px solid var(--line-2);border-left:3px solid ${x.co>0?'var(--jade)':'#C3CCC4'}">
@@ -1938,6 +1936,20 @@ function balanceToSavings(){
   setBud('tk',Math.max(0,p.conLai-other));
 }
 function balanceNow(){balanceToSavings();save();render();}
+/* lấy y hệt hạn mức tháng trước cho tháng đang xem */
+function copyPrevBudget(){
+  const km=ym(new Date(cursor.getFullYear(),cursor.getMonth()-1,1));
+  if(!DB.bm||!DB.bm[km]){flash('Tháng trước chưa đặt hạn mức.','err');return;}
+  if(DB.bm[ym(cursor)]&&!confirm('Ghi đè hạn mức tháng này bằng hạn mức tháng '+km.slice(5)+'?'))return;
+  DB.bm[ym(cursor)]=Object.assign({},DB.bm[km]);
+  save();flash('Đã lấy hạn mức tháng '+km.slice(5)+'.','ok');
+}
+/* xóa hạn mức riêng của tháng đang xem, quay về thừa kế tháng trước */
+function resetBudget(){
+  if(!confirm('Xóa hạn mức riêng của tháng này? App sẽ thừa kế lại tháng gần nhất trước đó.'))return;
+  if(DB.bm)delete DB.bm[ym(cursor)];
+  save();flash('Đã đặt lại hạn mức tháng này.','ok');
+}
 let fxEdit=null, fxAmt=false, fxCode='', manualCode='';
 function editFixed(id){const it=fixedItems().find(x=>x.id===id);fxEdit=id;fxAmt=!!(it&&it.ma);fxCode=it?it.code:'';render();}
 function saveFixed(){

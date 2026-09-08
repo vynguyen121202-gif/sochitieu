@@ -234,7 +234,7 @@ function labelOf(code){
 const validCode=(code,kind)=>{const g=groupOf(code);return !!code&&g.id&&(!kind||g.k===kind);};
 
 const KEY='sochi:data';
-const VERSION='15.1';
+const VERSION='15.2';
 let DB={txns:[],debts:[],budgets:{},bm:{},goals:[],fixedItems:[],roll:{},offsets:[],draws:[],income:0,rules:{},opens:{bidv:0,vi:0,tm:0},checks:{},opts:{ab:'off'},lastBackup:0,v:5};
 let tab='home', cursor=new Date(), pending=null, msg='', msgType='err', open={};
 
@@ -723,8 +723,7 @@ function treemap(list,chi){
     b.pc=Math.max(1,Math.round(b.v/chi*100));
     const w=Math.max(0,b.w-G), h=Math.max(0,b.h-G);
     /* ô có cấp 2 thì mở ra, ô còn lại nhảy sang danh sách giao dịch */
-    const act=(!open.zoom&&b.sub)?`zoomIn('${b.id}')`
-      :(b.id==='__o'?`zoomIn('__o')`:`pickTx('${b.id}')`);
+    const act=b.id==='__o'?`zoomIn('__o')`:`pickTx('${b.id}')`;
     sv+=`<g style="cursor:pointer" onclick="${act}">
       <rect x="${b.x.toFixed(1)}" y="${b.y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="4" fill="${gcF(b.col)}"></rect>`;
     if(w>=64&&h>=52){
@@ -1428,7 +1427,27 @@ function vHome(){
     }
     if(chi){
       h+=`<h2 class="hl"><i style="background:${gcA('#C8792B')}"></i><b>Cơ cấu chi tiêu</b><em>${money(chi)}</em></h2>${treemap(list,chi)}
-        <div class="sp"></div><div class="stack-note"><span>Ô càng lớn càng tốn nhiều tiền${open.zoom?'':'. Bấm vào ô để xem chi tiết bên trong.'}</span></div>`;
+        <div class="sp"></div><div class="stack-note"><span>Chạm một ô để xem giao dịch của nhóm đó.</span>
+          ${!open.zoom&&byGroup(list).some(([id])=>groupOf(id).subs.length)?`<span>
+            <button style="background:none;border:0;padding:0;color:var(--jade);font-weight:600;font-size:12.5px" onclick="askZoom()">chia nhỏ theo mục</button></span>`:''}</div>`;
+
+  /* bấm ô cuối trong bản đồ khối thì hiện thẳng giao dịch tại đây */
+      if(open.txCode){
+        const gg=groupOf(open.txCode), isSub=open.txCode!==gg.id;
+        const rows=list.filter(t=>t.t==='chi'&&(isSub?t.c===open.txCode:groupOf(t.c).id===open.txCode))
+          .sort((a,b)=>(b.d+' '+(b.tm||'')).localeCompare(a.d+' '+(a.tm||'')));
+        h+=`<div class="sp"></div><div class="stack-note" style="margin-bottom:8px"><span>
+          <span class="spine" style="background:${gcA(gg.c)};height:12px;display:inline-block;margin-right:6px"></span>
+          ${esc(labelOf(open.txCode))} · ${rows.length} giao dịch · ${money(sum(rows))}₫
+          <button style="background:none;border:0;padding:0 0 0 8px;color:var(--jade);font-weight:600;font-size:12.5px" onclick="pickTx('')">đóng</button></span></div>
+          <div class="panel">`;
+        rows.forEach(t=>{h+=`<div class="tx"><span class="spine" style="background:${gg.c}"></span>
+          <div class="tx-body"><div class="tx-n">${esc(t.n)}</div>
+            <div class="tx-m">${t.d.slice(8,10)}/${t.d.slice(5,7)}${t.tm?' '+t.tm:''} · ${esc(srcOf(t.s).n)}</div></div>
+          <div class="tx-a">−${money(t.a)}</div></div>`;});
+        if(!rows.length)h+=`<div class="empty">Không có giao dịch</div>`;
+        h+=`</div>`;
+      }
     }
   }
 
@@ -1464,24 +1483,6 @@ function vHome(){
     const xau=f.duocUoc?Math.min(f.keHoach,f.theoDa):f.keHoach;
     if(xau<0)h+=`<div class="sp"></div><div class="err">Theo đà này cuối tháng sẽ âm ${money(-xau)}₫. Cần cắt bớt ở nhóm linh hoạt ngay từ bây giờ.</div>`;
     else if(f.duocUoc&&f.theoDa<f.keHoach-100000)h+=`<div class="sp"></div><div class="warn">Đang tiêu nhanh hơn kế hoạch, cuối tháng hụt khoảng ${money(f.keHoach-f.theoDa)}₫ so với dự tính.</div>`;
-  }
-
-  /* bấm ô cuối trong bản đồ khối thì hiện thẳng giao dịch tại đây */
-  if(open.txCode){
-    const gg=groupOf(open.txCode), isSub=open.txCode!==gg.id;
-    const rows=list.filter(t=>t.t==='chi'&&(isSub?t.c===open.txCode:groupOf(t.c).id===open.txCode))
-      .sort((a,b)=>(b.d+' '+(b.tm||'')).localeCompare(a.d+' '+(a.tm||'')));
-    h+=`<div class="sp"></div><div class="stack-note" style="margin-bottom:8px"><span>
-      <span class="spine" style="background:${gcA(gg.c)};height:12px;display:inline-block;margin-right:6px"></span>
-      ${esc(labelOf(open.txCode))} · ${rows.length} giao dịch · ${money(sum(rows))}₫
-      <button style="background:none;border:0;padding:0 0 0 8px;color:var(--jade);font-weight:600;font-size:12.5px" onclick="pickTx('')">đóng</button></span></div>
-      <div class="panel">`;
-    rows.forEach(t=>{h+=`<div class="tx"><span class="spine" style="background:${gg.c}"></span>
-      <div class="tx-body"><div class="tx-n">${esc(t.n)}</div>
-        <div class="tx-m">${t.d.slice(8,10)}/${t.d.slice(5,7)}${t.tm?' '+t.tm:''} · ${esc(srcOf(t.s).n)}</div></div>
-      <div class="tx-a">−${money(t.a)}</div></div>`;});
-    if(!rows.length)h+=`<div class="empty">Không có giao dịch</div>`;
-    h+=`</div>`;
   }
 
   const dt=debtTotals();
@@ -1872,7 +1873,16 @@ function zoomIn(id){open.zoom=id;render()}
 function zoomOut(){open.zoom=null;render()}
 let filterCode='';
 function seeList(code){filterCode=code;go('list');}
-function pickTx(code){open.txCode=open.txCode===code?'':code;render();}
+function pickTx(code){
+  const g=groupOf(code);
+  /* chạm ô nhóm lớn: nếu nhóm có mục con và đang ở mức nhóm thì mở giao dịch cả nhóm */
+  open.txCode=open.txCode===code?'':code; render();
+}
+/* xổ bản đồ khối xuống cấp 2 */
+function askZoom(){
+  const first=byGroup(monthTx(cursor)).find(([id])=>groupOf(id).subs.length);
+  if(first){open.zoom=first[0];open.txCode='';render();}
+}
 function clearFilter(){filterCode='';render();}
 /* ---- khoản nợ ---- */
 function newDebt(kind,name,amount){

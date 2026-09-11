@@ -234,7 +234,7 @@ function labelOf(code){
 const validCode=(code,kind)=>{const g=groupOf(code);return !!code&&g.id&&(!kind||g.k===kind);};
 
 const KEY='sochi:data';
-const VERSION='15.3';
+const VERSION='15.4';
 let DB={txns:[],debts:[],budgets:{},bm:{},goals:[],fixedItems:[],roll:{},offsets:[],draws:[],income:0,rules:{},opens:{bidv:0,vi:0,tm:0},checks:{},opts:{ab:'off'},lastBackup:0,v:5};
 let tab='home', cursor=new Date(), pending=null, msg='', msgType='err', open={};
 
@@ -356,25 +356,32 @@ function bidvCheck(){
 function chainRows(){
   const map={}, out=[];
   DB.txns.forEach(t=>{
-    if((t.s||'bidv')!=='bidv')return;
-    /* mảnh cùng một giao dịch: có dấu sg, hoặc trùng cả ngày giờ lẫn số dư */
+    if((t.s||'bidv')!=='bidv'&&t.s2!=='bidv')return;
+    if(t.t==='dc')return;                      // dòng điều chỉnh không phải giao dịch ngân hàng
     const k=t.sg||(t.b?('b'+t.d+(t.tm||'')+t.b):('x'+t.id));
-    if(!map[k]){map[k]={d:t.d,tm:t.tm||'',t:t.t,a:0,b:0};out.push(map[k]);}
-    map[k].a+=t.a;
+    if(!map[k]){map[k]={d:t.d,tm:t.tm||'',delta:0,b:0};out.push(map[k]);}
+    const own=(t.s||'bidv')==='bidv';
+    map[k].delta+= t.t==='thu'?t.a : t.t==='mv'?(own?-t.a:t.a) : -t.a;
     if(t.b)map[k].b=t.b;
     if(!map[k].tm&&t.tm)map[k].tm=t.tm;
   });
-  return out.filter(r=>r.b);
+  return out.sort((x,y)=>(x.d+' '+(x.tm||'00:00')).localeCompare(y.d+' '+(y.tm||'00:00')));
 }
+/* Chuỗi số dư: cộng dồn MỌI giao dịch giữa hai mốc có số dư ngân hàng,
+   kể cả giao dịch không kèm số dư, nếu không sẽ báo thiếu oan. */
 function chainGaps(){
-  const rows=chainRows()
-    .sort((x,y)=>(x.d+' '+(x.tm||'00:00')).localeCompare(y.d+' '+(y.tm||'00:00')));
-  const out=[];
-  for(let i=1;i<rows.length;i++){
-    const p=rows[i-1],c=rows[i];
-    const expect=p.b+(c.t==='thu'?c.a:-c.a);
-    if(Math.abs(expect-c.b)>=1) out.push({d:c.d,tm:c.tm,gap:c.b-expect});
-  }
+  const rows=chainRows(), out=[];
+  let last=null, acc=0, from=null;
+  rows.forEach(r=>{
+    acc+=r.delta;
+    if(r.b){
+      if(last!==null){
+        const exp=last+acc;
+        if(Math.abs(exp-r.b)>=1)out.push({d:r.d,tm:r.tm,gap:r.b-exp,from});
+      }
+      last=r.b; acc=0; from=r.d+(r.tm?' '+r.tm:'');
+    }
+  });
   return out;
 }
 /* ==================== khoản nợ ==================== */

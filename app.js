@@ -36,7 +36,7 @@ function labelOf(code){
 const validCode=(code,kind)=>{const g=groupOf(code);return !!code&&g.id&&(!kind||g.k===kind);};
 
 const KEY='sochi:data';
-const VERSION='16.5';
+const VERSION='16.6';
 let DB={txns:[],debts:[],budgets:{},bm:{},goals:[],fixedItems:[],roll:{},offsets:[],draws:[],income:0,rules:{},opens:{bidv:0,vi:0,tm:0},checks:{},opts:{ab:'off'},lastBackup:0,v:5};
 let tab='home', cursor=new Date(), pending=null, msg='', msgType='err', open={};
 
@@ -288,7 +288,8 @@ function debtInfo(dt){
   let nextDate='', nextAmt=0, kyDone=0;
   if(dt.mode==='gop'&&dt.per){
     kyDone=Math.min(dt.periods||0,Math.floor(paid/dt.per));
-    if(left>0){nextDate=addMonths(dt.start||iso(new Date()),kyDone);nextAmt=Math.min(dt.per,left);}
+    if(left>0){nextDate=addMonths(dt.start||iso(new Date()),kyDone);
+      nextAmt=Math.min(left,Math.max(0,dt.per*(kyDone+1)-paid));}
   }else if(left>0){nextDate=dt.due||'';nextAmt=left;}
   const days=nextDate?Math.ceil((new Date(nextDate+'T00:00')-new Date(iso(new Date())+'T00:00'))/864e5):null;
   return {total,paid,left,lai,nextDate,nextAmt,kyDone,days,done:left<=0};
@@ -857,13 +858,19 @@ function fixedOfGroup(gid,d){
 const fixedTotal=()=>fixedItems().reduce((s,x)=>s+(x.a||0),0);
 const fixedInGroup=gid=>fixedItems().filter(x=>groupOf(x.code).id===gid).reduce((s,x)=>s+(x.a||0),0);
 /* các kỳ nợ rơi vào tháng đang xem */
+/* Nghĩa vụ nợ trong kỳ = phần ĐÃ TRẢ trong tháng + phần còn phải trả của tháng.
+   Trả rồi không có nghĩa là tháng đó hết nghĩa vụ — tiền đã ra khỏi túi,
+   nên nguồn khả dụng không được phình lên sau khi trả. */
 function debtDue(d){
-  const k=ym(d); let tong=0; const rows=[];
+  const k=ym(d||cursor); let tong=0; const rows=[];
   DB.debts.forEach(dt=>{
     if(dt.kind==='cho')return;
     const i=debtInfo(dt);
-    if(i.done||!i.nextDate)return;
-    if(i.nextDate.slice(0,7)===k){tong+=i.nextAmt;rows.push({name:dt.name,a:i.nextAmt,d:i.nextDate});}
+    const daTra=debtTxns(dt.id).filter(t=>t.d.slice(0,7)===k).reduce((s2,t)=>s2+t.a,0);
+    const conPhai=(!i.done&&i.nextDate&&i.nextDate.slice(0,7)===k)?i.nextAmt:0;
+    const a=daTra+conPhai;
+    if(a<=0)return;
+    tong+=a; rows.push({name:dt.name,a,d:i.nextDate||'',daTra,conPhai});
   });
   return {tong,rows};
 }
@@ -1078,7 +1085,10 @@ function vBudPlan(p,dd,inc){
   h+=`<div class="sp"></div><div class="panel" style="border-left:3px solid var(--jade);padding:12px 14px">
     <div class="cat-meta"><span>Tổng thu nhập</span><span style="color:var(--ink);font-weight:500">${money(inc)}</span></div>
     <div class="cat-meta" style="margin-top:5px"><span>− Chi phí cố định (${fixedItems().length})</span><span>${money(p.cd)}</span></div>
-    <div class="cat-meta" style="margin-top:5px"><span>− Nghĩa vụ nợ trong kỳ</span><span>${money(p.no)}</span></div>
+    <div class="cat-meta" style="margin-top:5px"><span>− Nghĩa vụ nợ trong kỳ (${dd.rows.length})</span><span>${money(p.no)}</span></div>
+    ${dd.rows.map(r=>`<div class="cat-meta" style="margin-top:3px;padding-left:10px"><span style="color:var(--ink-3)">${esc(r.name)}${
+      r.daTra?(r.conPhai?' · đã trả '+money(r.daTra)+', còn '+money(r.conPhai):' · đã trả'):''}</span>
+      <span style="color:var(--ink-3)">${money(r.a)}</span></div>`).join('')}
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:9px;padding-top:9px;border-top:1px solid var(--line-2)">
       <span style="font-size:11.5px;font-weight:600;color:var(--ink-2)">NGUỒN KHẢ DỤNG</span>
       <span style="font-size:18px;font-weight:600${p.conLai<0?';color:var(--brick)':''}">${money(p.conLai)}</span></div></div>`;

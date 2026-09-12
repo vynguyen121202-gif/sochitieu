@@ -36,7 +36,7 @@ function labelOf(code){
 const validCode=(code,kind)=>{const g=groupOf(code);return !!code&&g.id&&(!kind||g.k===kind);};
 
 const KEY='sochi:data';
-const VERSION='16.3';
+const VERSION='16.5';
 let DB={txns:[],debts:[],budgets:{},bm:{},goals:[],fixedItems:[],roll:{},offsets:[],draws:[],income:0,rules:{},opens:{bidv:0,vi:0,tm:0},checks:{},opts:{ab:'off'},lastBackup:0,v:5};
 let tab='home', cursor=new Date(), pending=null, msg='', msgType='err', open={};
 
@@ -831,6 +831,29 @@ function fixedTxIds(d){
   fixedItems().forEach(it=>fixedPaid(it,d).rows.forEach(t=>{set[t.id]=1;}));
   return set;
 }
+/* Cố định trong một nhóm: kế hoạch bao nhiêu, đã trả bao nhiêu, còn phải trả bao nhiêu.
+   Phần chưa trả coi như đã tiêu — nó chắc chắn sẽ ra khỏi hạn mức nhóm đó.
+   Khoản chưa gắn mã nhận diện thì đoán theo số tiền xấp xỉ, để không giữ chỗ hai lần. */
+function fixedOfGroup(gid,d){
+  d=d||cursor;
+  const its=fixedItems().filter(it=>groupOf(it.code).id===gid);
+  if(!its.length)return {plan:0,da:0,left:0,rows:[]};
+  const used={}, rows=[];
+  its.forEach(it=>{ if(it.mp)fixedPaid(it,d).rows.forEach(t=>{used[t.id]=1;}); });
+  let plan=0,da=0;
+  its.forEach(it=>{
+    const a=it.a||0; plan+=a; let tra=0;
+    if(it.mp)tra=Math.min(a,fixedPaid(it,d).tien);
+    else{
+      const hit=monthTx(d).find(t=>t.t==='chi'&&!used[t.id]&&groupOf(t.c).id===gid
+        &&a&&Math.abs(t.a-a)<=a*0.15);
+      if(hit){used[hit.id]=1;tra=Math.min(a,hit.a);}
+    }
+    if(a&&tra>=a*0.85)tra=a;         /* trả gần đủ thì coi như xong, khỏi giữ chỗ phần lẻ */
+    da+=tra; rows.push({name:it.name,a,tra,mp:!!it.mp});
+  });
+  return {plan,da,left:Math.max(0,plan-da),rows};
+}
 const fixedTotal=()=>fixedItems().reduce((s,x)=>s+(x.a||0),0);
 const fixedInGroup=gid=>fixedItems().filter(x=>groupOf(x.code).id===gid).reduce((s,x)=>s+(x.a||0),0);
 /* các kỳ nợ rơi vào tháng đang xem */
@@ -921,6 +944,32 @@ function roomGroups(d,exclude){
     const a=avail(g.id,d), v=spentOf(g.id,d);
     return {g,room:a-v};
   }).filter(x=>x.room>0);
+}
+const gname=id=>{const g=GROUPS.find(x=>x.id===id);return g?(g.sn||g.n):id;};
+/* các khoản bù của một nhóm trong tháng: nhận về và cho đi */
+function offsetRows(gid,d){
+  const k=ym(d||cursor), inn=[], out=[];
+  (DB.offsets||[]).forEach(o=>{
+    if(o.m!==k)return;
+    if(o.to===gid)inn.push({g:o.from,a:o.a});
+    else if(o.from===gid)out.push({g:o.to,a:o.a});
+  });
+  return {inn,out};
+}
+/* câu ngắn kê nguồn bù, quá hai nguồn thì rút gọn */
+function offsetLine(list,verb){
+  if(!list.length)return '';
+  const tong=list.reduce((s2,x)=>s2+x.a,0);
+  const ke=list.slice(0,2).map(x=>esc(gname(x.g))+' '+money(x.a)).join(' · ');
+  return verb+' '+money(tong)+' — '+ke+(list.length>2?' · và '+(list.length-2)+' nhóm khác':'');
+}
+/* gỡ đúng một khoản bù */
+function dropOffset(from,to,a){
+  const k=ym(cursor), arr=(DB.offsets||[]).slice();
+  const i=arr.findIndex(o=>o.m===k&&o.from===from&&o.to===to&&Math.round(o.a)===Math.round(Number(a)));
+  if(i<0)return;
+  arr.splice(i,1); DB.offsets=arr; save();
+  flash('Đã gỡ khoản bù '+money(Number(a))+'₫.','ok');
 }
 function addOffset(from,to,a){
   DB.offsets=(DB.offsets||[]).concat([{m:ym(cursor),from,to,a}]);
@@ -1103,6 +1152,13 @@ function hmDetail(g){
       <span>${money(flex)} linh hoạt${fx?' + '+money(fx)+' cố định':''}${off>0?' + '+money(off)+' bù sang':off<0?' − '+money(-off)+' bù đi':''}${drw?' + '+money(drw)+' rút từ tồn':''} = <b>${money(flex+fx+off+drw)}</b></span></div>
     <div class="cat-meta" style="padding:7px 0 3px;border-top:1px solid var(--line-2)">
       <span style="color:var(--ink)">Đã chi ${rows.length} giao dịch</span><span><b>${money(sum(rows))}</b></span></div>`;
+  const fo=fixedOfGroup(gid,d);
+  if(fo.plan){
+    x+=`<div class="cat-meta" style="padding:5px 0"><span style="color:var(--ink)">Trong đó cố định</span>
+      <span>đã trả ${money(fo.da)} / ${money(fo.plan)} · còn giữ <b>${money(fo.left)}</b></span></div>`;
+    fo.rows.forEach(r=>x+=`<div class="cat-meta" style="padding:3px 0 3px 10px"><span style="color:var(--ink-3)">${esc(r.name)}${r.mp?'':' · chưa gắn mã'}</span>
+      <span style="color:var(--ink-3)">${r.tra>=r.a-1?'đã trả':r.tra?money(r.tra)+' / '+money(r.a):'chưa trả · '+money(r.a)}</span></div>`);
+  }
   if(!rows.length)x+=`<div class="cat-meta" style="padding:5px 0"><span>chưa chi khoản nào trong tháng</span></div>`;
   rows.slice(0,25).forEach(t=>{
     const sub=t.c&&t.c!==gid?' · '+labelOf(t.c):'';
@@ -1120,6 +1176,19 @@ function hmDetail(g){
       <span>chi ${money(r.v)} / ${money(r.b)} · <b style="color:${r.du>=0?'var(--jade)':'var(--brick)'}">${r.du>=0?'dư '+money(r.du):'vượt '+money(-r.du)}</b></span></div>`);
     rt.filter(r=>!r.used).forEach(r=>x+=`<div class="cat-meta" style="padding:4px 0">
       <span>${MONTH(r.m.getMonth())}/${r.m.getFullYear()}</span><span>không tính — chưa theo dõi đủ tháng</span></div>`);
+  }
+  const or=offsetRows(gid,d);
+  if(or.inn.length||or.out.length){
+    x+=`<div class="cat-meta" style="padding:8px 0 3px;border-top:1px solid var(--line-2)">
+      <span style="color:var(--ink)">Bù trừ trong tháng</span><span>${off>0?'+'+money(off):money(off)}</span></div>`;
+    or.inn.forEach(o=>x+=`<div class="cat-meta" style="padding:4px 0">
+      <span style="color:var(--jade)">nhận từ ${esc(gname(o.g))}</span>
+      <span style="display:flex;gap:9px;align-items:center"><b>+${money(o.a)}</b>
+        <button class="chk-btn" style="color:var(--ink-3)" onclick="dropOffset('${o.g}','${gid}',${o.a})">gỡ</button></span></div>`);
+    or.out.forEach(o=>x+=`<div class="cat-meta" style="padding:4px 0">
+      <span style="color:var(--ink-3)">bù cho ${esc(gname(o.g))}</span>
+      <span style="display:flex;gap:9px;align-items:center"><b>−${money(o.a)}</b>
+        <button class="chk-btn" style="color:var(--ink-3)" onclick="dropOffset('${gid}','${o.g}',${o.a})">gỡ</button></span></div>`);
   }
   x+=`<div style="margin-top:9px"><button class="chk-btn" onclick="seeList('${gid}')">Mở nhóm này trong tab Giao dịch</button></div></div>`;
   return x;
@@ -1149,7 +1218,8 @@ function vBudRun(inc){
 
   /* khối Hạn mức */
   const rows=FLEX().map(g=>({g,b:avail(g.id,cursor),v:spentOf(g.id,cursor),ci:carryLeft(g.id,cursor),
-    off:offsetNet(g.id,cursor),drw:drawn(g.id,cursor)})).filter(x=>x.b>0||x.v>0);
+    off:offsetNet(g.id,cursor),drw:drawn(g.id,cursor),fxl:fixedOfGroup(g.id,cursor).left}))
+    .filter(x=>x.b>0||x.v>0);
   const tb=rows.reduce((s2,x)=>s2+x.b,0), tv=rows.reduce((s2,x)=>s2+x.v,0);
   const now=new Date(), nd=daysIn(cursor), qua=ym(cursor)===ym(now)?now.getDate():nd, pace2=qua/nd;
   h+=`<div class="panel">
@@ -1161,21 +1231,30 @@ function vBudRun(inc){
         <span style="color:var(--ink-3)">${open.bhm?'▴':'▾'}</span></span></button>`;
   if(open.bhm){
     h+=`<div style="padding:0 12px 12px 15px">`;
-    rows.forEach(({g,b,v,ci,off,drw})=>{
-      const r=b?v/b:0, het=v>b, gan=!het&&r>=0.8, op=!!open['hm_'+g.id];
+    rows.forEach(({g,b,v,ci,off,drw,fxl})=>{
+      const conLai=b-v-fxl;                       /* còn tiêu được sau khi chừa cố định chưa trả */
+      const het=v>b, cang=!het&&conLai<0, gan=!het&&!cang&&b&&(v+fxl)/b>=0.8;
+      const wAll=b?Math.min(100,(v+fxl)/b*100):0; /* đã chi + phần giữ chỗ */
+      const wRes=(v+fxl)?fxl/(v+fxl)*100:0;       /* phần giữ chỗ nằm cuối dải */
+      const op=!!open['hm_'+g.id];
       h+=`<div style="padding:10px 0;border-top:1px solid var(--line-2);cursor:pointer" onclick="toggle('hm_${g.id}')">
         <div class="cat-meta"><span style="color:var(--ink);font-size:12.5px">${esc(g.n)} <span style="color:var(--ink-3);font-size:10px">${op?'▴':'▾'}</span></span>
           <span><span style="color:var(--ink-3)">${money(v)} / </span><b>${money(b)}</b></span></div>
-        <div class="track" style="height:7px;margin-top:7px"><i style="width:${Math.min(100,r*100)}%;background:${het?'var(--brick)':gan?'var(--amber)':g.c}"></i>
+        <div class="track" style="height:7px;margin-top:7px"><i style="width:${wAll}%;background:linear-gradient(rgba(255,255,255,.55),rgba(255,255,255,.55)) no-repeat right/${wRes}% 100%, ${het?'var(--brick)':cang||gan?'var(--amber)':g.c}"></i>
           <u style="left:${Math.min(100,pace2*100)}%;background:var(--ink)"></u></div>
         <div class="cat-meta" style="margin-top:5px">
-          <span style="${het?'color:var(--brick)':gan?'color:var(--amber)':''}">${het?'vượt '+money(v-b):'còn '+money(b-v)}</span>
+          <span style="${het||cang?'color:var(--brick)':gan?'color:var(--amber)':''}">${het?'vượt '+money(v-b):conLai>=0?'còn '+money(conLai):'hụt '+money(-conLai)}</span>
           <span style="font-weight:500;${ci>0?'color:var(--jade)':ci<0?'color:var(--brick)':'color:transparent'}">${
             ci>0?'hạn mức tồn '+money(ci):ci<0?'đã trừ '+money(-ci)+' chi vượt tháng '+(new Date(cursor.getFullYear(),cursor.getMonth()-1,1).getMonth()+1):''}</span></div>
-        ${(off||drw)?`<div class="cat-meta" style="margin-top:3px"><span style="color:var(--jade)">${money(budgetOf(g.id,cursor))} gốc${off>0?' + '+money(off)+' bù từ nhóm khác':off<0?' − '+money(-off)+' bù cho nhóm khác':''}${drw?' + '+money(drw)+' rút từ tồn':''} = ${money(b)}</span>
+        ${fxl>0?`<div class="cat-meta" style="margin-top:3px"><span style="color:var(--ink-3)">đã chi ${money(v)} · giữ ${money(fxl)} cho cố định chưa trả${conLai<0?' → trả nốt là hụt '+money(-conLai):''}</span></div>`:''}
+        ${(off||drw)?`<div class="cat-meta" style="margin-top:3px"><span style="color:var(--jade)">${money(budgetOf(g.id,cursor))} gốc${
+          offsetRows(g.id,cursor).inn.map(o=>' + '+money(o.a)+' từ '+esc(gname(o.g))).join('')}${
+          offsetRows(g.id,cursor).out.map(o=>' − '+money(o.a)+' cho '+esc(gname(o.g))).join('')}${drw?' + '+money(drw)+' rút từ tồn':''} = ${money(b)}</span>
           <button class="chk-btn" style="color:var(--brick)" onclick="event.stopPropagation();undoAdjust('${g.id}')">hoàn tác</button></div>`:''}
-        ${(drw||off)?`<div class="cat-meta" style="margin-top:3px"><span style="color:var(--jade)">${
-          [drw?'đã rút '+money(drw)+' từ hạn mức tồn':'',off>0?'được bù '+money(off):off<0?'đã bù cho nhóm khác '+money(-off):''].filter(Boolean).join(' · ')}</span></div>`:''}
+        ${(drw||off)?(()=>{const or=offsetRows(g.id,cursor);
+          const line=[drw?'đã rút '+money(drw)+' từ hạn mức tồn':'',
+            offsetLine(or.inn,'được bù'),offsetLine(or.out,'đã bù')].filter(Boolean).join(' · ');
+          return `<div class="cat-meta" style="margin-top:3px"><span style="color:var(--jade)">${line}</span></div>`;})():''}
       ${het?(()=>{
         const over=v-b, cl=carryLeft(g.id,cursor), room=roomGroups(cursor,g.id);
         let x=`<div class="ask" style="margin-top:9px"><div>Vượt ${money(over)}₫. Lấy từ đâu bù vào?</div>`;

@@ -36,7 +36,7 @@ function labelOf(code){
 const validCode=(code,kind)=>{const g=groupOf(code);return !!code&&g.id&&(!kind||g.k===kind);};
 
 const KEY='sochi:data';
-const VERSION='16.1';
+const VERSION='16.2';
 let DB={txns:[],debts:[],budgets:{},bm:{},goals:[],fixedItems:[],roll:{},offsets:[],draws:[],income:0,rules:{},opens:{bidv:0,vi:0,tm:0},checks:{},opts:{ab:'off'},lastBackup:0,v:5};
 let tab='home', cursor=new Date(), pending=null, msg='', msgType='err', open={};
 
@@ -216,7 +216,48 @@ const addMonths=(isoD,k)=>{const [y,m,dd]=isoD.split('-').map(Number);
   return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(Math.min(dd,last)).padStart(2,'0');};
 const cleanName=s=>String(s).replace(/chuy[eể]?[nể]?\s*ti[eề]n/gi,'')
   .replace(/\s{2,}/g,' ').replace(/^[\s·,-]+|[\s·,-]+$/g,'').slice(0,40)||'Khoản nợ';
-const paidOf=id=>DB.txns.filter(t=>t.debt===id).reduce((s,t)=>s+t.a,0);
+/* ---- tự nhận diện giao dịch trả nợ / thu nợ theo NỘI DUNG + SỐ TIỀN ----
+   Giao dịch nhóm Trả nợ (chi) hoặc Thu nợ (thu) mà nội dung có tên khoản nợ
+   thì tự tính vào khoản đó, khỏi phải bấm "Ghi thanh toán". */
+const wordsOf=s2=>' '+noAccent(s2).replace(/[^a-z0-9]+/g,' ').trim()+' ';
+function debtNameHit(name,t){
+  const n=noAccent(name).replace(/[^a-z0-9]+/g,' ').trim();
+  if(!n)return 0;
+  const hay=wordsOf(t.n0||t.n)+wordsOf(t.n);
+  if(hay.indexOf(' '+n+' ')>=0)return n.length+5;
+  const ws=n.split(' ').filter(w=>w.length>1);
+  if(!ws.length||(ws.length===1&&ws[0].length<3))return 0;   /* tên quá ngắn thì không đoán */
+  return ws.every(w=>hay.indexOf(' '+w+' ')>=0)?n.length:0;
+}
+function debtMatch(t){
+  if(t.nodebt)return null;
+  if(t.debt)return t.debt;
+  const gid=groupOf(t.c).id;
+  const kind=(t.t==='chi'&&gid==='trano')?'no':(t.t==='thu'&&gid==='thuno')?'cho':null;
+  if(!kind)return null;
+  let best=null,bs=0;
+  (DB.debts||[]).forEach(dt=>{
+    if(dt.kind!==kind)return;
+    let sc=debtNameHit(dt.name,t); if(!sc)return;
+    const per=dt.mode==='gop'?(dt.per||0):(dt.principal||0);
+    if(per&&Math.abs(t.a-per)<=Math.max(1000,per*0.02))sc+=100;   /* khớp cả số tiền */
+    if(sc>bs){bs=sc;best=dt.id;}
+  });
+  return best;
+}
+let _dl=null;
+function debtLinks(){
+  if(_dl)return _dl;
+  const m={}; DB.txns.forEach(t=>{const id=debtMatch(t);if(id)m[String(t.id)]=id;});
+  _dl=m; return m;
+}
+const debtTxns=id=>{const m=debtLinks();return DB.txns.filter(t=>m[String(t.id)]===id);};
+const paidOf=id=>debtTxns(id).reduce((s,t)=>s+t.a,0);
+/* gỡ một giao dịch bị ghép nhầm ra khỏi khoản nợ */
+function unlinkDebt(tid){
+  const t=DB.txns.find(x=>String(x.id)===String(tid)); if(!t)return;
+  t.nodebt=1; delete t.debt; _dl=null; save(); flash('Đã bỏ khoản này khỏi sổ nợ.','ok');
+}
 function debtInfo(dt){
   const total=dt.mode==='gop'?(dt.periods||0)*(dt.per||0):(dt.principal||0);
   const paid=paidOf(dt.id), left=Math.max(0,total-paid);
@@ -790,12 +831,34 @@ function offsetNet(gid,d){
   const k=ym(d);
   return (DB.offsets||[]).reduce((s2,o)=>s2+(o.m===k?(o.to===gid?o.a:(o.from===gid?-o.a:0)):0),0);
 }
+/* ngày ghi chép đầu tiên trong sổ */
+let _first=null;
+function firstTxDate(){
+  if(_first!==null)return _first;
+  let k=''; DB.txns.forEach(t=>{if(t.d&&(!k||t.d<k))k=t.d;});
+  _first=k; return k;
+}
+/* đã từng đặt hạn mức cho nhóm này tính tới tháng đó chưa */
+function budSetBy(gid,m){
+  const k=ym(m), bm=DB.bm||{};
+  return Object.keys(bm).some(x=>x<=k&&bm[x][gid]!==undefined);
+}
+/* tháng có đủ dữ liệu để mang số dư sang tháng sau: ghi chép trọn tháng
+   (tháng đầu dùng app mà bắt đầu từ giữa tháng thì không tính) và đã đặt hạn mức */
+function trackedMonth(gid,m){
+  if(!monthTx(m).length)return false;
+  const f=firstTxDate(); if(!f)return false;
+  const k=ym(m), fk=f.slice(0,7);
+  if(k<fk)return false;
+  if(k===fk&&+f.slice(8,10)>3)return false;
+  return budSetBy(gid,m);
+}
 function carryIn(gid,d){
   if(!canRoll(gid))return 0;
   let tot=0;
   for(let i=1;i<=6;i++){
     const m=new Date(d.getFullYear(),d.getMonth()-i,1);
-    if(!monthTx(m).length)continue;              // tháng chưa dùng app thì bỏ qua
+    if(!trackedMonth(gid,m))continue;            // tháng chưa theo dõi đủ thì bỏ qua
     tot+=budgetOf(gid,m)+offsetNet(gid,m)-spentOf(gid,m);
   }
   const tran=budgetOf(gid,d)*6;
@@ -847,11 +910,11 @@ function earmarked(d){
 }
 function rollTable(gid,d){
   const rows=[];
-  for(let i=5;i>=0;i--){
+  for(let i=5;i>=1;i--){
     const m=new Date(d.getFullYear(),d.getMonth()-i,1);
     if(!monthTx(m).length)continue;
     const b=budgetOf(gid,m)+offsetNet(gid,m), v=spentOf(gid,m);
-    rows.push({m,b,v,du:b-v});
+    rows.push({m,b,v,du:b-v,used:trackedMonth(gid,m)});
   }
   return rows;
 }
@@ -1006,6 +1069,39 @@ function vBudPlan(p,dd,inc){
   return h;
 }
 
+/* chi tiết một nhóm hạn mức: hạn mức ghép từ đâu, đã chi những gì, tồn từ tháng nào */
+function hmDetail(g){
+  const gid=g.id, d=cursor, fxIds=fixedTxIds(d);
+  const flex=bud(gid,d), fx=fixedInGroup(gid), off=offsetNet(gid,d), drw=drawn(gid,d);
+  const rows=monthTx(d).filter(t=>t.t==='chi'&&groupOf(t.c).id===gid)
+    .sort((a,b)=>(b.d+' '+(b.tm||'')).localeCompare(a.d+' '+(a.tm||'')));
+  let x=`<div style="margin-top:9px;padding:9px 0 2px;border-top:1px dashed var(--line-2)" onclick="event.stopPropagation()">
+    <div class="cat-meta" style="padding:3px 0"><span style="color:var(--ink)">Hạn mức ghép từ</span>
+      <span>${money(flex)} linh hoạt${fx?' + '+money(fx)+' cố định':''}${off>0?' + '+money(off)+' bù sang':off<0?' − '+money(-off)+' bù đi':''}${drw?' + '+money(drw)+' rút từ tồn':''} = <b>${money(flex+fx+off+drw)}</b></span></div>
+    <div class="cat-meta" style="padding:7px 0 3px;border-top:1px solid var(--line-2)">
+      <span style="color:var(--ink)">Đã chi ${rows.length} giao dịch</span><span><b>${money(sum(rows))}</b></span></div>`;
+  if(!rows.length)x+=`<div class="cat-meta" style="padding:5px 0"><span>chưa chi khoản nào trong tháng</span></div>`;
+  rows.slice(0,25).forEach(t=>{
+    const sub=t.c&&t.c!==gid?' · '+labelOf(t.c):'';
+    x+=`<div class="cat-meta" style="padding:5px 0;border-top:1px solid var(--line-2)">
+      <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ddmm(t.d)} · ${esc(t.n)}${esc(sub)}${fxIds[t.id]?' · cố định':''}</span>
+      <span style="white-space:nowrap"><b>${money(t.a)}</b></span></div>`;});
+  if(rows.length>25)x+=`<div class="cat-meta" style="padding:5px 0"><span>… còn ${rows.length-25} giao dịch nữa</span></div>`;
+  if(canRoll(gid)){
+    const ci=carryIn(gid,d), rt=rollTable(gid,d), used=rt.filter(r=>r.used);
+    x+=`<div class="cat-meta" style="padding:8px 0 3px;border-top:1px solid var(--line-2)">
+      <span style="color:var(--ink)">Hạn mức tồn</span><span><b>${money(ci)}</b>${drw?' · đã rút '+money(drw):''}</span></div>`;
+    if(!used.length)x+=`<div class="cat-meta" style="padding:4px 0"><span>chưa tháng nào đủ dữ liệu để cộng dồn</span></div>`;
+    used.forEach(r=>x+=`<div class="cat-meta" style="padding:4px 0">
+      <span>${MONTH(r.m.getMonth())}/${r.m.getFullYear()}</span>
+      <span>chi ${money(r.v)} / ${money(r.b)} · <b style="color:${r.du>=0?'var(--jade)':'var(--brick)'}">${r.du>=0?'dư '+money(r.du):'vượt '+money(-r.du)}</b></span></div>`);
+    rt.filter(r=>!r.used).forEach(r=>x+=`<div class="cat-meta" style="padding:4px 0">
+      <span>${MONTH(r.m.getMonth())}/${r.m.getFullYear()}</span><span>không tính — chưa theo dõi đủ tháng</span></div>`);
+  }
+  x+=`<div style="margin-top:9px"><button class="chk-btn" onclick="seeList('${gid}')">Mở nhóm này trong tab Giao dịch</button></div></div>`;
+  return x;
+}
+
 function vBudRun(inc){
   const items=fixedItems();
   const fxTong=items.reduce((s2,x)=>s2+x.a,0);
@@ -1043,9 +1139,9 @@ function vBudRun(inc){
   if(open.bhm){
     h+=`<div style="padding:0 12px 12px 15px">`;
     rows.forEach(({g,b,v,ci,off,drw})=>{
-      const r=b?v/b:0, het=v>b, gan=!het&&r>=0.8;
-      h+=`<div style="padding:10px 0;border-top:1px solid var(--line-2)">
-        <div class="cat-meta"><span style="color:var(--ink);font-size:12.5px">${esc(g.n)}</span>
+      const r=b?v/b:0, het=v>b, gan=!het&&r>=0.8, op=!!open['hm_'+g.id];
+      h+=`<div style="padding:10px 0;border-top:1px solid var(--line-2);cursor:pointer" onclick="toggle('hm_${g.id}')">
+        <div class="cat-meta"><span style="color:var(--ink);font-size:12.5px">${esc(g.n)} <span style="color:var(--ink-3);font-size:10px">${op?'▴':'▾'}</span></span>
           <span><span style="color:var(--ink-3)">${money(v)} / </span><b>${money(b)}</b></span></div>
         <div class="track" style="height:7px;margin-top:7px"><i style="width:${Math.min(100,r*100)}%;background:${het?'var(--brick)':gan?'var(--amber)':g.c}"></i>
           <u style="left:${Math.min(100,pace2*100)}%;background:var(--ink)"></u></div>
@@ -1054,18 +1150,19 @@ function vBudRun(inc){
           <span style="font-weight:500;${ci>0?'color:var(--jade)':ci<0?'color:var(--brick)':'color:transparent'}">${
             ci>0?'hạn mức tồn '+money(ci):ci<0?'đã trừ '+money(-ci)+' chi vượt tháng '+(new Date(cursor.getFullYear(),cursor.getMonth()-1,1).getMonth()+1):''}</span></div>
         ${(off||drw)?`<div class="cat-meta" style="margin-top:3px"><span style="color:var(--jade)">${money(budgetOf(g.id,cursor))} gốc${off>0?' + '+money(off)+' bù từ nhóm khác':off<0?' − '+money(-off)+' bù cho nhóm khác':''}${drw?' + '+money(drw)+' rút từ tồn':''} = ${money(b)}</span>
-          <button class="chk-btn" style="color:var(--brick)" onclick="undoAdjust('${g.id}')">hoàn tác</button></div>`:''}
+          <button class="chk-btn" style="color:var(--brick)" onclick="event.stopPropagation();undoAdjust('${g.id}')">hoàn tác</button></div>`:''}
         ${(drw||off)?`<div class="cat-meta" style="margin-top:3px"><span style="color:var(--jade)">${
           [drw?'đã rút '+money(drw)+' từ hạn mức tồn':'',off>0?'được bù '+money(off):off<0?'đã bù cho nhóm khác '+money(-off):''].filter(Boolean).join(' · ')}</span></div>`:''}
       ${het?(()=>{
         const over=v-b, cl=carryLeft(g.id,cursor), room=roomGroups(cursor,g.id);
         let x=`<div class="ask" style="margin-top:9px"><div>Vượt ${money(over)}₫. Lấy từ đâu bù vào?</div>`;
-        if(cl>0)x+=`<button onclick="drawCarry('${g.id}',${Math.min(over,cl)})">Rút ${short(Math.min(over,cl))}₫ từ hạn mức tồn</button>`;
-        if(room.length)x+=`<select class="pill" style="margin-top:8px;width:100%" onchange="if(this.value)addOffset(this.value,'${g.id}',Math.min(${over},Number(this.options[this.selectedIndex].dataset.room)))">
+        if(cl>0)x+=`<button onclick="event.stopPropagation();drawCarry('${g.id}',${Math.min(over,cl)})">Rút ${short(Math.min(over,cl))}₫ từ hạn mức tồn</button>`;
+        if(room.length)x+=`<select class="pill" style="margin-top:8px;width:100%" onclick="event.stopPropagation()" onchange="if(this.value)addOffset(this.value,'${g.id}',Math.min(${over},Number(this.options[this.selectedIndex].dataset.room)))">
             <option value="">— bù từ nhóm khác —</option>
             ${room.map(r=>`<option value="${r.g.id}" data-room="${Math.round(r.room)}">${esc(r.g.sn||r.g.n)} — còn ${short(r.room)}₫</option>`).join('')}</select>`;
         x+=`<div style="margin-top:7px;font-size:11.5px">Không chọn gì thì khoản vượt tự trừ vào hạn mức tháng sau.</div></div>`;
         return x;})():''}
+      ${op?hmDetail(g):''}
       </div>`;
     });
     h+=`</div>`;
@@ -1121,8 +1218,11 @@ function vDebt(){
         <button class="chk-btn" style="color:var(--ink-3)" onclick="toggle('h_${d.id}')">Lịch sử</button>
         <button class="chk-btn" style="color:var(--brick);margin-left:auto" onclick="delDebt('${d.id}')">Xóa</button></div>`;
     if(open['h_'+d.id]){
-      const ps=DB.txns.filter(t=>t.debt===d.id).sort((a,b)=>b.d.localeCompare(a.d));
-      x+=ps.length?ps.map(pp=>`<div class="cat-meta" style="margin-top:7px"><span>${pp.d.slice(8,10)}/${pp.d.slice(5,7)} · ${esc(srcOf(pp.s).n)}</span><span><b>${money(pp.a)}</b></span></div>`).join('')
+      const ps=debtTxns(d.id).slice().sort((a,b)=>b.d.localeCompare(a.d));
+      x+=ps.length?ps.map(pp=>`<div class="cat-meta" style="margin-top:7px">
+          <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ddmm(pp.d)} · ${esc(pp.n)}${pp.debt?'':' · tự nhận'}</span>
+          <span style="display:flex;gap:9px;align-items:center;white-space:nowrap"><b>${money(pp.a)}</b>
+          <button class="chk-btn" style="color:var(--ink-3)" onclick="unlinkDebt('${pp.id}')">gỡ</button></span></div>`).join('')
         :`<div class="cat-meta" style="margin-top:7px"><span>chưa có lần thanh toán nào</span></div>`;
     }
     return x+`</div>`;
@@ -2015,6 +2115,7 @@ function move(n){cursor=new Date(cursor.getFullYear(),cursor.getMonth()+n,1);sel
 const TABS=[['home','Tổng quan','◉'],['add','Nhập','＋'],['list','Giao dịch','☰'],['debt','Nợ','◈'],['budget','Ngân sách','◐'],['trend','Xu hướng','◪']];
 let toTop=true;
 function render(){
+  _dl=null; _first=null;
   const y=window.scrollY||window.pageYOffset||0;
   const showMonth=tab==='home'||tab==='list';
   let h=`<div class="top">`;

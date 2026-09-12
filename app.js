@@ -36,7 +36,7 @@ function labelOf(code){
 const validCode=(code,kind)=>{const g=groupOf(code);return !!code&&g.id&&(!kind||g.k===kind);};
 
 const KEY='sochi:data';
-const VERSION='16.2';
+const VERSION='16.3';
 let DB={txns:[],debts:[],budgets:{},bm:{},goals:[],fixedItems:[],roll:{},offsets:[],draws:[],income:0,rules:{},opens:{bidv:0,vi:0,tm:0},checks:{},opts:{ab:'off'},lastBackup:0,v:5};
 let tab='home', cursor=new Date(), pending=null, msg='', msgType='err', open={};
 
@@ -253,6 +253,29 @@ function debtLinks(){
 }
 const debtTxns=id=>{const m=debtLinks();return DB.txns.filter(t=>m[String(t.id)]===id);};
 const paidOf=id=>debtTxns(id).reduce((s,t)=>s+t.a,0);
+/* ---- gán tay: chọn một giao dịch ĐÃ CÓ trong sổ để tính vào khoản nợ,
+   thay vì bấm Ghi thanh toán (vốn tạo thêm một dòng chi mới, làm đội chi phí) ---- */
+let debtPick='', debtPickQ='';
+function pickForDebt(id){debtPick=debtPick===id?'':id;debtPickQ='';render();}
+function setDebtPickQ(v){debtPickQ=v;render();}
+function debtCandidates(dt){
+  const m=debtLinks(), want=dt.kind==='cho'?'thu':'chi';
+  const q=noAccent(String(debtPickQ).trim()), qn=q.replace(/\D/g,'');
+  const gid=dt.kind==='cho'?'thuno':'trano';
+  return DB.txns.filter(t=>{
+    if(t.t!==want||m[String(t.id)])return false;
+    if(!q)return true;
+    return noAccent(t.n).indexOf(q)>=0||(qn.length>=3&&String(t.a).indexOf(qn)>=0);
+  }).sort((a,b)=>{
+    const ga=groupOf(a.c).id===gid?0:1, gb=groupOf(b.c).id===gid?0:1;
+    return ga!==gb?ga-gb:(b.d+' '+(b.tm||'')).localeCompare(a.d+' '+(a.tm||''));
+  }).slice(0,30);
+}
+function linkTx(did,tid){
+  const t=DB.txns.find(x=>String(x.id)===String(tid)); if(!t)return;
+  t.debt=did; delete t.nodebt; _dl=null; save();
+  flash('Đã tính '+money(t.a)+'₫ ngày '+ddmm(t.d)+' vào khoản này.','ok');
+}
 /* gỡ một giao dịch bị ghép nhầm ra khỏi khoản nợ */
 function unlinkDebt(tid){
   const t=DB.txns.find(x=>String(x.id)===String(tid)); if(!t)return;
@@ -1212,11 +1235,26 @@ function vDebt(){
       <div class="track" style="height:5px;margin:9px 0 7px"><i style="width:${pct}%;background:${gcA(col)}"></i></div>
       <div class="cat-meta"><span>Đã ${cho?'thu hồi':'thanh toán'} ${money(i.paid)} / ${money(i.total)}</span>
         <span class="${lv.cls==='red'?'over':''}">${i.done?'đã tất toán':i.nextDate?(d.mode==='gop'?'Kỳ kế tiếp ':'Đến hạn ')+i.nextDate.slice(8,10)+'/'+i.nextDate.slice(5,7)+(lv.k!=='far'?' · '+lv.txt:''):'Chưa xác định ngày'}</span></div>
-      <div style="display:flex;gap:16px;margin-top:10px;padding-top:9px;border-top:1px solid var(--line-2)">
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;padding-top:9px;border-top:1px solid var(--line-2)">
         <button class="chk-btn" onclick="payDebt('${d.id}')">${cho?'Ghi thu hồi':'Ghi thanh toán'}</button>
+        <button class="chk-btn" style="${debtPick===d.id?'font-weight:700;text-decoration:underline':''}" onclick="pickForDebt('${d.id}')">Đối chiếu</button>
         <button class="chk-btn" onclick="editDebt('${d.id}')">Sửa</button>
         <button class="chk-btn" style="color:var(--ink-3)" onclick="toggle('h_${d.id}')">Lịch sử</button>
         <button class="chk-btn" style="color:var(--brick);margin-left:auto" onclick="delDebt('${d.id}')">Xóa</button></div>`;
+    if(debtPick===d.id){
+      const cands=debtCandidates(d);
+      x+=`<div class="ask" style="margin-top:9px">
+        <div>Chọn giao dịch đã ghi trong sổ để tính vào khoản này — khỏi ghi thêm dòng mới làm đội chi phí.</div>
+        <input class="rename" style="margin:9px 0 2px" value="${esc(debtPickQ)}" placeholder="Tìm theo nội dung hoặc số tiền" oninput="setDebtPickQ(this.value)">`;
+      if(!cands.length)x+=`<div class="cat-meta" style="padding:8px 0"><span>không còn giao dịch ${cho?'tiền vào':'tiền ra'} nào chưa gán</span></div>`;
+      cands.forEach(t=>{
+        const khop=i.nextAmt&&Math.abs(t.a-i.nextAmt)<=Math.max(1000,i.nextAmt*0.02);
+        x+=`<button class="src" style="width:100%;border:0;border-top:1px solid var(--line-2);text-align:left;padding:8px 0" onclick="linkTx('${d.id}','${t.id}')">
+          <span style="min-width:0"><span class="src-n" style="font-size:13px">${ddmm(t.d)} · ${esc(t.n)}</span>
+            <span class="src-m">${esc(labelOf(t.c))} · ${esc(srcOf(t.s).n)}${khop?' · khớp kỳ tới':''}</span></span>
+          <span class="src-a">${money(t.a)}</span></button>`;});
+      x+=`</div>`;
+    }
     if(open['h_'+d.id]){
       const ps=debtTxns(d.id).slice().sort((a,b)=>b.d.localeCompare(a.d));
       x+=ps.length?ps.map(pp=>`<div class="cat-meta" style="margin-top:7px">

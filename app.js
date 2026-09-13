@@ -36,7 +36,7 @@ function labelOf(code){
 const validCode=(code,kind)=>{const g=groupOf(code);return !!code&&g.id&&(!kind||g.k===kind);};
 
 const KEY='sochi:data';
-const VERSION='16.7';
+const VERSION='16.8';
 let DB={txns:[],debts:[],budgets:{},bm:{},goals:[],fixedItems:[],roll:{},offsets:[],draws:[],income:0,rules:{},opens:{bidv:0,vi:0,tm:0},checks:{},opts:{ab:'off'},chainOK:{},lastBackup:0,v:5};
 let tab='home', cursor=new Date(), pending=null, msg='', msgType='err', open={};
 
@@ -759,14 +759,30 @@ function pace(d){
   d=d||cursor;
   /* mẫu số: hạn mức linh hoạt, trừ Tiết kiệm, trừ Cho mượn; cộng phần tích lũy đã rút */
   const NGOAI={tk:1,trano:1,muon:1};
-  let duTru=0;
-  FLEX().forEach(g=>{ if(!NGOAI[g.id]) duTru+=bud(g.id,d)+offsetNet(g.id,d)+drawn(g.id,d); });
+  let duTru=0; const gr=[];
+  FLEX().forEach(g=>{ if(NGOAI[g.id])return;
+    const b=bud(g.id,d), o=offsetNet(g.id,d), dr=drawn(g.id,d), tot=b+o+dr;
+    duTru+=tot; if(b||tot)gr.push({id:g.id,n:g.n,b,o,dr,tot});
+  });
   const skip=fixedTxIds(d);
-  const daChi=monthTx(d).filter(t=>t.t==='chi'&&!skip[t.id]&&!NGOAI[groupOf(t.c).id])
-    .reduce((s2,t)=>s2+t.a,0);
+  /* tách chi của tháng làm ba rổ, để bảng giải thích nói được số nào trừ số nào */
+  const all=monthTx(d).filter(t=>t.t==='chi');
+  const fx=[], daNgoai=[], spent={};
+  let daChi=0, chiTong=0, tienNgoai=0;
+  all.forEach(t=>{
+    chiTong+=t.a;
+    const gid=groupOf(t.c).id;
+    if(skip[t.id]){fx.push({t,it:skip[t.id]});return;}
+    if(NGOAI[gid]){daNgoai.push(t);tienNgoai+=t.a;return;}
+    daChi+=t.a; spent[gid]=(spent[gid]||0)+t.a;
+  });
+  const khongHM=Object.keys(spent).filter(gid=>!bud(gid,d)&&!drawn(gid,d))
+    .map(gid=>({id:gid,n:groupOf(gid).n,a:spent[gid]}))
+    .sort((x,y)=>y.a-x.a);
   const now=new Date(), nd=daysIn(d), cur=ym(d)===ym(now);
   const qua=cur?now.getDate():nd, conLai=Math.max(0,nd-qua);
   return {duTru,daChi,nd,qua,conLai,
+    bd:{gr,chiTong,fx,tienNgoai,khongHM},
     tyChi:duTru?daChi/duTru:0, tyNgay:qua/nd,
     moiNgay:qua?daChi/qua:0, chuan:duTru/nd,
     conDuoc:Math.max(0,duTru-daChi)};
@@ -821,7 +837,7 @@ function forecast(){
      Chỉ chi linh hoạt mới ngoại suy theo tốc độ, nếu không thì khoản 3 triệu
      đưa bố mẹ đầu tháng sẽ bị nhân lên cho cả tháng. */
   const skip=fixedTxIds(now), NGOAI={tk:1,trano:1,muon:1};
-  let planConLai=0, cdConLai=0, lhDaChi=0;
+  let planConLai=0, cdConLai=0, lhDaChi=0; const bd=[];
   GROUPS.filter(g=>g.k==='chi').forEach(g=>{
     const b=budgetOf(g.id,now);
     const rows=list.filter(t=>t.t==='chi'&&groupOf(t.c).id===g.id);
@@ -834,11 +850,14 @@ function forecast(){
     /* Chi linh hoạt = chi thực tế trừ giao dịch đã khớp khoản cố định.
        Không lấy hiệu b−codinh nữa: cố định chưa trả sẽ nuốt mất phần linh hoạt
        đã tiêu, và nhóm chưa đặt hạn mức thì bị bỏ qua hoàn toàn. */
-    if(!NGOAI[g.id])lhDaChi+=rows.filter(t=>!skip[t.id]).reduce((s2,t)=>s2+t.a,0);
+    const lh=NGOAI[g.id]?0:rows.filter(t=>!skip[t.id]).reduce((s2,t)=>s2+t.a,0);
+    lhDaChi+=lh;
+    if(b||v)bd.push({id:g.id,n:g.n,b,v,con:b?Math.max(0,b-v):0,
+      codinh,cdCon:codinh?Math.max(0,codinh-v):0,lh,noBud:!b&&lh>0});
   });
   const rate=passed?lhDaChi/passed:0, lhConLai=rate*conLai;
   const duocUoc=passed>=5;
-  return {hienTai,thuConLai,planConLai,cdConLai,lhConLai,rate,conLai,duocUoc,
+  return {hienTai,thuConLai,planConLai,cdConLai,lhConLai,rate,conLai,duocUoc,passed,lhDaChi,bd,
     keHoach:hienTai+thuConLai-planConLai,
     theoDa:hienTai+thuConLai-cdConLai-lhConLai};
 }
@@ -871,7 +890,7 @@ function fixedTxIds(d){
   fixedItems().forEach(it=>{gids[groupOf(it.code).id]=1;});
   Object.keys(gids).forEach(gid=>{
     const ids=fixedOfGroup(gid,d).ids||{};
-    Object.keys(ids).forEach(k=>{set[k]=1;});
+    Object.keys(ids).forEach(k=>{set[k]=ids[k];});
   });
   return set;
 }
@@ -883,7 +902,7 @@ function fixedOfGroup(gid,d){
   const its=fixedItems().filter(it=>groupOf(it.code).id===gid);
   if(!its.length)return {plan:0,da:0,left:0,rows:[],ids:{}};
   const used={}, rows=[];
-  its.forEach(it=>{ if(it.mp)fixedPaid(it,d).rows.forEach(t=>{used[t.id]=1;}); });
+  its.forEach(it=>{ if(it.mp)fixedPaid(it,d).rows.forEach(t=>{used[t.id]={name:it.name,by:'ma',a:it.a||0};}); });
   let plan=0,da=0;
   its.forEach(it=>{
     const a=it.a||0; plan+=a; let tra=0;
@@ -891,7 +910,7 @@ function fixedOfGroup(gid,d){
     else{
       const hit=monthTx(d).find(t=>t.t==='chi'&&!used[t.id]&&groupOf(t.c).id===gid
         &&a&&Math.abs(t.a-a)<=a*0.15);
-      if(hit){used[hit.id]=1;tra=Math.min(a,hit.a);}
+      if(hit){used[hit.id]={name:it.name,by:'tien',a};tra=Math.min(a,hit.a);}
     }
     if(a&&tra>=a*0.85)tra=a;         /* trả gần đủ thì coi như xong, khỏi giữ chỗ phần lẻ */
     da+=tra; rows.push({name:it.name,a,tra,mp:!!it.mp});
@@ -1511,6 +1530,75 @@ function jump(k){
   render();
   setTimeout(()=>{const e=document.getElementById('sec-'+k);if(e)e.scrollIntoView({block:'start'});},30);
 }
+/* một dòng trong bảng giải thích: tên · ghi chú nhỏ · số tiền */
+function LN(t,v,sub,neg){
+  return `<div class="src" style="padding:9px 14px"><div style="min-width:0">
+    <div class="src-n" style="font-size:13.5px">${t}</div>${sub?`<div class="src-m">${sub}</div>`:''}</div>
+    <div class="src-a ${neg?'neg':''}" style="font-size:14px">${neg?'−':''}${money(v)}</div></div>`;
+}
+/* Ngân sách còn lại — số nào trừ số nào */
+function paceWhy(pa){
+  const b=pa.bd;
+  let x=`<div class="panel" style="border-radius:0 0 var(--r) var(--r);border-top:0">
+    <div class="daygroup">ĐƯỢC TIÊU CẢ THÁNG</div>`;
+  b.gr.forEach(g=>{
+    const extra=[g.o?(g.o>0?'bù sang +':'bù đi ')+money(g.o):'',g.dr?'rút từ tồn +'+money(g.dr):'']
+      .filter(Boolean).join(' · ');
+    x+=LN(esc(g.n),g.tot,extra?'hạn mức '+money(g.b)+' · '+extra:'');
+  });
+  if(!b.gr.length)x+=`<div class="src" style="padding:9px 14px"><div class="src-m">Chưa đặt hạn mức nhóm nào.</div></div>`;
+  x+=`<div class="src total"><div><div class="src-n">TỔNG ĐƯỢC TIÊU</div>
+      <div class="src-m">không gồm Tiết kiệm, Trả nợ, Cho mượn và chi phí cố định</div></div>
+      <div class="src-a">${money(pa.duTru)}</div></div>
+    <div class="daygroup">ĐÃ TIÊU</div>`;
+  x+=LN('Tổng chi tháng này',b.chiTong,'mọi giao dịch chi, kể cả cố định');
+  b.fx.forEach(f=>{
+    const lech=f.it.a?Math.round(Math.abs(f.t.a-f.it.a)/f.it.a*100):0;
+    x+=LN(esc(f.it.name||f.t.n||'(không tên)'),f.t.a,
+      ddmm(f.t.d)+' · '+(f.it.by==='ma'?'khoản cố định, khớp theo mã':'khoản cố định, khớp theo số tiền'+(lech?', lệch '+lech+'%':'')),1);
+  });
+  if(b.tienNgoai)x+=LN('Tiết kiệm, Trả nợ, Cho mượn',b.tienNgoai,'ba nhóm này tính riêng, không nằm trong nhịp tiêu',1);
+  x+=`<div class="src total"><div><div class="src-n">CÒN LẠI LÀ CHI LINH HOẠT</div>
+      <div class="src-m">${short(b.chiTong)} − ${short(b.chiTong-pa.daChi)}</div></div>
+      <div class="src-a">${money(pa.daChi)}</div></div>`;
+  if(b.khongHM.length){
+    x+=`<div class="daygroup">ĐÃ TIÊU MÀ CHƯA ĐẶT HẠN MỨC</div>`;
+    b.khongHM.forEach(k=>x+=LN(esc(k.n),k.a,'đang trừ vào ngân sách chung'));
+  }
+  x+=`<div class="daygroup">KẾT QUẢ</div>`;
+  x+=LN('Ngân sách còn lại',pa.conDuoc,money(pa.duTru)+' − '+money(pa.daChi));
+  x+=LN('Định mức ngày',Math.round(pa.duTru/pa.nd),money(pa.duTru)+' ÷ '+pa.nd+' ngày trong tháng');
+  x+=LN('Thực tế được tiêu',pa.conLai?Math.round(pa.conDuoc/pa.conLai):0,
+    pa.conLai?money(pa.conDuoc)+' ÷ '+pa.conLai+' ngày còn lại':'hết tháng rồi');
+  x+=`</div>`;
+  if(b.khongHM.length)x+=`<div class="sp"></div><div class="stack-note"><span>${b.khongHM.length} nhóm đang tiêu mà chưa có hạn mức riêng, nên phần đó ăn vào ngân sách chung. Đặt hạn mức cho chúng ở tab Ngân sách thì con số sẽ sát hơn.</span></div>`;
+  return x;
+}
+/* Dự trù cuối tháng — chi tiết từng nhóm cho cả hai cách */
+function fcDetail(f){
+  let x=`<div class="panel" style="border-radius:0 0 var(--r) var(--r);border-top:0">
+    <div class="daygroup">CÁCH 1 — HẠN MỨC CHƯA DÙNG</div>`;
+  const c1=f.bd.filter(g=>g.b);
+  c1.forEach(g=>x+=LN(esc(g.n),g.con,'hạn mức '+money(g.b)+' − đã tiêu '+money(g.v)));
+  if(!c1.length)x+=`<div class="src" style="padding:9px 14px"><div class="src-m">Chưa đặt hạn mức nhóm nào.</div></div>`;
+  x+=`<div class="src total"><div class="src-n">CỘNG LẠI</div><div class="src-a">${money(f.planConLai)}</div></div>
+    <div class="daygroup">CÁCH 2 — CỐ ĐỊNH, NỢ, TIẾT KIỆM CHƯA TRẢ</div>`;
+  const c2=f.bd.filter(g=>g.codinh);
+  c2.forEach(g=>x+=LN(esc(g.n),g.cdCon,'giữ chỗ '+money(g.codinh)+' − đã trả '+money(Math.min(g.v,g.codinh))));
+  if(!c2.length)x+=`<div class="src" style="padding:9px 14px"><div class="src-m">Không có khoản nào giữ chỗ.</div></div>`;
+  x+=`<div class="src total"><div class="src-n">CỘNG LẠI</div><div class="src-a">${money(f.cdConLai)}</div></div>
+    <div class="daygroup">CÁCH 2 — TỐC ĐỘ CHI LINH HOẠT</div>`;
+  const c3=f.bd.filter(g=>g.lh).sort((a,b)=>b.lh-a.lh);
+  c3.forEach(g=>x+=LN(esc(g.n),g.lh,g.noBud?'chưa đặt hạn mức':''));
+  if(!c3.length)x+=`<div class="src" style="padding:9px 14px"><div class="src-m">Chưa có chi linh hoạt nào trong tháng.</div></div>`;
+  x+=`<div class="src total"><div><div class="src-n">TỐC ĐỘ MỖI NGÀY</div>
+      <div class="src-m">${money(f.lhDaChi)} ÷ ${f.passed} ngày đã qua</div></div>
+      <div class="src-a">${money(Math.round(f.rate))}</div></div>
+    <div class="src total"><div><div class="src-n">CÒN PHẢI TIÊU</div>
+      <div class="src-m">${money(Math.round(f.rate))} × ${f.conLai} ngày còn lại</div></div>
+      <div class="src-a">${money(Math.round(f.lhConLai))}</div></div></div>`;
+  return x;
+}
 function chainClose(){open.chain='';render();}
 /* Soi một mốc số dư lệch: mốc trước → các giao dịch ở giữa → mốc sau. */
 function chainPanel(key){
@@ -1585,9 +1673,9 @@ function vHome(){
     if(pa.duTru>0){
       const nhanh=pa.tyChi>pa.tyNgay;
       const chuan=pa.chuan, tuNay=pa.conLai?pa.conDuoc/pa.conLai:0, lech=tuNay-chuan;
-      h+=`<div class="sp"></div><div class="panel" style="padding:14px">
+      h+=`<div class="sp"></div><div class="panel" style="padding:14px${open.pw?';border-radius:var(--r) var(--r) 0 0':''}" onclick="toggle('pw')">
         <div style="text-align:center">
-          <div class="src-m">Ngân sách còn lại</div>
+          <div class="src-m">Ngân sách còn lại ${open.pw?'▾':'▸'}</div>
           <div style="font-size:32px;font-weight:600;letter-spacing:-.025em;margin:2px 0">${money(pa.conDuoc)}</div>
           <div class="src-m">còn ${pa.conLai} ngày · đã tiêu ${money(pa.daChi)} / ${money(pa.duTru)}</div></div>
         <div class="pace" style="margin-top:13px"><i style="width:${Math.min(100,pa.tyChi*100)}%;background:${nhanh?'var(--amber)':'var(--jade)'}"></i>
@@ -1602,6 +1690,7 @@ function vHome(){
             <div style="font-size:18px;font-weight:600;margin-top:3px">${money(tuNay)}</div>
             <div style="font-size:11px;font-weight:500;color:${lech<0?'var(--warntx)':'var(--jade)'}">${lech<0?'↓ hụt '+money(-lech):'↑ dôi ra '+money(lech)}</div></div>
         </div></div>`;
+      if(open.pw)h+=paceWhy(pa);
     }
     if(chi){
       h+=`<h2 class="hl"><i style="background:${gcA('#C8792B')}"></i><b>Cơ cấu chi tiêu</b><em>${money(chi)}</em></h2>${treemap(list,chi)}
@@ -1667,7 +1756,9 @@ function vHome(){
           <div class="src-a ${f.theoDa<0?'neg':''}" style="${f.theoDa>=0?'color:var(--jade)':''}">${money(f.theoDa)}</div></div>`
         :`<div class="src" style="padding:10px 14px"><div class="src-m">Chưa đủ ngày để ước tốc độ, đợi qua mùng 5.</div></div>`}
       </div>
-      <div class="sp"></div><div class="stack-note"><span>Cách 1 là kế hoạch. Cách 2 là thực tế. Cách 2 thấp hơn nhiều nghĩa là đang tiêu vượt kế hoạch.</span></div>`;
+      <div class="sp"></div><div class="stack-note"><span>Cách 1 là kế hoạch. Cách 2 là thực tế. Cách 2 thấp hơn nhiều nghĩa là đang tiêu vượt kế hoạch.</span>
+        <span><button style="background:none;border:0;padding:0;color:var(--jade);font-weight:600;font-size:12.5px" onclick="toggle('fcd')">${open.fcd?'thu gọn':'chi tiết từng nhóm'}</button></span></div>`;
+      if(open.fcd)h+=`<div class="sp"></div>`+fcDetail(f);
     }
     const xau=f.duocUoc?Math.min(f.keHoach,f.theoDa):f.keHoach;
     if(xau<0)h+=`<div class="sp"></div><div class="err">Theo đà này cuối tháng sẽ âm ${money(-xau)}₫. Cần cắt bớt ở nhóm linh hoạt ngay từ bây giờ.</div>`;

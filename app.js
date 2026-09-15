@@ -36,7 +36,7 @@ function labelOf(code){
 const validCode=(code,kind)=>{const g=groupOf(code);return !!code&&g.id&&(!kind||g.k===kind);};
 
 const KEY='sochi:data';
-const VERSION='16.9';
+const VERSION='17.0';
 let DB={txns:[],debts:[],budgets:{},bm:{},goals:[],fixedItems:[],roll:{},offsets:[],draws:[],income:0,rules:{},opens:{bidv:0,vi:0,tm:0},checks:{},opts:{ab:'off'},lastBackup:0,v:5};
 let tab='home', cursor=new Date(), pending=null, msg='', msgType='err', open={};
 
@@ -779,31 +779,29 @@ function budgetTotals(){
 }
 
 /* ==================== dự trù số dư cuối tháng ==================== */
+/* Dự trù cuối tháng = SỐ ĐỂ DÀNH ĐƯỢC, chứ không phải số dư còn lại.
+   Tiết kiệm là phần còn lại sau khi mọi thứ khác đã tiêu, nên nếu mọi nhóm
+   tiêu vừa đủ hạn mức thì con số này đúng bằng hạn mức Tiết kiệm.
+   Thấp hơn là cảnh báo: tháng này sẽ để dành được ít hơn dự tính. */
 function forecast(){
-  const now=new Date(), list=monthTx(now);
+  const now=new Date();
   const bal=balances(), hienTai=SRC.reduce((s,x)=>s+(bal[x.id]||0),0);
   const nd=daysIn(now), passed=now.getDate(), conLai=nd-passed;
-  const thuTT=sum(list.filter(t=>t.t==='thu'&&['luong','thuong','tkhac'].includes(groupOf(t.c).id)));
-  const thuConLai=Math.max(0,(DB.income||0)-thuTT);
-
-  /* cố định và tiết kiệm là khoản trả một lần, lấy phần hạn mức chưa dùng.
-     Chỉ chi linh hoạt mới ngoại suy theo tốc độ, nếu không thì khoản 3 triệu
-     đưa bố mẹ đầu tháng sẽ bị nhân lên cho cả tháng. */
-  let planConLai=0, cdConLai=0, lhDaChi=0, lhBudget=0;
-  GROUPS.filter(g=>g.k==='chi').forEach(g=>{
-    const b=budgetOf(g.id,new Date());
-    const v=sum(list.filter(t=>t.t==='chi'&&groupOf(t.c).id===g.id));
-    if(b)planConLai+=Math.max(0,b-v);
-    const codinh=fixedInGroup(g.id)+(g.id==='trano'?b:0)+(g.id==='tk'?bud('tk',new Date()):0);
-    if(codinh)cdConLai+=Math.max(0,codinh-v);
-    const lh=Math.max(0,b-codinh);
-    if(lh){ lhDaChi+=Math.max(0,v-codinh); lhBudget+=lh; }
+  const inc=DB.income||0, tkKeHoach=bud('tk',now);
+  let raPlan=0, daChi=0, cdConLai=0, lhDaChi=0;
+  GROUPS.filter(g=>g.k==='chi'&&g.id!=='tk').forEach(g=>{
+    const a=avail(g.id,now), v=spentOf(g.id,now), fo=fixedOfGroup(g.id,now);
+    raPlan+=Math.max(a,v);            /* cả tháng nhóm này sẽ ra: đã lỡ tiêu quá thì tính số đã tiêu */
+    daChi+=v;
+    /* khoản trả một lần: cố định chưa trả và nợ còn phải trả — không ngoại suy theo ngày */
+    cdConLai+=fo.left+(g.id==='trano'?Math.max(0,a-v):0);
+    if(g.id!=='trano')lhDaChi+=Math.max(0,v-Math.min(fo.chi,fo.plan));
   });
   const rate=passed?lhDaChi/passed:0, lhConLai=rate*conLai;
-  const duocUoc=passed>=5;
-  return {hienTai,thuConLai,planConLai,cdConLai,lhConLai,rate,conLai,duocUoc,
-    keHoach:hienTai+thuConLai-planConLai,
-    theoDa:hienTai+thuConLai-cdConLai-lhConLai};
+  return {hienTai,inc,tkKeHoach,raPlan,daChi,cdConLai,lhDaChi,lhConLai,rate,conLai,
+    duocUoc:passed>=5,
+    keHoach:inc-raPlan,
+    theoDa:inc-daChi-cdConLai-lhConLai};
 }
 
 /* ==================== ngân sách ====================
@@ -1589,40 +1587,39 @@ function vHome(){
   /* dự trù cuối tháng, chỉ có nghĩa khi đang xem tháng hiện tại */
   if(ym(cursor)===ym(new Date())&&(DB.income||0)>0){
     const f=forecast(), pa=pace(cursor);
-    const daChiThang=sumChi(monthTx(new Date()));
-    const tongDuKien=daChiThang+f.planConLai;
+    const hut=f.tkKeHoach-f.keHoach;   /* thấp hơn mục tiêu tiết kiệm bao nhiêu */
+    const mau=f.keHoach<0?'var(--brick)':hut>0?'var(--amber)':'var(--jade)';
     h+=`<button class="fold blue" id="sec-fc" onclick="toggle('fc')">
-      <span>${open.fc?'▾':'▸'} Dự trù cả tháng</span>
-      <span style="font-size:13px;font-weight:600;color:${f.keHoach<0?'var(--brick)':'var(--jade)'}">${f.keHoach<0?'thiếu ':'còn '}${short(Math.abs(f.keHoach))}₫</span></button>`;
+      <span>${open.fc?'▾':'▸'} Dự trù để dành</span>
+      <span style="font-size:13px;font-weight:600;color:${mau}">${short(f.keHoach)}₫${f.tkKeHoach?' / '+short(f.tkKeHoach)+'₫':''}</span></button>`;
     if(open.fc){
       const R=(t,v,g,neg)=>`<div class="src" style="padding:10px 14px"><div style="min-width:0">
         <div class="src-n" style="font-size:13.5px">${t}</div>${g?`<div class="src-m">${g}</div>`:''}</div>
         <div class="src-a ${neg?'neg':''}" style="font-size:14px">${v}</div></div>`;
       h+=`<div class="panel" style="border-radius:0 0 var(--r) var(--r);border-top:0">
         <div class="daygroup">CÁCH 1 — NẾU TIÊU VỪA ĐỦ HẠN MỨC</div>
-        ${R('Tiền đang có',money(f.hienTai),'BIDV + ví + tiền mặt tính tới hôm nay')}
-        ${R('+ Thu nhập chưa nhận',money(f.thuConLai),'thu nhập tháng '+money(DB.income)+' trừ phần lương đã về')}
-        ${R('− Hạn mức chưa dùng',money(f.planConLai),'cộng phần chưa dùng của từng nhóm: hạn mức trừ đã tiêu',1)}
-        <div class="src total"><div><div class="src-n">CUỐI THÁNG CÒN LẠI</div>
-          <div class="src-m">${short(f.hienTai)} + ${short(f.thuConLai)} − ${short(f.planConLai)}</div></div>
-          <div class="src-a ${f.keHoach<0?'neg':''}" style="${f.keHoach>=0?'color:var(--jade)':''}">${money(f.keHoach)}</div></div>
+        ${R('Thu nhập tháng',money(f.inc),'')}
+        ${R('− Sẽ chi cả tháng',money(f.raPlan),'mọi nhóm trừ Tiết kiệm, nhóm nào lỡ tiêu quá hạn mức thì tính số đã tiêu',1)}
+        <div class="src total"><div><div class="src-n">ĐỂ DÀNH ĐƯỢC</div>
+          <div class="src-m">${short(f.inc)} − ${short(f.raPlan)}${f.tkKeHoach?' · mục tiêu '+short(f.tkKeHoach):''}</div></div>
+          <div class="src-a ${f.keHoach<f.tkKeHoach?'neg':''}" style="${f.keHoach>=f.tkKeHoach?'color:var(--jade)':''}">${money(f.keHoach)}</div></div>
 
         <div class="daygroup">CÁCH 2 — NẾU GIỮ ĐÀ ĐANG TIÊU</div>
         ${f.duocUoc?`
-        ${R('Tiền đang có',money(f.hienTai),'')}
-        ${R('+ Thu nhập chưa nhận',money(f.thuConLai),'')}
-        ${R('− Cố định, nợ, tiết kiệm chưa trả',money(f.cdConLai),'các khoản trả một lần, không ngoại suy',1)}
+        ${R('Thu nhập tháng',money(f.inc),'')}
+        ${R('− Đã chi tới hôm nay',money(f.daChi),'không kể tiền chuyển vào Tiết kiệm',1)}
+        ${R('− Cố định và nợ còn phải trả',money(f.cdConLai),'các khoản trả một lần, không ngoại suy',1)}
         ${R('− Chi linh hoạt còn lại',money(f.lhConLai),short(f.rate)+'₫ mỗi ngày × '+f.conLai+' ngày còn lại',1)}
-        <div class="src total"><div><div class="src-n">CUỐI THÁNG CÒN LẠI</div>
-          <div class="src-m">${short(f.hienTai)} + ${short(f.thuConLai)} − ${short(f.cdConLai)} − ${short(f.rate)}×${f.conLai}</div></div>
-          <div class="src-a ${f.theoDa<0?'neg':''}" style="${f.theoDa>=0?'color:var(--jade)':''}">${money(f.theoDa)}</div></div>`
+        <div class="src total"><div><div class="src-n">ĐỂ DÀNH ĐƯỢC</div>
+          <div class="src-m">${short(f.inc)} − ${short(f.daChi)} − ${short(f.cdConLai)} − ${short(f.rate)}×${f.conLai}</div></div>
+          <div class="src-a ${f.theoDa<f.tkKeHoach?'neg':''}" style="${f.theoDa>=f.tkKeHoach?'color:var(--jade)':''}">${money(f.theoDa)}</div></div>`
         :`<div class="src" style="padding:10px 14px"><div class="src-m">Chưa đủ ngày để ước tốc độ, đợi qua mùng 5.</div></div>`}
       </div>
-      <div class="sp"></div><div class="stack-note"><span>Cách 1 là kế hoạch. Cách 2 là thực tế. Cách 2 thấp hơn nhiều nghĩa là đang tiêu vượt kế hoạch.</span></div>`;
+      <div class="sp"></div><div class="stack-note"><span>Tiết kiệm là phần còn lại sau khi mọi nhóm khác tiêu xong. Tiêu vừa đủ hạn mức thì Cách 1 đúng bằng hạn mức Tiết kiệm; thấp hơn là tháng này để dành hụt.</span></div>`;
     }
     const xau=f.duocUoc?Math.min(f.keHoach,f.theoDa):f.keHoach;
-    if(xau<0)h+=`<div class="sp"></div><div class="err">Theo đà này cuối tháng sẽ âm ${money(-xau)}₫. Cần cắt bớt ở nhóm linh hoạt ngay từ bây giờ.</div>`;
-    else if(f.duocUoc&&f.theoDa<f.keHoach-100000)h+=`<div class="sp"></div><div class="warn">Đang tiêu nhanh hơn kế hoạch, cuối tháng hụt khoảng ${money(f.keHoach-f.theoDa)}₫ so với dự tính.</div>`;
+    if(xau<0)h+=`<div class="sp"></div><div class="err">Theo đà này tháng nay không để dành được đồng nào, còn thiếu ${money(-xau)}₫. Cần cắt bớt ở nhóm linh hoạt ngay từ bây giờ.</div>`;
+    else if(f.tkKeHoach&&xau<f.tkKeHoach)h+=`<div class="sp"></div><div class="warn">Sẽ để dành được ${money(xau)}₫, hụt ${money(f.tkKeHoach-xau)}₫ so với mục tiêu tiết kiệm ${money(f.tkKeHoach)}₫.</div>`;
   }
 
   const dt=debtTotals();
@@ -1978,8 +1975,8 @@ function vInfo(){
    ['Chi phí cố định đã chi chưa','cộng mọi giao dịch trong tháng có mã đối tác trùng mã nhận diện. Nếu bật tùy chọn xấp xỉ thì chỉ tính giao dịch lệch không quá 15%.'],
    ['Hạn mức tồn','cộng phần dư của tối đa 6 kỳ gần nhất, chỉ tính tháng có ghi chép, trần bằng 6 lần hạn mức tháng. Chỉ áp cho nhóm bật cộng dồn. Kỳ trước tiêu vượt thì thành số âm và bị trừ vào hạn mức tháng này.'],
    ['Rút hạn mức tồn','không tự cộng vào hạn mức. Chỉ khi Vy bấm rút thì phần rút mới vào hạn mức khả dụng và vào mẫu số nhịp tiêu.'],
-   ['Dự trù theo kế hoạch','số dư hiện tại + lương chưa nhận − phần hạn mức chưa dùng của mọi nhóm.'],
-   ['Dự trù theo đà','số dư hiện tại + lương chưa nhận − cố định và tiết kiệm còn lại − tốc độ chi linh hoạt nhân số ngày còn lại. Trước ngày 5 không ước.'],
+   ['Dự trù để dành theo kế hoạch','thu nhập tháng − tổng số mọi nhóm (trừ Tiết kiệm) sẽ chi cả tháng, mỗi nhóm lấy số lớn hơn giữa hạn mức khả dụng và số đã tiêu. Tiêu vừa đủ hạn mức thì bằng đúng hạn mức Tiết kiệm.'],
+   ['Dự trù để dành theo đà','thu nhập tháng − đã chi tới hôm nay − cố định và nợ còn phải trả − tốc độ chi linh hoạt nhân số ngày còn lại. Trước ngày 5 không ước.'],
    ['Khoản trả góp','tổng phải trả = số kỳ nhân tiền mỗi kỳ. Phí thu hộ = tổng phải trả − gốc. Kỳ kế tiếp = ngày kỳ đầu cộng số kỳ đã thanh toán.'],
    ['Tỷ lệ tiết kiệm','chi nhóm Tiết kiệm chia thu nhập. Mục tiêu từ 25% trở lên.'],
    ['Quỹ dự phòng','cộng dồn mọi khoản đã ghi vào nhóm Tiết kiệm. Mục tiêu bằng 3 lần chi phí trung bình 3 tháng gần nhất, đã trừ phần tiết kiệm ra khỏi chi phí.'],

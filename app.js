@@ -36,7 +36,7 @@ function labelOf(code){
 const validCode=(code,kind)=>{const g=groupOf(code);return !!code&&g.id&&(!kind||g.k===kind);};
 
 const KEY='sochi:data';
-const VERSION='16.8';
+const VERSION='16.9';
 let DB={txns:[],debts:[],budgets:{},bm:{},goals:[],fixedItems:[],roll:{},offsets:[],draws:[],income:0,rules:{},opens:{bidv:0,vi:0,tm:0},checks:{},opts:{ab:'off'},lastBackup:0,v:5};
 let tab='home', cursor=new Date(), pending=null, msg='', msgType='err', open={};
 
@@ -822,6 +822,15 @@ function hitFixed(it,t){
   return true;
 }
 /* đã trả bao nhiêu trong tháng đang xem */
+/* Nhận diện tự động có lúc trượt (giao dịch không kèm mã, số tiền tháng này khác
+   kế hoạch). Cho phép tự đánh dấu "đã trả" theo từng tháng để khỏi giữ chỗ oan. */
+const fxMarked=(it,d)=>!!(((DB.fxDone||{})[ym(d||cursor)]||{})[it.id]);
+function toggleFxDone(id){
+  const k=ym(cursor); DB.fxDone=DB.fxDone||{};
+  const m=DB.fxDone[k]=DB.fxDone[k]||{};
+  if(m[id])delete m[id]; else m[id]=1;
+  save();
+}
 function fixedPaid(it,d){
   const rows=monthTx(d||cursor).filter(t=>hitFixed(it,t));
   return {tien:rows.reduce((s2,t)=>s2+t.a,0), rows};
@@ -844,8 +853,10 @@ function fixedOfGroup(gid,d){
   let plan=0,da=0,chi=0;
   its.forEach(it=>{
     const a=it.a||0; plan+=a; let tra=0, doan=false;
+    let tay=false;
     if(it.mp)tra=Math.min(a,fixedPaid(it,d).tien);
     if(it.mp)chi+=fixedPaid(it,d).tien;
+    if(!tra&&fxMarked(it,d)){tra=a;chi+=a;tay=true;}
     if(!tra){
       /* chưa nhận ra bằng mã (chưa gắn mã, hoặc giao dịch dán về không kèm mã)
          → dò theo số tiền xấp xỉ trong nhóm, để không giữ chỗ cho khoản đã trả */
@@ -854,7 +865,7 @@ function fixedOfGroup(gid,d){
       if(hit){used[hit.id]=1;tra=Math.min(a,hit.a);chi+=hit.a;doan=true;}
     }
     if(a&&tra>=a*0.85)tra=a;         /* trả gần đủ thì coi như xong, khỏi giữ chỗ phần lẻ */
-    da+=tra; rows.push({name:it.name,a,tra,mp:!!it.mp,doan});
+    da+=tra; rows.push({id:it.id,name:it.name,a,tra,mp:!!it.mp,doan,tay});
   });
   return {plan,da,chi,left:Math.max(0,plan-da),rows};
 }
@@ -1171,8 +1182,10 @@ function hmDetail(g){
       <span>${money(Math.max(0,sum(rows)-Math.min(fo.chi,fo.plan)))} / ${money(flex+off+drw)}</span></div>`;
     x+=`<div class="cat-meta" style="padding:5px 0"><span style="color:var(--ink)">Trong đó cố định</span>
       <span>đã trả ${money(fo.da)} / ${money(fo.plan)} · còn giữ <b>${money(fo.left)}</b></span></div>`;
-    fo.rows.forEach(r=>x+=`<div class="cat-meta" style="padding:3px 0 3px 10px"><span style="color:var(--ink-3)">${esc(r.name)}${r.doan?' · nhận ra theo số tiền':r.mp?'':' · chưa gắn mã'}</span>
-      <span style="color:var(--ink-3)">${r.tra>=r.a-1?'đã trả':r.tra?money(r.tra)+' / '+money(r.a):'chưa trả · '+money(r.a)}</span></div>`);
+    fo.rows.forEach(r=>x+=`<div class="cat-meta" style="padding:3px 0 3px 10px">
+      <span style="color:var(--ink-3)">${esc(r.name)}${r.tay?' · tự đánh dấu':r.doan?' · nhận ra theo số tiền':r.mp?'':' · chưa gắn mã'}</span>
+      <span style="display:flex;gap:9px;align-items:center;color:var(--ink-3);white-space:nowrap">${r.tra>=r.a-1?'đã trả':r.tra?money(r.tra)+' / '+money(r.a):'chưa trả · '+money(r.a)}
+        ${r.tay||r.tra<r.a-1?`<button class="chk-btn" style="color:var(--ink-3)" onclick="toggleFxDone('${r.id}')">${r.tay?'bỏ dấu':'đã trả'}</button>`:''}</span></div>`);
   }
   if(!rows.length)x+=`<div class="cat-meta" style="padding:5px 0"><span>chưa chi khoản nào trong tháng</span></div>`;
   rows.slice(0,25).forEach(t=>{
@@ -1212,7 +1225,7 @@ function hmDetail(g){
 function vBudRun(inc){
   const items=fixedItems();
   const fxTong=items.reduce((s2,x)=>s2+x.a,0);
-  const fxDa=items.reduce((s2,x)=>s2+Math.min(x.a,fixedPaid(x,cursor).tien),0);
+  const fxDa=items.reduce((s2,x)=>s2+(fxMarked(x,cursor)?x.a:Math.min(x.a,fixedPaid(x,cursor).tien)),0);
   const fxPc=fxTong?Math.round(fxDa/fxTong*100):0;
   let h=`<div class="panel" style="margin-bottom:10px">
     <button class="fold" style="margin:0;border:0;border-left:3px solid var(--info);border-radius:var(--r)" onclick="toggle('bfx')">
@@ -1223,9 +1236,11 @@ function vBudRun(inc){
   if(open.bfx){
     h+=`<div style="padding:0 12px 12px 15px">
       <div class="cat-meta" style="padding:9px 0"><span>đã chi ${money(fxDa)} / ${money(fxTong)}</span></div>`;
-    items.forEach(it=>{const pd=fixedPaid(it,cursor);
+    items.forEach(it=>{const pd=fixedPaid(it,cursor), tay=fxMarked(it,cursor);
       h+=`<div class="cat-meta" style="padding:7px 0;border-top:1px solid var(--line-2)">
-        <span>${esc(it.name)}</span><span>${pd.tien?money(pd.tien)+' / '+money(it.a):'chưa chi · '+money(it.a)}</span></div>`;});
+        <span>${esc(it.name)}${tay&&!pd.tien?' · tự đánh dấu':''}</span>
+        <span style="display:flex;gap:9px;align-items:center;white-space:nowrap">${pd.tien?money(pd.tien)+' / '+money(it.a):tay?'đã trả · '+money(it.a):'chưa chi · '+money(it.a)}
+        ${pd.tien?'':`<button class="chk-btn" style="color:var(--ink-3)" onclick="toggleFxDone('${it.id}')">${tay?'bỏ dấu':'đã trả'}</button>`}</span></div>`;});
     if(!items.length)h+=`<div class="cat-meta" style="padding:7px 0"><span>chưa khai khoản cố định nào</span></div>`;
     h+=`</div>`;
   }
@@ -1238,9 +1253,11 @@ function vBudRun(inc){
       fxc:Math.min(fo.chi,fo.plan)};})   /* trả dôi hơn kế hoạch thì phần dôi tính vào linh hoạt */
     .filter(x=>x.b>0||x.v>0);
   const tb=rows.reduce((s2,x)=>s2+x.b,0), tv=rows.reduce((s2,x)=>s2+x.v,0);
-  /* phần linh hoạt: bỏ cả hạn mức lẫn chi tiêu của các khoản cố định ra ngoài */
-  const tlb=rows.reduce((s2,x)=>s2+(x.b-x.fxp),0),
-        tlv=rows.reduce((s2,x)=>s2+Math.max(0,x.v-x.fxc),0);
+  /* phần linh hoạt: bỏ cố định ra ngoài, và bỏ luôn Tiết kiệm
+     — tiết kiệm là phần còn lại chứ không phải tiền tiêu */
+  const lh=rows.filter(x=>x.g.id!=='tk');
+  const tlb=lh.reduce((s2,x)=>s2+(x.b-x.fxp),0),
+        tlv=lh.reduce((s2,x)=>s2+Math.max(0,x.v-x.fxc),0);
   const now=new Date(), nd=daysIn(cursor), qua=ym(cursor)===ym(now)?now.getDate():nd, pace2=qua/nd;
   h+=`<div class="panel">
     <button class="fold" style="margin:0;border:0;border-left:3px solid var(--amber);border-radius:var(--r)" onclick="toggle('bhm')">
@@ -1251,7 +1268,7 @@ function vBudRun(inc){
         <span style="color:var(--ink-3)">${open.bhm?'▴':'▾'}</span></span></button>`;
   if(open.bhm){
     h+=`<div style="padding:0 12px 12px 15px">`;
-    if(tb!==tlb)h+=`<div class="cat-meta" style="padding:9px 0 2px"><span style="color:var(--ink)">Chi linh hoạt (không kể cố định)</span>
+    if(lh.length)h+=`<div class="cat-meta" style="padding:9px 0 2px"><span style="color:var(--ink)">Chi linh hoạt (không kể cố định, tiết kiệm)</span>
       <span><span style="color:var(--ink-3)">${money(tlv)} / </span><b>${money(tlb)}</b></span></div>`;
     rows.forEach(({g,b,v,ci,off,drw,fxl,fxp,fxc})=>{
       const vLh=Math.max(0,v-fxc), bLh=b-fxp;      /* đã chi / hạn mức phần linh hoạt */

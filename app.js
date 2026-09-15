@@ -36,8 +36,8 @@ function labelOf(code){
 const validCode=(code,kind)=>{const g=groupOf(code);return !!code&&g.id&&(!kind||g.k===kind);};
 
 const KEY='sochi:data';
-const VERSION='17.0';
-let DB={txns:[],debts:[],budgets:{},bm:{},goals:[],fixedItems:[],roll:{},offsets:[],draws:[],income:0,rules:{},opens:{bidv:0,vi:0,tm:0},checks:{},opts:{ab:'off'},lastBackup:0,v:5};
+const VERSION='17.2';
+let DB={txns:[],debts:[],budgets:{},bm:{},goals:[],fixedItems:[],roll:{},offsets:[],draws:[],income:0,rules:{},opens:{bidv:0,vi:0,tm:0},checks:{},opts:{ab:'off'},chainOK:{},lastBackup:0,v:5};
 let tab='home', cursor=new Date(), pending=null, msg='', msgType='err', open={};
 
 /* ==================== tiện ích ==================== */
@@ -122,7 +122,7 @@ async function load(){try{const raw=await store.get();if(raw){let d=JSON.parse(r
   DB=Object.assign({},d,{txns:Array.isArray(d.txns)?d.txns:[],debts:Array.isArray(d.debts)?d.debts:[],
     budgets:d.budgets||{},bm:d.bm||{},goals:Array.isArray(d.goals)?d.goals:[],fixedItems:Array.isArray(d.fixedItems)?d.fixedItems:[],roll:d.roll||{},offsets:Array.isArray(d.offsets)?d.offsets:[],draws:Array.isArray(d.draws)?d.draws:[],income:d.income||0,rules:d.rules||{},
     opens:Object.assign({bidv:0,vi:0,tm:0},d.opens||{}),checks:d.checks||{},
-    opts:Object.assign({ab:'off'},d.opts||{}),lastBackup:d.lastBackup||0,v:9});}}catch(e){}}
+    opts:Object.assign({ab:'off'},d.opts||{}),chainOK:d.chainOK||{},lastBackup:d.lastBackup||0,v:9});}}catch(e){}}
 let saveT=null;
 function save(){clearTimeout(saveT);saveT=setTimeout(()=>store.set(JSON.stringify(DB)),200);}
 
@@ -185,11 +185,13 @@ function chainRows(){
     if((t.s||'bidv')!=='bidv'&&t.s2!=='bidv')return;
     if(t.t==='dc')return;                      // dòng điều chỉnh không phải giao dịch ngân hàng
     const k=t.sg||(t.b?('b'+t.d+(t.tm||'')+t.b):('x'+t.id));
-    if(!map[k]){map[k]={d:t.d,tm:t.tm||'',delta:0,b:0};out.push(map[k]);}
+    if(!map[k]){map[k]={d:t.d,tm:t.tm||'',delta:0,b:0,name:t.n||'',ids:[]};out.push(map[k]);}
     const own=(t.s||'bidv')==='bidv';
     map[k].delta+= t.t==='thu'?t.a : t.t==='mv'?(own?-t.a:t.a) : -t.a;
+    map[k].ids.push(t.id);
     if(t.b)map[k].b=t.b;
     if(!map[k].tm&&t.tm)map[k].tm=t.tm;
+    if(!map[k].name&&t.n)map[k].name=t.n;
   });
   return out.sort((x,y)=>(x.d+' '+(x.tm||'00:00')).localeCompare(y.d+' '+(y.tm||'00:00')));
 }
@@ -197,19 +199,72 @@ function chainRows(){
    kể cả giao dịch không kèm số dư, nếu không sẽ báo thiếu oan. */
 function chainGaps(){
   const rows=chainRows(), out=[];
-  let last=null, acc=0, from=null;
+  let last=null, acc=0, from=null, fromB=0, bucket=[];
   rows.forEach(r=>{
-    acc+=r.delta;
+    acc+=r.delta; bucket.push(r);
     if(r.b){
       if(last!==null){
         const exp=last+acc;
-        if(Math.abs(exp-r.b)>=1)out.push({d:r.d,tm:r.tm,gap:r.b-exp,from});
+        if(Math.abs(exp-r.b)>=1)out.push({d:r.d,tm:r.tm,gap:r.b-exp,exp,b:r.b,
+          from,fromB,rows:bucket.slice()});
       }
-      last=r.b; acc=0; from=r.d+(r.tm?' '+r.tm:'');
+      last=r.b; acc=0; from=r.d+(r.tm?' '+r.tm:''); fromB=r.b; bucket=[];
     }
   });
+  /* Giao dịch không ghi giờ bị xếp vào 00:00 nên có thể rơi nhầm sang khoảng trước.
+     Nếu trong khoảng có đúng một dòng thiếu giờ bù vừa khít phần lệch thì đây là
+     lỗi thứ tự, không phải thiếu giao dịch. */
+  out.forEach((g,i)=>{
+    let c=g.rows.find(r=>!r.tm&&Math.abs(r.delta+g.gap)<1);
+    if(!c){const nx=out[i+1];
+      if(nx)c=nx.rows.find(r=>!r.tm&&Math.abs(r.delta-g.gap)<1);}
+    if(c){g.why='gio';g.culprit=c;}
+    g.key=g.d+'|'+(g.tm||'')+'|'+Math.round(g.gap);
+    g.ok=!!(DB.chainOK&&DB.chainOK[g.key]);
+  });
+  /* lệch do thứ tự luôn đi thành cặp bù nhau: khoảng sau cũng là cùng một chuyện */
+  out.forEach((g,i)=>{const n2=out[i+1];
+    if(g.why==='gio'&&n2&&!n2.why&&Math.abs(g.gap+n2.gap)<1){n2.why='gio';n2.culprit=g.culprit;n2.mirror=1;}});
   return out;
 }
+const chainGap=key=>chainGaps().find(g=>g.key===key)||null;
+/* Số dư lệch mà Vy chắc chắn đã nhập đủ giao dịch thì lỗi nằm ở chỗ khác:
+   ghi sai ngày, ghi nhầm nguồn tiền, nhập trùng, hoặc thiếu giờ nên rơi nhầm khoảng.
+   Hàm này dò trong sổ xem khoản nào bù vừa khít phần lệch. */
+function chainSuspects(g){
+  const need=g.gap;                      /* cần cộng thêm bấy nhiêu vào khoảng này */
+  const inIds={}; g.rows.forEach(r=>(r.ids||[]).forEach(i=>{inIds[i]=1;}));
+  const dTu=(g.from||g.d).slice(0,10), dDen=g.d;
+  const nudge=(ds,n)=>{const x=new Date(ds+'T00:00:00');x.setDate(x.getDate()+n);return iso(x);};
+  const som=nudge(dTu,-3), muon=nudge(dDen,3);
+  const out=[];
+  DB.txns.forEach(t=>{
+    if(t.t==='dc')return;
+    const own=(t.s||'bidv')==='bidv';
+    const delta=t.t==='thu'?t.a : t.t==='mv'?(own?-t.a:t.a) : -t.a;
+    const laB=own||t.s2==='bidv';
+    if(inIds[t.id]){
+      /* đang nằm trong khoảng — bỏ ra hoặc xóa đi thì hết lệch */
+      if(Math.abs(delta+need)<1)
+        out.push({t,delta,ly:t.tm?'có thể bị nhập trùng, hoặc thật ra thuộc khoảng sau':'chưa ghi giờ nên có thể rơi nhầm khoảng'});
+      return;
+    }
+    if(t.d<som||t.d>muon)return;
+    if(Math.abs(delta-need)>=1)return;
+    /* nằm ngoài khoảng — kéo vào thì hết lệch */
+    out.push({t,delta,ly:laB?'có thể bị ghi sai ngày, đúng ra thuộc khoảng này':'đang ghi ở '+srcOf(t.s).n+', có thể thật ra là giao dịch BIDV'});
+  });
+  return out.slice(0,6);
+}
+function chainAck(key){
+  const all=chainGaps(), i=all.findIndex(g=>g.key===key);
+  DB.chainOK=Object.assign({},DB.chainOK||{}); DB.chainOK[key]=1;
+  if(i>=0&&all[i].why==='gio')[all[i-1],all[i+1]].forEach(n=>{
+    if(n&&Math.abs(n.gap+all[i].gap)<1)DB.chainOK[n.key]=1;});
+  open.chain=''; save();
+  flash('Đã ghi nhận. Mốc này sẽ không báo nữa.','ok');
+}
+function chainReset(){ DB.chainOK={}; save(); flash('Đã bỏ xác nhận toàn bộ mốc số dư.','ok'); }
 /* ==================== khoản nợ ==================== */
 const addMonths=(isoD,k)=>{const [y,m,dd]=isoD.split('-').map(Number);
   const t=new Date(y,m-1+k,1), last=new Date(t.getFullYear(),t.getMonth()+1,0).getDate();
@@ -728,14 +783,29 @@ function pace(d){
   d=d||cursor;
   /* mẫu số: hạn mức linh hoạt, trừ Tiết kiệm, trừ Cho mượn; cộng phần tích lũy đã rút */
   const NGOAI={tk:1,trano:1,muon:1};
-  let duTru=0;
-  FLEX().forEach(g=>{ if(!NGOAI[g.id]) duTru+=bud(g.id,d)+drawn(g.id,d); });
+  let duTru=0; const gr=[];
+  FLEX().forEach(g=>{ if(NGOAI[g.id])return;
+    const b=bud(g.id,d), o=offsetNet(g.id,d), dr=drawn(g.id,d), tot=b+o+dr;
+    duTru+=tot; if(b||tot)gr.push({id:g.id,n:g.n,b,o,dr,tot});
+  });
   const skip=fixedTxIds(d);
-  const daChi=monthTx(d).filter(t=>t.t==='chi'&&!skip[t.id]&&!NGOAI[groupOf(t.c).id])
-    .reduce((s2,t)=>s2+t.a,0);
+  /* tách chi của tháng làm ba rổ, để bảng giải thích nói được số nào trừ số nào */
+  const all=monthTx(d).filter(t=>t.t==='chi');
+  const fx=[], spent={};
+  let daChi=0, chiTong=0, tienNgoai=0;
+  all.forEach(t=>{
+    chiTong+=t.a;
+    const gid=groupOf(t.c).id;
+    if(skip[t.id]){fx.push({t,it:skip[t.id]});return;}
+    if(NGOAI[gid]){tienNgoai+=t.a;return;}
+    daChi+=t.a; spent[gid]=(spent[gid]||0)+t.a;
+  });
+  const khongHM=Object.keys(spent).filter(gid=>!bud(gid,d)&&!drawn(gid,d))
+    .map(gid=>({id:gid,n:groupOf(gid).n,a:spent[gid]})).sort((x,y)=>y.a-x.a);
   const now=new Date(), nd=daysIn(d), cur=ym(d)===ym(now);
   const qua=cur?now.getDate():nd, conLai=Math.max(0,nd-qua);
   return {duTru,daChi,nd,qua,conLai,
+    bd:{gr,chiTong,fx,tienNgoai,khongHM},
     tyChi:duTru?daChi/duTru:0, tyNgay:qua/nd,
     moiNgay:qua?daChi/qua:0, chuan:duTru/nd,
     conDuoc:Math.max(0,duTru-daChi)};
@@ -788,17 +858,21 @@ function forecast(){
   const bal=balances(), hienTai=SRC.reduce((s,x)=>s+(bal[x.id]||0),0);
   const nd=daysIn(now), passed=now.getDate(), conLai=nd-passed;
   const inc=DB.income||0, tkKeHoach=bud('tk',now);
-  let raPlan=0, daChi=0, cdConLai=0, lhDaChi=0;
+  let raPlan=0, daChi=0, cdConLai=0, lhDaChi=0; const bd=[];
   GROUPS.filter(g=>g.k==='chi'&&g.id!=='tk').forEach(g=>{
     const a=avail(g.id,now), v=spentOf(g.id,now), fo=fixedOfGroup(g.id,now);
-    raPlan+=Math.max(a,v);            /* cả tháng nhóm này sẽ ra: đã lỡ tiêu quá thì tính số đã tiêu */
-    daChi+=v;
+    const ra=Math.max(a,v);           /* cả tháng nhóm này sẽ ra: đã lỡ tiêu quá thì tính số đã tiêu */
+    raPlan+=ra; daChi+=v;
     /* khoản trả một lần: cố định chưa trả và nợ còn phải trả — không ngoại suy theo ngày */
-    cdConLai+=fo.left+(g.id==='trano'?Math.max(0,a-v):0);
-    if(g.id!=='trano')lhDaChi+=Math.max(0,v-Math.min(fo.chi,fo.plan));
+    const cd=fo.left+(g.id==='trano'?Math.max(0,a-v):0);
+    cdConLai+=cd;
+    /* Trả nợ và Cho mượn là khoản một lần, nhân lên cho cả tháng là sai */
+    const lh=(g.id==='trano'||g.id==='muon')?0:Math.max(0,v-Math.min(fo.chi,fo.plan));
+    lhDaChi+=lh;
+    if(ra||v||cd||lh)bd.push({id:g.id,n:g.n,a,v,ra,vuot:v>a,fo,cd,lh,noBud:!a&&lh>0});
   });
   const rate=passed?lhDaChi/passed:0, lhConLai=rate*conLai;
-  return {hienTai,inc,tkKeHoach,raPlan,daChi,cdConLai,lhDaChi,lhConLai,rate,conLai,
+  return {hienTai,inc,tkKeHoach,raPlan,daChi,cdConLai,lhDaChi,lhConLai,rate,conLai,passed,bd,
     duocUoc:passed>=5,
     keHoach:inc-raPlan,
     theoDa:inc-daChi-cdConLai-lhConLai};
@@ -833,10 +907,16 @@ function fixedPaid(it,d){
   const rows=monthTx(d||cursor).filter(t=>hitFixed(it,t));
   return {tien:rows.reduce((s2,t)=>s2+t.a,0), rows};
 }
-/* id các giao dịch đã được tính là khoản cố định, để loại khỏi phần linh hoạt */
+/* id các giao dịch đã được tính là khoản cố định, để loại khỏi phần linh hoạt.
+   Gồm cả khoản CHƯA gắn mã: khớp theo số tiền xấp xỉ 15% giống fixedOfGroup,
+   nếu không thì khoản đó bị đếm nhầm thành chi linh hoạt. */
 function fixedTxIds(d){
-  const set={};
-  fixedItems().forEach(it=>fixedPaid(it,d).rows.forEach(t=>{set[t.id]=1;}));
+  const set={}, gids={};
+  fixedItems().forEach(it=>{gids[groupOf(it.code).id]=1;});
+  Object.keys(gids).forEach(gid=>{
+    const ids=fixedOfGroup(gid,d).ids||{};
+    Object.keys(ids).forEach(k=>{set[k]=ids[k];});
+  });
   return set;
 }
 /* Cố định trong một nhóm: kế hoạch bao nhiêu, đã trả bao nhiêu, còn phải trả bao nhiêu.
@@ -845,9 +925,9 @@ function fixedTxIds(d){
 function fixedOfGroup(gid,d){
   d=d||cursor;
   const its=fixedItems().filter(it=>groupOf(it.code).id===gid);
-  if(!its.length)return {plan:0,da:0,chi:0,left:0,rows:[]};
+  if(!its.length)return {plan:0,da:0,chi:0,left:0,rows:[],ids:{}};
   const used={}, rows=[];
-  its.forEach(it=>{ if(it.mp)fixedPaid(it,d).rows.forEach(t=>{used[t.id]=1;}); });
+  its.forEach(it=>{ if(it.mp)fixedPaid(it,d).rows.forEach(t=>{used[t.id]={name:it.name,by:'ma',a:it.a||0};}); });
   let plan=0,da=0,chi=0;
   its.forEach(it=>{
     const a=it.a||0; plan+=a; let tra=0, doan=false;
@@ -860,12 +940,12 @@ function fixedOfGroup(gid,d){
          → dò theo số tiền xấp xỉ trong nhóm, để không giữ chỗ cho khoản đã trả */
       const hit=monthTx(d).find(t=>t.t==='chi'&&!used[t.id]&&groupOf(t.c).id===gid
         &&a&&Math.abs(t.a-a)<=a*0.15);
-      if(hit){used[hit.id]=1;tra=Math.min(a,hit.a);chi+=hit.a;doan=true;}
+      if(hit){used[hit.id]={name:it.name,by:'tien',a};tra=Math.min(a,hit.a);chi+=hit.a;doan=true;}
     }
     if(a&&tra>=a*0.85)tra=a;         /* trả gần đủ thì coi như xong, khỏi giữ chỗ phần lẻ */
     da+=tra; rows.push({id:it.id,name:it.name,a,tra,mp:!!it.mp,doan,tay});
   });
-  return {plan,da,chi,left:Math.max(0,plan-da),rows};
+  return {plan,da,chi,left:Math.max(0,plan-da),rows,ids:used};
 }
 const fixedTotal=()=>fixedItems().reduce((s,x)=>s+(x.a||0),0);
 const fixedInGroup=gid=>fixedItems().filter(x=>groupOf(x.code).id===gid).reduce((s,x)=>s+(x.a||0),0);
@@ -1476,15 +1556,21 @@ function alerts(){
     else if(lv.k==='soon')out.push({cls:'amber',t:esc(dt.name)+' — '+lv.txt,k:'debt'});});
   const chk=bidvCheck();
   if(chk&&chk.diff!==0)out.push({cls:'red',t:'Số dư BIDV lệch '+money(Math.abs(chk.diff))+'₫ so với ngân hàng',k:'bal'});
-  chainGaps().filter(g=>g.d.slice(0,7)===ym(d)).slice(0,2).forEach(g=>out.push({cls:'amber',
-    t:'Thiếu một khoản '+(g.gap<0?'chi':'thu')+' khoảng '+money(Math.abs(g.gap))+'₫ trước '+g.d.slice(8,10)+'/'+g.d.slice(5,7),k:'bal'}));
+  chainGaps().filter(g=>g.d.slice(0,7)===ym(d)&&!g.ok&&!g.mirror).slice(0,2).forEach(g=>out.push({
+    cls:g.why==='gio'?'grey':'amber',
+    t:g.why==='gio'
+      ? 'Số dư lệch '+money(Math.abs(g.gap))+'₫ trước '+ddmm(g.d)+' — nhiều khả năng do một giao dịch chưa ghi giờ, bấm để xem'
+      : 'Thiếu một khoản '+(g.gap<0?'chi':'thu')+' khoảng '+money(Math.abs(g.gap))+'₫ trước '+ddmm(g.d)+' — bấm để soi',
+    k:'chain:'+g.key}));
   const chuaMa=fixedItems().filter(x=>!x.mp);
-  if(chuaMa.length)out.push({cls:'amber',t:chuaMa.length+' khoản cố định chưa gắn mã nhận diện — nhịp tiêu sẽ sai',k:'budget'});
+  if(chuaMa.length)out.push({cls:'grey',t:chuaMa.length+' khoản cố định chưa gắn mã nhận diện — đang đoán theo số tiền, gắn mã cho chắc',k:'budget'});
   const ds=daysSinceBackup();
   if(DB.txns.length>=10&&(ds===null||ds>30))out.push({cls:'grey',t:ds===null?'Sổ chưa từng được sao lưu':'Đã '+ds+' ngày chưa sao lưu',k:'backup'});
   return out;
 }
 function jump(k){
+  if(k.slice(0,6)==='chain:'){open.chain=k.slice(6);render();
+    setTimeout(()=>{const e=document.getElementById('sec-chain');if(e)e.scrollIntoView({block:'start'});},30);return;}
   if(k==='over'){bTab='run';open.bhm=true;go('budget');return;}
   if(k==='bal')open.bal=true;
   if(k==='backup'){go('set');return;}
@@ -1492,6 +1578,125 @@ function jump(k){
   if(k==='debt'){go('debt');return;}
   render();
   setTimeout(()=>{const e=document.getElementById('sec-'+k);if(e)e.scrollIntoView({block:'start'});},30);
+}
+function chainClose(){open.chain='';render();}
+/* một dòng trong bảng giải thích: tên · ghi chú nhỏ · số tiền */
+function LN(t,v,sub,neg){
+  return `<div class="src" style="padding:9px 14px"><div style="min-width:0">
+    <div class="src-n" style="font-size:13.5px">${t}</div>${sub?`<div class="src-m">${sub}</div>`:''}</div>
+    <div class="src-a ${neg?'neg':''}" style="font-size:14px">${neg?'−':''}${money(v)}</div></div>`;
+}
+/* Soi một mốc số dư lệch: mốc trước → các giao dịch ở giữa → mốc sau. */
+function chainPanel(key){
+  const g=chainGap(key);
+  if(!g)return `<div class="ok">Mốc số dư này đã khớp lại rồi.</div>`;
+  const dt=s2=>s2?ddmm(s2.slice(0,10))+(s2.length>10?' '+s2.slice(11):''):'';
+  let x=`<h2 class="hl" id="sec-chain"><i style="background:var(--info)"></i><b>Soi chuỗi số dư</b>
+    <button style="background:none;border:0;padding:0;font-size:12px;font-weight:600;color:var(--jade)" onclick="chainClose()">đóng</button></h2>
+    <div class="panel">
+    <div class="daygroup">NGÂN HÀNG BÁO LÚC ${esc(dt(g.from))}</div>
+    ${LN('Số dư gốc',g.fromB,'')}
+    <div class="daygroup">${g.rows.length} GIAO DỊCH GIỮA HAI MỐC</div>`;
+  g.rows.forEach(r=>{
+    const nghi=g.culprit&&r===g.culprit;
+    x+=`<div class="src" style="padding:9px 14px${nghi?';background:var(--tint)':''}"><div style="min-width:0">
+      <div class="src-n" style="font-size:13.5px">${esc(r.name||'(không tên)')}</div>
+      <div class="src-m">${ddmm(r.d)}${r.tm?' '+r.tm:' · <b>chưa ghi giờ</b>'}${r.b?' · ngân hàng báo số dư '+money(r.b):''}${nghi?' · nghi rơi nhầm khoảng':''}</div></div>
+      <div class="src-a ${r.delta<0?'neg':''}" style="font-size:14px">${r.delta<0?'−':'+'}${money(Math.abs(r.delta))}</div></div>`;});
+  x+=`<div class="src total"><div><div class="src-n">APP TÍNH RA</div>
+      <div class="src-m">${short(g.fromB)} ${g.exp-g.fromB<0?'−':'+'} ${short(Math.abs(g.exp-g.fromB))}</div></div>
+      <div class="src-a">${money(g.exp)}</div></div>
+    <div class="src total"><div><div class="src-n">NGÂN HÀNG BÁO LÚC ${ddmm(g.d)}${g.tm?' '+g.tm:''}</div>
+      <div class="src-m">lệch ${money(Math.abs(g.gap))} — ${g.gap<0?'app tính dư, tức sổ đang thiếu một khoản chi':'app tính thiếu, tức sổ đang thiếu một khoản thu'}</div></div>
+      <div class="src-a">${money(g.b)}</div></div></div>
+    <div class="sp"></div>`;
+  const nghi=chainSuspects(g);
+  if(nghi.length){
+    x+=`<div class="stack-note" style="margin-bottom:8px"><span>Dò trong sổ thấy ${nghi.length} khoản bù vừa khít ${money(Math.abs(g.gap))}₫. Nếu Vy đã đối chiếu và chắc là không thiếu giao dịch nào, thì lệch nhiều khả năng do một trong những khoản này.</span></div>
+      <div class="panel">`;
+    nghi.forEach(k=>{x+=`<div class="src" style="padding:9px 14px"><div style="min-width:0">
+      <div class="src-n" style="font-size:13.5px">${esc(k.t.n||'(không tên)')}</div>
+      <div class="src-m">${ddmm(k.t.d)}${k.t.tm?' '+k.t.tm:''} · ${esc(srcOf(k.t.s).n)} · ${esc(k.ly)}</div></div>
+      <div class="src-a ${k.delta<0?'neg':''}" style="font-size:14px">${k.delta<0?'−':'+'}${money(Math.abs(k.delta))}</div></div>`;});
+    x+=`</div><div class="sp"></div>`;
+  }
+  x+=`<div class="stack-note"><span>`;
+  if(g.why==='gio')x+=`Khoản <b>${esc(g.culprit.name||'không tên')}</b> chưa ghi giờ nên app xếp nó vào lúc 00:00 và tính vào khoảng này. Nếu thật ra nó xảy ra sau mốc trên thì chuỗi không hề thiếu gì — mở giao dịch đó điền giờ là hết lệch, hoặc bấm nút dưới để khỏi báo nữa.`;
+  else if(nghi.length)x+=`Ngoài mấy khoản trên, lệch còn có thể do một giao dịch trong khoảng bị nhập thiếu hoặc thừa đúng ${money(Math.abs(g.gap))}₫, hoặc do số dư ${money(g.b)} ở mốc dưới gõ nhầm.`;
+  else x+=`Không có khoản nào trong sổ bù vừa khít ${money(Math.abs(g.gap))}₫. Vậy hoặc là thiếu hẳn một giao dịch chưa nhập, hoặc một giao dịch trong khoảng bị nhập sai số tiền đúng ${money(Math.abs(g.gap))}₫, hoặc số dư ${money(g.b)} ở mốc dưới gõ nhầm. Đối chiếu danh sách trên với app BIDV là ra.`;
+  x+=`</span></div>
+    <div class="sp"></div><button class="btn ghost" onclick="chainAck('${esc(key)}')">Đã kiểm tra, không báo mốc này nữa</button>`;
+  return x;
+}
+/* Ngân sách còn lại — số nào trừ số nào */
+function paceWhy(pa){
+  const b=pa.bd;
+  let x=`<div class="panel" style="border-radius:0 0 var(--r) var(--r);border-top:0">
+    <div class="daygroup">ĐƯỢC TIÊU CẢ THÁNG</div>`;
+  b.gr.forEach(g=>{
+    const extra=[g.o?(g.o>0?'bù sang +':'bù đi ')+money(g.o):'',g.dr?'rút từ tồn +'+money(g.dr):'']
+      .filter(Boolean).join(' · ');
+    x+=LN(esc(g.n),g.tot,extra?'hạn mức '+money(g.b)+' · '+extra:'');
+  });
+  if(!b.gr.length)x+=`<div class="src" style="padding:9px 14px"><div class="src-m">Chưa đặt hạn mức nhóm nào.</div></div>`;
+  x+=`<div class="src total"><div><div class="src-n">TỔNG ĐƯỢC TIÊU</div>
+      <div class="src-m">không gồm Tiết kiệm, Trả nợ, Cho mượn và chi phí cố định</div></div>
+      <div class="src-a">${money(pa.duTru)}</div></div>
+    <div class="daygroup">ĐÃ TIÊU</div>`;
+  x+=LN('Tổng chi tháng này',b.chiTong,'mọi giao dịch chi, kể cả cố định');
+  b.fx.forEach(f=>{
+    const lech=f.it.a?Math.round(Math.abs(f.t.a-f.it.a)/f.it.a*100):0;
+    x+=LN(esc(f.it.name||f.t.n||'(không tên)'),f.t.a,
+      ddmm(f.t.d)+' · '+(f.it.by==='ma'?'khoản cố định, khớp theo mã':'khoản cố định, khớp theo số tiền'+(lech?', lệch '+lech+'%':'')),1);
+  });
+  if(b.tienNgoai)x+=LN('Tiết kiệm, Trả nợ, Cho mượn',b.tienNgoai,'ba nhóm này tính riêng, không nằm trong nhịp tiêu',1);
+  x+=`<div class="src total"><div><div class="src-n">CÒN LẠI LÀ CHI LINH HOẠT</div>
+      <div class="src-m">${short(b.chiTong)} − ${short(b.chiTong-pa.daChi)}</div></div>
+      <div class="src-a">${money(pa.daChi)}</div></div>`;
+  if(b.khongHM.length){
+    x+=`<div class="daygroup">ĐÃ TIÊU MÀ CHƯA ĐẶT HẠN MỨC</div>`;
+    b.khongHM.forEach(k=>x+=LN(esc(k.n),k.a,'đang trừ vào ngân sách chung'));
+  }
+  x+=`<div class="daygroup">KẾT QUẢ</div>`;
+  x+=LN('Ngân sách còn lại',pa.conDuoc,money(pa.duTru)+' − '+money(pa.daChi));
+  x+=LN('Định mức ngày',Math.round(pa.duTru/pa.nd),money(pa.duTru)+' ÷ '+pa.nd+' ngày trong tháng');
+  x+=LN('Thực tế được tiêu',pa.conLai?Math.round(pa.conDuoc/pa.conLai):0,
+    pa.conLai?money(pa.conDuoc)+' ÷ '+pa.conLai+' ngày còn lại':'hết tháng rồi');
+  x+=`</div>`;
+  if(b.khongHM.length)x+=`<div class="sp"></div><div class="stack-note"><span>${b.khongHM.length} nhóm đang tiêu mà chưa có hạn mức riêng, nên phần đó ăn vào ngân sách chung. Đặt hạn mức cho chúng ở tab Ngân sách thì con số sẽ sát hơn.</span></div>`;
+  return x;
+}
+/* Dự trù để dành — chi tiết từng nhóm cho cả hai cách */
+function fcDetail(f){
+  const trong=`<div class="src" style="padding:9px 14px"><div class="src-m">Không có nhóm nào.</div></div>`;
+  let x=`<div class="panel" style="border-radius:0 0 var(--r) var(--r);border-top:0">
+    <div class="daygroup">CÁCH 1 — SẼ CHI CẢ THÁNG</div>`;
+  const c1=f.bd.filter(g=>g.ra);
+  c1.forEach(g=>x+=LN(esc(g.n),g.ra,g.vuot
+    ?'đã tiêu '+money(g.v)+' vượt hạn mức '+money(g.a)+', lấy số đã tiêu'
+    :'hạn mức '+money(g.a)+' · đã tiêu '+money(g.v)));
+  x+=(c1.length?'':trong)+`<div class="src total"><div class="src-n">CỘNG LẠI</div>
+      <div class="src-a">${money(f.raPlan)}</div></div>
+    <div class="daygroup">CÁCH 2 — CỐ ĐỊNH VÀ NỢ CÒN PHẢI TRẢ</div>`;
+  const c2=f.bd.filter(g=>g.cd);
+  c2.forEach(g=>x+=LN(esc(g.n),g.cd,g.id==='trano'
+    ?'nghĩa vụ nợ '+money(g.a)+' − đã trả '+money(Math.min(g.v,g.a))
+    :'kế hoạch '+money(g.fo.plan)+' − đã trả '+money(g.fo.da)));
+  x+=(c2.length?'':trong)+`<div class="src total"><div class="src-n">CỘNG LẠI</div>
+      <div class="src-a">${money(f.cdConLai)}</div></div>
+    <div class="daygroup">CÁCH 2 — TỐC ĐỘ CHI LINH HOẠT</div>`;
+  const c3=f.bd.filter(g=>g.lh).sort((a,b)=>b.lh-a.lh);
+  c3.forEach(g=>x+=LN(esc(g.n),g.lh,g.fo.chi
+    ?'đã tiêu '+money(g.v)+' − cố định đã trả '+money(Math.min(g.fo.chi,g.fo.plan))
+    :(g.noBud?'chưa đặt hạn mức':'')));
+  x+=(c3.length?'':trong)+`<div class="src total"><div><div class="src-n">TỐC ĐỘ MỖI NGÀY</div>
+      <div class="src-m">${money(f.lhDaChi)} ÷ ${f.passed} ngày đã qua</div></div>
+      <div class="src-a">${money(Math.round(f.rate))}</div></div>
+    <div class="src total"><div><div class="src-n">CÒN PHẢI TIÊU</div>
+      <div class="src-m">${money(Math.round(f.rate))} × ${f.conLai} ngày còn lại</div></div>
+      <div class="src-a">${money(Math.round(f.lhConLai))}</div></div></div>
+    <div class="sp"></div><div class="stack-note"><span>Dòng "đã chi tới hôm nay" của Cách 2 chính là phần Cơ cấu chi tiêu ở trên, nên không lặp lại ở đây.</span></div>`;
+  return x;
 }
 function vHome(){
   const list=monthTx(cursor), chi=sumChi(list);
@@ -1535,9 +1740,9 @@ function vHome(){
     if(pa.duTru>0){
       const nhanh=pa.tyChi>pa.tyNgay;
       const chuan=pa.chuan, tuNay=pa.conLai?pa.conDuoc/pa.conLai:0, lech=tuNay-chuan;
-      h+=`<div class="sp"></div><div class="panel" style="padding:14px">
+      h+=`<div class="sp"></div><div class="panel" style="padding:14px${open.pw?';border-radius:var(--r) var(--r) 0 0':''}" onclick="toggle('pw')">
         <div style="text-align:center">
-          <div class="src-m">Ngân sách còn lại</div>
+          <div class="src-m">Ngân sách còn lại ${open.pw?'▾':'▸'}</div>
           <div style="font-size:32px;font-weight:600;letter-spacing:-.025em;margin:2px 0">${money(pa.conDuoc)}</div>
           <div class="src-m">còn ${pa.conLai} ngày · đã tiêu ${money(pa.daChi)} / ${money(pa.duTru)}</div></div>
         <div class="pace" style="margin-top:13px"><i style="width:${Math.min(100,pa.tyChi*100)}%;background:${nhanh?'var(--amber)':'var(--jade)'}"></i>
@@ -1552,6 +1757,7 @@ function vHome(){
             <div style="font-size:18px;font-weight:600;margin-top:3px">${money(tuNay)}</div>
             <div style="font-size:11px;font-weight:500;color:${lech<0?'var(--warntx)':'var(--jade)'}">${lech<0?'↓ hụt '+money(-lech):'↑ dôi ra '+money(lech)}</div></div>
         </div></div>`;
+      if(open.pw)h+=paceWhy(pa);
     }
     if(chi){
       h+=`<h2 class="hl"><i style="background:${gcA('#C8792B')}"></i><b>Cơ cấu chi tiêu</b><em>${money(chi)}</em></h2>${treemap(list,chi)}
@@ -1583,6 +1789,7 @@ function vHome(){
   if(al.length){
     h+=`<div class="alerts">`+al.map(a=>`<button class="al ${a.cls}" onclick="jump('${a.k}')"><span>${a.t}</span><span>›</span></button>`).join('')+`</div>`;
   }
+  if(open.chain)h+=`<div class="sp"></div>`+chainPanel(open.chain);
 
   /* dự trù cuối tháng, chỉ có nghĩa khi đang xem tháng hiện tại */
   if(ym(cursor)===ym(new Date())&&(DB.income||0)>0){
@@ -1615,7 +1822,9 @@ function vHome(){
           <div class="src-a ${f.theoDa<f.tkKeHoach?'neg':''}" style="${f.theoDa>=f.tkKeHoach?'color:var(--jade)':''}">${money(f.theoDa)}</div></div>`
         :`<div class="src" style="padding:10px 14px"><div class="src-m">Chưa đủ ngày để ước tốc độ, đợi qua mùng 5.</div></div>`}
       </div>
-      <div class="sp"></div><div class="stack-note"><span>Tiết kiệm là phần còn lại sau khi mọi nhóm khác tiêu xong. Tiêu vừa đủ hạn mức thì Cách 1 đúng bằng hạn mức Tiết kiệm; thấp hơn là tháng này để dành hụt.</span></div>`;
+      <div class="sp"></div><div class="stack-note"><span>Tiết kiệm là phần còn lại sau khi mọi nhóm khác tiêu xong. Tiêu vừa đủ hạn mức thì Cách 1 đúng bằng hạn mức Tiết kiệm; thấp hơn là tháng này để dành hụt.</span>
+        <span><button style="background:none;border:0;padding:0;color:var(--jade);font-weight:600;font-size:12.5px" onclick="toggle('fcd')">${open.fcd?'thu gọn':'chi tiết từng nhóm'}</button></span></div>`;
+      if(open.fcd)h+=`<div class="sp"></div>`+fcDetail(f);
     }
     const xau=f.duocUoc?Math.min(f.keHoach,f.theoDa):f.keHoach;
     if(xau<0)h+=`<div class="sp"></div><div class="err">Theo đà này tháng nay không để dành được đồng nào, còn thiếu ${money(-xau)}₫. Cần cắt bớt ở nhóm linh hoạt ngay từ bây giờ.</div>`;
@@ -1963,12 +2172,12 @@ function vInfo(){
   const R=[
    ['Số dư mỗi nguồn','số dư ban đầu + tiền vào − tiền ra ± chuyển giữa các nguồn ± dòng điều chỉnh khi đối chiếu.'],
    ['Đối chiếu BIDV','so số app tính tại đúng thời điểm ngân hàng báo số dư với số dư đó, không so với hôm nay.'],
-   ['Chuỗi số dư','lấy hai giao dịch BIDV liền nhau, kiểm số dư trước cộng trừ số tiền có ra số dư sau không. Các mảnh của một giao dịch đã tách được gộp lại trước khi kiểm.'],
+   ['Chuỗi số dư','lấy hai mốc ngân hàng có báo số dư, cộng dồn mọi giao dịch BIDV ở giữa xem có ra số dư sau không. Các mảnh của một giao dịch đã tách được gộp lại, dòng điều chỉnh không tính. Giao dịch chưa ghi giờ bị xếp vào 00:00 nên có thể rơi nhầm khoảng — app tự nhận ra và nói rõ trong cảnh báo. Bấm vào cảnh báo để soi từng khoảng; xác nhận rồi thì mốc đó không báo lại.'],
    ['Thu nhập','chỉ cộng ba nhóm Lương, Thưởng, Thu khác. Đi vay và Thu nợ không phải thu nhập.'],
    ['Nguồn khả dụng','tổng thu nhập − chi phí cố định − nghĩa vụ nợ trong kỳ. Đây là phần Vy có quyền chia.'],
    ['Ngân sách còn lại','mẫu số của nhịp tiêu trừ đi phần đã tiêu cùng phạm vi.'],
-   ['Nhịp tiêu — mẫu số','tổng hạn mức các nhóm linh hoạt, trừ Tiết kiệm, trừ Trả nợ, trừ Cho mượn, cộng phần hạn mức tồn đã chủ động rút trong tháng.'],
-   ['Nhịp tiêu — tử số','tổng chi cùng phạm vi, loại giao dịch đã khớp chi phí cố định.'],
+   ['Nhịp tiêu — mẫu số','tổng hạn mức các nhóm linh hoạt, trừ Tiết kiệm, trừ Trả nợ, trừ Cho mượn, cộng khoản bù qua lại giữa các nhóm và phần hạn mức tồn đã chủ động rút trong tháng.'],
+   ['Nhịp tiêu — tử số','tổng chi cùng phạm vi, loại giao dịch đã khớp chi phí cố định — kể cả khoản cố định chưa gắn mã, khớp theo số tiền xấp xỉ 15%. Chạm vào khối Ngân sách còn lại để xem bảng số nào trừ số nào.'],
    ['Định mức ngày','mẫu số chia số ngày trong tháng, cố định suốt tháng.'],
    ['Thực tế được tiêu','ngân sách còn lại chia số ngày còn lại, đổi theo thực tế mỗi ngày.'],
    ['Hạn mức một nhóm','chi phí cố định thuộc nhóm đó cộng phần linh hoạt đã phân bổ. Riêng Trả nợ lấy đúng kỳ nợ đến hạn trong tháng. Hạn mức lưu riêng từng tháng, tháng chưa đặt thì thừa kế tháng gần nhất trước đó.'],
@@ -2053,7 +2262,12 @@ function vSet(){
   if(msg)h+=`<div class="${msgType==='ok'?'ok':'err'}">${esc(msg)}</div>`;
   h+=`<h2>Dữ liệu</h2><div class="empty" style="text-align:left">${DB.txns.length} giao dịch đang lưu.<br>
     <span style="font-size:12.5px;color:var(--ink-3)">Phiên bản ${VERSION} · lưu tại ${window.storage?'kho của Claude':'trình duyệt máy này'}</span></div>
-    <div class="sp"></div><button class="btn danger" onclick="wipe()">Xóa toàn bộ dữ liệu</button>`;
+    <div class="sp"></div>`;
+  const nOK=Object.keys(DB.chainOK||{}).length;
+  if(nOK)h+=`<div class="stack-note"><span>Đã xác nhận ${nOK} mốc số dư lệch, app không báo lại nữa.
+    <button style="background:none;border:0;padding:0;color:var(--jade);font-weight:600;font-size:12.5px;text-decoration:underline" onclick="chainReset()">Bỏ xác nhận</button></span></div>
+    <div class="sp"></div>`;
+  h+=`<button class="btn danger" onclick="wipe()">Xóa toàn bộ dữ liệu</button>`;
   return h;
 }
 

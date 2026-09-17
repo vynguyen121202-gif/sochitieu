@@ -1,20 +1,37 @@
-:root{--ink:#1B2A33;--ink-2:#5C6F78;--ink-3:#8FA0A7;--paper:#ECEFEA;--card:#FFFFFF;
-    --line:#DCE1DC;--line-2:#EDF0EC;--jade:#0E6B5C;--amber:#C8792B;--brick:#9C4A3C;--r:10px;
-    --row:#F7F9F6;--rowb:#F2F5F1;--field:#FAFBF9;--greybg:#F1F4F0;--info:#3D5A80;
-    --warnbg:#FBF0E6;--warnbd:#E8CDA9;--warntx:#8A5418;--errbg:#F9E9E6;--errtx:#8A3A2E;--okbg:#E9F2EC;
-    --tint:#F4F8F4;--tintb:#E4EFE9;--tintbd:#C6DDD1;--tinttx:#0B4A40;--tinttx2:#6E8478;
-    --trackbg:#DFE4DE;--navbg:#fffffff2}
-  :root[data-theme="dark"]{--ink:#EDF2F0;--ink-2:#9FB2AA;--ink-3:#778A83;--paper:#10171A;--card:#1A2427;
-      --line:#28353A;--line-2:#222E32;--jade:#43A98F;--amber:#D9A05B;--brick:#CE7565;
-      --row:#1C282B;--rowb:#202D30;--field:#1E2A2D;--greybg:#232F33;--info:#7FA6D6;
-      --warnbg:#2C2218;--warnbd:#5A452A;--warntx:#E3B677;--errbg:#2E1E1B;--errtx:#EA9C8C;--okbg:#1B2E28;
+:root{--ink:#3E3660;--ink-2:#7C7296;--ink-3:#A79EC2;--paper:#EAF1FC;--card:rgba(255,255,255,.86);
+    --line:#E1D9F0;--line-2:#EFE8F8;--jade:#C2568B;--amber:#D1822F;--brick:#B5574C;--r:16px;
+    --row:#F6F1FB;--rowb:#F0E8F9;--field:#FBF8FE;--greybg:#F2EDF8;--info:#6C87C7;
+    --warnbg:#FCEFE1;--warnbd:#EFCC9E;--warntx:#93571B;--errbg:#FBEAEA;--errtx:#963A34;--okbg:#EAF4EE;
+    --tint:#F0F8F3;--tintb:#DFF0E7;--tintbd:#BFE0D0;--tinttx:#1F6B52;--tinttx2:#6E8478;
+    --trackbg:#E6DFF2;--navbg:rgba(255,255,255,.92);--shadow:0 8px 24px -10px rgba(120,90,160,.22)}
+  :root[data-theme="dark"]{--ink:#F1EDFA;--ink-2:#B7ACD2;--ink-3:#8C80AA;--paper:#161026;--card:rgba(40,30,58,.80);
+      --line:#3B2E52;--line-2:#2E2440;--jade:#E58FBE;--amber:#E3A75E;--brick:#D98277;
+      --row:#20182F;--rowb:#251C36;--field:#241A38;--greybg:#2A2040;--info:#93AEEA;
+      --warnbg:#2E2416;--warnbd:#5C4726;--warntx:#E7B876;--errbg:#301E1F;--errtx:#E79086;--okbg:#1B2E28;
       --tint:#1B2C27;--tintb:#22392F;--tintbd:#2E4A3E;--tinttx:#7ED6B9;--tinttx2:#8FB3A4;
-    --trackbg:#26333A;--navbg:#141D20f2;color-scheme:dark}
+    --trackbg:#3A2E52;--navbg:rgba(28,20,44,.92);--shadow:0 8px 24px -10px rgba(0,0,0,.45);color-scheme:dark}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;padding:0}
-  body{background:var(--paper);color:var(--ink);
+  html{background:var(--paper)}
+  body{background:transparent;color:var(--ink);position:relative;
     font-family:'Be Vietnam Pro',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
     font-size:15px;line-height:1.5;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+  body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+    background-image:linear-gradient(180deg,rgba(255,255,255,.32),rgba(255,255,255,.10) 35%,rgba(255,255,255,.32)),url("Background app.jpg");
+    background-size:cover,cover;background-position:center,center;background-repeat:no-repeat,no-repeat}
+  :root[data-theme="dark"] body::before{
+    background-image:radial-gradient(1.6px 1.6px at 12% 22%,rgba(255,236,214,.65) 45%,transparent 46%),
+      radial-gradient(1.3px 1.3px at 78% 12%,rgba(255,236,214,.55) 45%,transparent 46%),
+      radial-gradient(1.3px 1.3px at 40% 8%,rgba(255,236,214,.5) 45%,transparent 46%),
+      radial-gradient(1.6px 1.6px at 90% 60%,rgba(255,236,214,.5) 45%,transparent 46%),
+      radial-gradient(1.3px 1.3px at 25% 70%,rgba(255,236,214,.4) 45%,transparent 46%),
+      radial-gradient(120% 60% at 15% -10%,rgba(219,140,196,.28),transparent 60%),
+      radial-gradient(110% 60% at 95% 10%,rgba(130,160,235,.22),transparent 55%),
+      radial-gradient(150% 80% at 50% 115%,rgba(102,76,150,.45),transparent 60%);
+    background-color:var(--paper);
+    background-size:auto,auto,auto,auto,auto,cover,cover,cover;
+    background-position:0 0,0 0,0 0,0 0,0 0,center,center,center;
+    background-repeat:repeat,repeat,repeat,repeat,repeat,no-repeat,no-repeat,no-repeat}
   .wrap{max-width:480px;margin:0 auto;padding:0 18px 108px;min-height:100vh}
   button{font-family:inherit;font-size:inherit;color:inherit;cursor:pointer}
   input,select,textarea{font-family:inherit;font-size:16px;color:inherit}
@@ -70,6 +87,10 @@
   h2.hl b{flex:1;min-width:0;font-weight:600}
   h2.hl em{font-style:normal;font-size:12px;color:var(--ink-2);font-weight:500}
   .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+
+  .panel,.kpi,.gtile,.fold,.strip,.chip,.empty,.days,.days-x{
+    box-shadow:var(--shadow);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+  .btn.ghost,.btn.danger{backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
 
   .cat{display:flex;align-items:flex-start;gap:11px;padding:13px 14px;border-bottom:1px solid var(--line-2);background:var(--card);width:100%;border-left:0;border-right:0;border-top:0;text-align:left}
   .cat:last-child{border-bottom:0}
@@ -169,7 +190,7 @@
   .warn{background:var(--warnbg);border:1px solid var(--warnbd);color:var(--warntx);padding:12px 14px;border-radius:var(--r);font-size:13.5px;margin-top:12px}
   .ok{background:var(--okbg);border:1px solid #BFD8C8;color:#0E6B5C;padding:12px 14px;border-radius:var(--r);font-size:13.5px;margin-top:12px}
 
-  nav{position:fixed;left:0;right:0;bottom:0;background:var(--navbg);backdrop-filter:blur(12px);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+  nav{position:fixed;left:0;right:0;bottom:0;background:var(--navbg);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
   .nav-in{max-width:480px;margin:0 auto;display:flex}
   nav button{flex:1;background:none;border:0;padding:11px 2px 13px;font-size:10.5px;white-space:nowrap;color:var(--ink-3);font-weight:500;display:flex;flex-direction:column;align-items:center;gap:4px}
   nav button b{font-size:17px;font-weight:400;line-height:1}

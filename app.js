@@ -1,25 +1,25 @@
 /* ==================== CÂY NHÓM — mã cố định vĩnh viễn ==================== */
 const GROUPS=[
- {id:'an', k:'chi', n:'Ăn uống', c:'#0E6B5C', subs:[['an_sang','Ăn sáng'],['an_ngoai','Ăn ngoài'],['an_cafe','Cà phê, trà chiều']]},
- {id:'cho',sn:'Chợ, siêu thị', k:'chi', n:'Chợ & siêu thị', c:'#4E8C5A', subs:[['cho_vat','Ăn vặt'],['cho_giavi','Gia vị'],['cho_mi','Mì gói']]},
- {id:'di', k:'chi', n:'Di chuyển', c:'#2F7A93', subs:[['di_xang','Xăng xe'],['di_grab','Grab, taxi'],['di_guixe','Gửi xe'],['di_suaxe','Sửa xe'],['di_ve','Vé xe, vé máy bay']]},
+ {id:'an', k:'chi', n:'Ăn uống', c:'#C0766B', subs:[['an_sang','Ăn sáng'],['an_ngoai','Ăn ngoài'],['an_cafe','Cà phê, trà chiều']]},
+ {id:'cho',sn:'Chợ, siêu thị', k:'chi', n:'Chợ & siêu thị', c:'#7E9455', subs:[['cho_vat','Ăn vặt'],['cho_giavi','Gia vị'],['cho_mi','Mì gói']]},
+ {id:'di', k:'chi', n:'Di chuyển', c:'#5F86AE', subs:[['di_xang','Xăng xe'],['di_grab','Grab, taxi'],['di_guixe','Gửi xe'],['di_suaxe','Sửa xe'],['di_ve','Vé xe, vé máy bay']]},
  {id:'hd', sn:'Hóa đơn', k:'chi', n:'Hóa đơn & tiện ích', c:'var(--info)', subs:[['hd_dt','Điện thoại'],['hd_ai','A.I']]},
- {id:'qa', sn:'Quần áo', k:'chi', n:'Quần áo & giày dép', c:'#7A5C9E', subs:[['qa_ao','Quần áo'],['qa_giay','Giày dép'],['qa_tui','Túi xách, phụ kiện']]},
- {id:'gdu',sn:'Gia dụng', k:'chi', n:'Đồ gia dụng', c:'#5B6E8C', subs:[]},
- {id:'ld', sn:'Làm đẹp', k:'chi', n:'Làm đẹp & chăm sóc bản thân', c:'#B4557A', subs:[]},
- {id:'sk', k:'chi', n:'Sức khỏe', c:'#C05A55', subs:[['sk_thuoc','Thuốc'],['sk_tpcn','Thực phẩm chức năng'],['sk_kham','Khám bệnh']]},
- {id:'gt', k:'chi', n:'Giải trí', c:'#C8792B', subs:[['gt_dichoi','Đi chơi, du lịch'],['gt_phim','Phim, sách, game'],['gt_ban','Đi ăn với bạn bè']]},
- {id:'gd', sn:'Gia đình', k:'chi', n:'Gia đình & hiếu hỉ', c:'#9C4A3C', subs:[['gd_bome','Biếu bố mẹ'],['gd_cuoi','Cưới hỏi'],['gd_ma','Ma chay'],['gd_qua','Quà tặng']]},
- {id:'ht', k:'chi', n:'Học tập', c:'#6B7B2E', subs:[['ht_khoa','Khóa học'],['ht_sach','Sách'],['ht_thi','Thi chứng chỉ']]},
- {id:'tk', sn:'Tiết kiệm', k:'chi', n:'Tiết kiệm & đầu tư (tiền nhàn rỗi)', c:'#2E7D6B', subs:[['tk_gui','Gửi tiết kiệm'],['tk_vang','Mua vàng']]},
- {id:'tt',  k:'chi', n:'Từ thiện', c:'#8E3B6B', subs:[]},
- {id:'muon',sn:'Cho mượn', k:'chi',n:'Cho mượn', c:'#8C7B4A', subs:[]},
- {id:'trano',sn:'Trả nợ', k:'chi',n:'Trả nợ', c:'#7A6A55', subs:[['trano_cn','Trả nợ cá nhân'],['trano_gop','Trả góp']]},
- {id:'luong', k:'thu', n:'Lương', c:'#0E6B5C', subs:[]},
- {id:'thuong',sn:'Thưởng', k:'thu', n:'Thưởng', c:'#4E8C5A', subs:[['thuong_tet','Thưởng lễ Tết'],['thuong_hq','Thưởng hiệu quả']]},
- {id:'thuno', sn:'Thu nợ', k:'thu', n:'Thu nợ', c:'#8C7B4A', subs:[]},
- {id:'divay', sn:'Đi vay', k:'thu', n:'Đi vay', c:'#B4557A', subs:[]},
- {id:'tkhac', sn:'Thu khác', k:'thu', n:'Thu khác', c:'#7C8A92', subs:[['tkhac_hoan','Hoàn tiền'],['tkhac_ban','Bán đồ cũ'],['tkhac_cho','Người nhà cho'],['tkhac_lai','Lãi tiết kiệm, cổ tức']]}
+ {id:'qa', sn:'Quần áo', k:'chi', n:'Quần áo & giày dép', c:'#8E76AB', subs:[['qa_ao','Quần áo'],['qa_giay','Giày dép'],['qa_tui','Túi xách, phụ kiện']]},
+ {id:'gdu',sn:'Gia dụng', k:'chi', n:'Đồ gia dụng', c:'#71809A', subs:[]},
+ {id:'ld', sn:'Làm đẹp', k:'chi', n:'Làm đẹp & chăm sóc bản thân', c:'#B4709A', subs:[]},
+ {id:'sk', k:'chi', n:'Sức khỏe', c:'#C07470', subs:[['sk_thuoc','Thuốc'],['sk_tpcn','Thực phẩm chức năng'],['sk_kham','Khám bệnh']]},
+ {id:'gt', k:'chi', n:'Giải trí', c:'#C08F4E', subs:[['gt_dichoi','Đi chơi, du lịch'],['gt_phim','Phim, sách, game'],['gt_ban','Đi ăn với bạn bè']]},
+ {id:'gd', sn:'Gia đình', k:'chi', n:'Gia đình & hiếu hỉ', c:'#A96A58', subs:[['gd_bome','Biếu bố mẹ'],['gd_cuoi','Cưới hỏi'],['gd_ma','Ma chay'],['gd_qua','Quà tặng']]},
+ {id:'ht', k:'chi', n:'Học tập', c:'#7A9470', subs:[['ht_khoa','Khóa học'],['ht_sach','Sách'],['ht_thi','Thi chứng chỉ']]},
+ {id:'tk', sn:'Tiết kiệm', k:'chi', n:'Tiết kiệm & đầu tư (tiền nhàn rỗi)', c:'#47897A', subs:[['tk_gui','Gửi tiết kiệm'],['tk_vang','Mua vàng']]},
+ {id:'tt',  k:'chi', n:'Từ thiện', c:'#9A6B95', subs:[]},
+ {id:'muon',sn:'Cho mượn', k:'chi',n:'Cho mượn', c:'#97885F', subs:[]},
+ {id:'trano',sn:'Trả nợ', k:'chi',n:'Trả nợ', c:'#8A7D6C', subs:[['trano_cn','Trả nợ cá nhân'],['trano_gop','Trả góp']]},
+ {id:'luong', k:'thu', n:'Lương', c:'#56937F', subs:[]},
+ {id:'thuong',sn:'Thưởng', k:'thu', n:'Thưởng', c:'#7E9E6A', subs:[['thuong_tet','Thưởng lễ Tết'],['thuong_hq','Thưởng hiệu quả']]},
+ {id:'thuno', sn:'Thu nợ', k:'thu', n:'Thu nợ', c:'#97885F', subs:[]},
+ {id:'divay', sn:'Đi vay', k:'thu', n:'Đi vay', c:'#B4709A', subs:[]},
+ {id:'tkhac', sn:'Thu khác', k:'thu', n:'Thu khác', c:'#8794A0', subs:[['tkhac_hoan','Hoàn tiền'],['tkhac_ban','Bán đồ cũ'],['tkhac_cho','Người nhà cho'],['tkhac_lai','Lãi tiết kiệm, cổ tức']]}
 ];
 const SRC=[{id:'bidv',n:'BIDV'},{id:'vi',n:'Ví điện tử'},{id:'tm',n:'Tiền mặt'}];
 const srcOf=id=>SRC.find(s=>s.id===id)||SRC[0];
@@ -622,7 +622,7 @@ function layoutBlocks(items,W,H){
   if(list.length>6){
     const tailv=list.slice(5).reduce((s,x)=>s+x.v,0);
     const merged=list.slice(5);
-    list=list.slice(0,5).concat([{id:'__o',name:'Khác',v:tailv,col:gcA('#8FA0A7'),sub:true,merged}]);
+    list=list.slice(0,5).concat([{id:'__o',name:'Khác',v:tailv,col:gcA('#8794A0'),sub:true,merged}]);
   }
   const oi=list.findIndex(x=>x.id==='__o');
   if(oi>-1&&oi<list.length-1)list.push(list.splice(oi,1)[0]);
@@ -649,7 +649,7 @@ function applyTheme(){
   const m=(DB.opts&&DB.opts.theme)||'auto';
   DARK=m==='dark'?true:m==='light'?false:sysDark();
   try{document.documentElement.setAttribute('data-theme',DARK?'dark':'light');}catch(e){}
-  try{const tc=document.getElementById('themeColorMeta');if(tc)tc.setAttribute('content',DARK?'#161026':'#EAF1FC');}catch(e){}
+  try{const tc=document.getElementById('themeColorMeta');if(tc)tc.setAttribute('content',DARK?'#14161E':'#F4F5F8');}catch(e){}
 }
 function setTheme(v){DB.opts=Object.assign({},DB.opts,{theme:v});save();applyTheme();render();}
 function mixc(hex,to,k){
@@ -659,8 +659,8 @@ function mixc(hex,to,k){
   const c=Math.round(((a&255)*(1-k)+(b&255)*k));
   return '#'+((1<<24)+(r<<16)+(g<<8)+c).toString(16).slice(1);
 }
-const gcA=h=>DARK?mixc(h,'#FFFFFF',0.30):h;
-const gcF=h=>DARK?mixc(h,'#0E1416',0.26):h;
+const gcA=h=>DARK?mixc(h,'#FFFFFF',0.16):h;
+const gcF=h=>DARK?mixc(h,'#14161E',0.20):h;
 function shade(hex,k){
   const n=parseInt(hex.slice(1),16);
   const r=Math.round(((n>>16)&255)*(1-k)+255*k), g=Math.round(((n>>8)&255)*(1-k)+255*k), b=Math.round((n&255)*(1-k)+255*k);
@@ -684,7 +684,7 @@ function treemap(list,chi){
     const gs=byGroup(list); let big=[],nho=0;
     gs.forEach(([id,v])=>{ if(v/chi>=0.03)big.push({id,name:groupOf(id).sn||groupOf(id).n,v,
       col:gcA(groupOf(id).c),sub:groupOf(id).subs.length>0}); else nho+=v; });
-    if(nho>0)big.push({id:'__o',name:'Khác',v:nho,col:gcA('#8FA0A7'),sub:true});
+    if(nho>0)big.push({id:'__o',name:'Khác',v:nho,col:gcA('#8794A0'),sub:true});
     items=big;
   }
   if(!items.length)return '';
@@ -1863,7 +1863,7 @@ function vHome(){
       if(open.pw)h+=paceWhy(pa);
     }
     if(chi){
-      h+=`<h2 class="hl"><i style="background:${gcA('#C8792B')}"></i><b>Cơ cấu chi tiêu</b><em>${money(chi)}</em></h2>${treemap(list,chi)}
+      h+=`<h2 class="hl"><i style="background:${gcA('#C08F4E')}"></i><b>Cơ cấu chi tiêu</b><em>${money(chi)}</em></h2>${treemap(list,chi)}
         <div class="sp"></div><div class="stack-note"><span>Chạm một ô để xem giao dịch của nhóm đó.</span>
           ${!open.zoom&&byGroup(list).some(([id])=>groupOf(id).subs.length)?`<span>
             <button style="background:none;border:0;padding:0;color:var(--jade);font-weight:600;font-size:12.5px" onclick="askZoom()">chia nhỏ theo mục</button></span>`:''}</div>`;
@@ -1950,13 +1950,13 @@ function vHome(){
 
   const gp=goalProgress().filter(x=>x.thieu>0).slice(0,2);
   if(gp.length){
-    h+=`<h2 class="hl"><i style="background:${gcA('#2E7D6B')}"></i><b>Mục tiêu đang thực hiện</b>
+    h+=`<h2 class="hl"><i style="background:${gcA('#47897A')}"></i><b>Mục tiêu đang thực hiện</b>
       <button style="background:none;border:0;padding:0;font-size:12px;font-weight:600;color:var(--jade)" onclick="go('trend')">xem tất cả</button></h2><div class="panel">`;
     gp.forEach(x=>{const pct=x.g.target?Math.min(100,x.co/x.g.target*100):0;
       h+=`<div style="padding:12px;border-bottom:1px solid var(--line-2)">
         <div class="cat-top"><span style="font-size:13.5px;font-weight:500">${esc(x.g.name)}</span>
           <span style="font-size:13px;font-weight:500">${money(x.co)}</span></div>
-        <div class="track" style="height:6px;margin:8px 0 6px"><i style="width:${pct}%;background:#2E7D6B"></i></div>
+        <div class="track" style="height:6px;margin:8px 0 6px"><i style="width:${pct}%;background:#47897A"></i></div>
         <div class="cat-meta"><span>mục tiêu ${money(x.g.target)}</span>
           <span>${x.eta?'đủ vào '+x.eta.slice(5,7)+'/'+x.eta.slice(0,4):'chưa đặt mức tiết kiệm'}</span></div></div>`;});
     h+=`</div>`;
@@ -2274,7 +2274,7 @@ function vTrend(){
     h+=`<div style="padding:12px;border-bottom:1px solid var(--line-2);border-left:3px solid ${x.co>0?'var(--jade)':'var(--ink-3)'}">
       <div class="cat-top"><span style="font-size:13.5px;font-weight:500">${k+1} · ${esc(g.name)}</span>
         <span style="font-size:13px;font-weight:500;${x.co?'':'color:var(--ink-3)'}">${money(x.co)}</span></div>
-      <div class="track" style="height:6px;margin:8px 0 6px"><i style="width:${pct}%;background:${xong?'var(--jade)':'#2E7D6B'}"></i></div>
+      <div class="track" style="height:6px;margin:8px 0 6px"><i style="width:${pct}%;background:${xong?'var(--jade)':'#47897A'}"></i></div>
       <div class="cat-meta"><span>mục tiêu ${g.target?money(g.target):'chưa đặt'}${g.auto?(DB.efTarget?' · Vy tự đặt':' · 3 tháng chi phí'):''}${g.due?' · mong muốn '+g.due.slice(5)+'/'+g.due.slice(0,4):''}</span>
         <span style="${tre?'color:var(--amber);font-weight:500':''}">${!g.target?'chưa đủ dữ liệu':xong?'đã đủ':x.eta?'đủ vào '+x.eta.slice(5,7)+'/'+x.eta.slice(0,4):'chưa đặt mức góp'}</span></div>
       ${g.target&&x.thieu?`<div class="cat-meta" style="margin-top:3px"><span style="color:var(--tinttx)">${

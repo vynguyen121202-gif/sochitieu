@@ -1,0 +1,17 @@
+# Rác của Windows
+Thumbs.db
+desktop.ini
+*.tmp
+
+# Cài đặt riêng của máy, không phải của dự án
+.claude/settings.local.json
+
+# File sao lưu sổ xuất ra từ Cài đặt — là DỮ LIỆU cá nhân, không phải mã nguồn.
+# Muốn lưu một bản cụ thể vào repo thì thêm tay bằng: git add -f <tên file>
+sochi-backup*.json
+so-chi-tieu*.json
+
+# Ghi chú làm việc riêng của Vy — KHÔNG đẩy lên vì kho này công khai.
+# Vẫn nằm ở máy và Claude Code vẫn đọc bình thường.
+CLAUDE.md
+.claude/

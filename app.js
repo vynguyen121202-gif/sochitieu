@@ -125,7 +125,7 @@ async function load(){try{const raw=await store.get();if(raw){let d=JSON.parse(r
   DB=Object.assign({},d,{txns:Array.isArray(d.txns)?d.txns:[],debts:Array.isArray(d.debts)?d.debts:[],
     budgets:d.budgets||{},bm:d.bm||{},goals:Array.isArray(d.goals)?d.goals:[],fixedItems:Array.isArray(d.fixedItems)?d.fixedItems:[],roll:d.roll||{},offsets:Array.isArray(d.offsets)?d.offsets:[],draws:Array.isArray(d.draws)?d.draws:[],income:d.income||0,rules:d.rules||{},
     opens:Object.assign({bidv:0,vi:0,tm:0},d.opens||{}),checks:d.checks||{},
-    opts:Object.assign({ab:'off'},d.opts||{}),chainOK:d.chainOK||{},
+    opts:Object.assign({ab:'off'},d.opts||{}),chainOK:d.chainOK||{},ngayOK:d.ngayOK||{},
     efTarget:d.efTarget||0,efGop:d.efGop||0,goalPlan:Object.assign({mode:'auto',a:0},d.goalPlan||{}),
     payDays:Object.assign({k1:[5,10],k2:[15,25]},d.payDays||{}),
     lastBackup:d.lastBackup||0,v:10});}}catch(e){}}
@@ -491,22 +491,29 @@ function refineByTime(code,tm){
 }
 
 /* ==================== đọc kết quả dán ==================== */
+/* Những dòng dán vào mà không đọc được — báo cho Vy thay vì nuốt im lặng.
+   Chỉ ghi lỗi THẬT; dòng trống, dòng kẻ ngang, dòng tiêu đề bảng thì bỏ qua lặng lẽ
+   vì AI nào cũng hay trả kèm mấy thứ đó. */
+let boQua=[];
 function parsePaste(raw){
   const out=[]; let txt=String(raw).replace(/```[a-z]*|```/g,'').trim();
   const today=new Date();
-  txt.split(/\r?\n/).forEach(line=>{
+  boQua=[];
+  txt.split(/\r?\n/).forEach((line,i)=>{
+    const hong=ly=>{boQua.push({so:i+1,ly,goc:line.trim()});};
     let s=line.trim().replace(/^\|/,'').replace(/\|$/,'').trim();
-    if(!s||!s.includes('|'))return;
+    if(!s)return;
+    if(!s.includes('|')){hong('không có dấu | nào để tách cột');return;}
     const p=s.split('|').map(x=>x.trim());
-    if(p.length<4)return;
     if(/^[-: ]+$/.test(p[0]))return;
     if(/ngay|ngày|date/.test(noAccent(p[0]))&&/nguon|source/.test(noAccent(p[1]||'')))return;
+    if(p.length<4){hong('chỉ có '+p.length+' cột, cần ít nhất 4');return;}
 
     let d=null, dm=p[0].match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
     if(dm) d=dm[1]+'-'+dm[2].padStart(2,'0')+'-'+dm[3].padStart(2,'0');
     else{
       const dm2=p[0].match(/(\d{1,2})[\/.-](\d{1,2})(?:[\/.-](\d{2,4}))?/);
-      if(!dm2)return;
+      if(!dm2){hong('không đọc được ngày từ "'+p[0]+'"');return;}
       let y=dm2[3]?(dm2[3].length===2?'20'+dm2[3]:dm2[3]):String(today.getFullYear());
       if(!dm2[3]&&+dm2[2]>today.getMonth()+1)y=String(today.getFullYear()-1);
       d=y+'-'+dm2[2].padStart(2,'0')+'-'+dm2[1].padStart(2,'0');
@@ -517,7 +524,7 @@ function parsePaste(raw){
     const s0=sr.includes('vi')||sr.includes('momo')?'vi':sr.includes('mat')||sr==='tm'?'tm':'bidv';
     const kind=noAccent(p[2]||'chi');
     let t=(kind.includes('thu')||kind.includes('vao'))?'thu':'chi';
-    const a=parseAmt(p[3]); if(!a||isNaN(a))return;
+    const a=parseAmt(p[3]); if(!a||isNaN(a)){hong('không đọc được số tiền từ "'+p[3]+'"');return;}
     const n=(p[4]||'Giao dịch').slice(0,60);
     let code=(p[5]||'').trim().toLowerCase();
     const b=p[6]?parseAmt(p[6]):NaN;
@@ -531,6 +538,19 @@ function parsePaste(raw){
     out.push(row);
   });
   return out;
+}
+/* Liệt kê nguyên văn dòng hỏng kèm lý do, để Vy sửa tay hoặc chép lại. */
+function khoiBoQua(){
+  if(!boQua.length)return '';
+  return `<div class="warn" style="margin-top:0">
+    <b>${boQua.length} dòng không đọc được nên đã bỏ qua</b>
+    <div style="margin-top:4px">Sổ sẽ thiếu đúng những khoản này. Sửa lại rồi dán thêm, hoặc ghi tay ở dưới.</div>
+    ${boQua.map(x=>`<div style="margin-top:9px;padding-top:9px;border-top:1px solid var(--warnbd)">
+      <div style="font-size:12px;font-weight:600">Dòng ${x.so} — ${esc(x.ly)}</div>
+      <div class="mono" style="margin-top:4px;padding:7px 9px;border-radius:8px;
+        word-break:break-all;white-space:pre-wrap;background:rgba(0,0,0,.05)">${esc(x.goc)}</div>
+    </div>`).join('')}
+  </div>`;
 }
 function doPaste(){
   const raw=document.getElementById('paste').value;
@@ -1883,6 +1903,59 @@ function catBtn(val,kind,mode,ref){
 }
 
 /* những việc cần Vy để mắt, gom lên đầu Tổng quan */
+/* ---- Nhắc ghi sổ ----
+   Đếm từ HÔM QUA lùi dần xem có bao nhiêu ngày liên tiếp sổ không có giao dịch nào.
+   Ngày nào Vy đã bấm "không phát sinh giao dịch" thì bỏ qua nhưng vẫn đếm tiếp về trước.
+   Dừng khi gặp ngày có giao dịch, hoặc khi lùi quá ngày ghi chép đầu tiên của sổ.
+
+   "Lần cuối cập nhật" lấy từ id giao dịch: id sinh bằng Date.now()+Math.random() nên
+   nó đã sẵn là mốc thời gian lúc bấm Lưu. Giao dịch nào có id không phải mốc thời gian
+   (sổ cũ, dữ liệu nhập từ nơi khác) thì bỏ qua, khi đó chỉ hiện ngày chứ không có giờ. */
+function chuaGhiSo(){
+  if('cgs' in _memo)return _memo.cgs;
+  if(!DB.txns.length)return _memo.cgs=null;
+  const dau=firstTxDate(); if(!dau)return _memo.cgs=null;
+  const co={}; DB.txns.forEach(t=>{if(t.d)co[t.d]=1;});
+  const daOK=DB.ngayOK||{};
+  const now=new Date(), trong=[];
+  for(let i=1;i<=60;i++){
+    const k=iso(new Date(now.getFullYear(),now.getMonth(),now.getDate()-i));
+    if(k<dau)break;
+    if(co[k])break;
+    if(!daOK[k])trong.push(k);
+  }
+  if(!trong.length)return _memo.cgs=null;
+  /* lần cuối bấm Lưu — suy từ id, chỉ nhận mốc thời gian hợp lý */
+  let ms=0; const gioHan=Date.now();
+  DB.txns.forEach(t=>{const v=Math.floor(Number(t.id));
+    if(v>15e11&&v<=gioHan&&v>ms)ms=v;});
+  let lanCuoi='';
+  if(ms){const z=new Date(ms);
+    lanCuoi=String(z.getDate()).padStart(2,'0')+'/'+String(z.getMonth()+1).padStart(2,'0')
+      +' '+String(z.getHours()).padStart(2,'0')+':'+String(z.getMinutes()).padStart(2,'0');}
+  else{const dc=DB.txns.map(t=>t.d).filter(Boolean).sort().pop(); if(dc)lanCuoi=ddmm(dc);}
+  return _memo.cgs={trong,so:trong.length,lanCuoi,coGio:!!ms};
+}
+/* Vy xác nhận mấy ngày đó thật sự không tiêu gì — thôi không nhắc nữa */
+function ngayKhongTieu(){
+  const g=chuaGhiSo(); if(!g)return;
+  DB.ngayOK=Object.assign({},DB.ngayOK||{});
+  g.trong.forEach(k=>{DB.ngayOK[k]=1;});
+  save(); render();
+}
+/* Khối nhắc ghi sổ — để riêng chứ không nhét vào dãy cảnh báo, vì câu dài hơn một dòng
+   và nó cần tới hai nút bấm. */
+function khoiNhacGhi(){
+  const g=chuaGhiSo(); if(!g)return '';
+  return `<div class="warn">
+    <b>${g.so===1?'Ngày '+ddmm(g.trong[0])+' chưa ghi nhận giao dịch'
+                  :'Đã '+g.so+' ngày chưa cập nhật giao dịch'}</b>
+    ${g.lanCuoi?`<div style="margin-top:3px">Lần cuối: ${g.lanCuoi}</div>`:''}
+    <div style="display:flex;gap:14px;margin-top:9px">
+      <button class="chk-btn" onclick="go('add')">Mở tab Nhập</button>
+      <button class="chk-btn" style="color:var(--ink-3)" onclick="ngayKhongTieu()">Không phát sinh giao dịch</button>
+    </div></div>`;
+}
 function alerts(){
   const out=[], d=cursor;
   /* Tiết kiệm, Trả nợ, Cho mượn trả một lần đầu tháng nên không đo theo nhịp */
@@ -2114,6 +2187,9 @@ function vHome(){
   }
 
 
+  /* Nhắc ghi sổ phải đứng ngoài nhánh if/else: tháng mới sang chưa có giao dịch nào
+     thì vẫn phải nhắc, đó mới chính là lúc dễ quên nhất. */
+  if(cur)h+=khoiNhacGhi();
   if(!list.length) h+=`<div class="empty"><b>Tháng này chưa có gì</b>Mở BIDV và ví, chụp giao dịch trong ngày, gửi vào chat của tháng rồi dán kết quả ở tab Nhập.</div>`;
   else{
     h+=`<div class="hero"><div class="lead">Đã chi trong ${MONTH(cursor.getMonth()).toLowerCase()}</div>
@@ -2313,7 +2389,15 @@ function vImport(){
   if(pending){
     const on=pending.filter(t=>t.keep), miss=pending.filter(needCat).length,
           ask=pending.filter(needRep).length;
-    let h=`<h2>Kiểm tra trước khi lưu</h2><div class="panel">`;
+    const tatCa=pending.length&&on.length===pending.length;
+    let h=`<h2>Kiểm tra trước khi lưu</h2>`;
+    h+=khoiBoQua();
+    if(boQua.length)h+=`<div class="sp"></div>`;
+    h+=`<div class="stack-note" style="margin-bottom:8px">
+        <span>${on.length}/${pending.length} giao dịch đang được chọn</span>
+        <span><button class="chk-btn" style="padding:0" onclick="togAll(${tatCa?0:1})">${
+          tatCa?'bỏ chọn tất cả':'chọn tất cả'}</button></span></div>
+      <div class="panel">`;
     pending.forEach((t,i)=>{
       h+=`<div class="rev ${t.keep?'':'off'}">
         <button class="chk ${t.keep?'on':''}" onclick="tog(${i})" aria-label="Chọn">${t.keep?'✓':''}</button>
@@ -2347,17 +2431,34 @@ function vImport(){
         <div class="tx-a ${t.t==='thu'?'in':t.t==='mv'?'mv':''}">${t.t==='thu'?'+':''}${money(t.a)}</div></div>`;
     });
     h+=`</div><div class="sp"></div>`;
+    /* Tổng của những dòng ĐANG ĐƯỢC CHỌN, để đối chiếu với app ngân hàng trước khi lưu.
+       Chuyển tiền tách riêng vì nó không phải chi cũng không phải thu. */
+    {
+      const oChi=on.filter(t=>t.t==='chi'), oThu=on.filter(t=>t.t==='thu'), oMv=on.filter(t=>t.t==='mv');
+      const sChi=oChi.reduce((s,t)=>s+t.a,0), sThu=oThu.reduce((s,t)=>s+t.a,0), sMv=oMv.reduce((s,t)=>s+t.a,0);
+      const D=(nhan,soKhoan,tien,mau)=>soKhoan?`<div class="src" style="padding:10px 14px">
+        <div><div class="src-n" style="font-size:13.5px">${nhan}</div>
+          <div class="src-m">${soKhoan} giao dịch</div></div>
+        <div class="src-a" style="font-size:15px;font-weight:700;color:${mau}">${money(tien)}</div></div>`:'';
+      if(on.length)h+=`<div class="panel">
+        <div class="daygroup dg-neu">SẮP GHI VÀO SỔ</div>
+        ${D('Tiền ra',oChi.length,sChi,'var(--brick)')}
+        ${D('Tiền vào',oThu.length,sThu,'var(--pos)')}
+        ${D('Chuyển giữa các nguồn',oMv.length,sMv,'var(--ink-2)')}
+        </div><div class="sp"></div>`;
+    }
     if(miss)h+=`<div class="err">Còn ${miss} giao dịch chưa chọn nhóm.</div><div class="sp"></div>`;
     if(ask)h+=`<div class="err">Còn ${ask} giao dịch chưa chọn thay khoản cũ hay giữ cả hai.</div><div class="sp"></div>`;
     h+=`<button class="btn" ${on.length&&!miss&&!ask?'':'disabled'} onclick="commit()">Lưu ${on.length} giao dịch</button>
       <div class="sp"></div><button class="btn ghost" onclick="pending=null;render()">Quay lại</button>`;
     return h;
   }
-  let h=`<h2>Dán kết quả từ Claude</h2>
+  let h=`<h2>Dán kết quả đọc chi tiêu từ A.I</h2>
     <div class="stack-note"><span>Mở BIDV và ví, chụp các giao dịch trong ngày, thả vào chat của tháng, chép kết quả rồi dán xuống đây.</span></div>
     <div class="sp"></div>
     <textarea id="paste" rows="7" placeholder="2026-08-22 10:07 | vi | chi | 20000 | Nạp data Viettel | hd_dt |  | 0981980039"></textarea>
     <div class="sp"></div><button class="btn" onclick="doPaste()">Đọc kết quả</button>`;
+  h+=khoiBoQua();
   if(msg)h+=`<div class="${msgType==='ok'?'ok':'err'}">${esc(msg)}</div>`;
 
   h+=`<h2>Ghi tay</h2><div class="panel">
@@ -2694,6 +2795,7 @@ function vInfo(){
    ['Dự báo 1 — nếu tiêu vừa đủ hạn mức','thu nhập tháng trừ dự chi trong tháng. Dòng "Trong đó cần góp mục tiêu tài chính" chỉ hiện ra cho biết, KHÔNG trừ vào kết quả, vì tiền góp mục tiêu vẫn nằm trong phần để dành. Tên cũ là "Cách 1 — sẽ chi cả tháng".'],
    ['Dự báo 2 — tốc độ chi linh hoạt','mỗi nhóm lấy số đã tiêu chia số ngày đã qua ra tốc độ riêng của nhóm, rồi cộng tốc độ các nhóm lại. Bằng đúng tổng đã tiêu chia số ngày đã qua, chỉ bày ra cho biết nhóm nào đang chạy nhanh. Trả nợ và Cho mượn là khoản một lần nên không tính vào tốc độ, nhưng tiền đã cho mượn vẫn nằm trong dòng "đã chi tới hôm nay".'],
    ['So với tháng trước','trong khối Hạn mức cần chú ý, mỗi nhóm so tổng chi từ đầu tháng tới hôm nay với TỔNG CẢ THÁNG trước của chính nhóm đó. Hai vế cùng lấy tổng chi thô của nhóm, không trừ khoản cố định ở vế nào. Vì tháng này còn đang chạy nên app chỉ báo khi đã vượt hẳn tháng trước — tiêu ít hơn thì không nhắc, và tháng trước nhóm đó chưa tiêu đồng nào thì không có gì để so.'],
+   ['Nhắc ghi sổ','đếm từ hôm qua lùi dần xem có bao nhiêu ngày liên tiếp sổ không có giao dịch nào, dừng khi gặp ngày có ghi chép. Một ngày trống thì nhắc đúng ngày đó; từ hai ngày trở lên thì báo số ngày kèm lần cuối cập nhật. "Lần cuối" là lúc Vy bấm Lưu, không phải giờ của khoản chi — app suy ra từ mã giao dịch vốn đã mang sẵn mốc thời gian. Bấm "Không phát sinh giao dịch" thì những ngày đang bị nhắc được đánh dấu là ngày thật sự không tiêu gì và thôi nhắc. Chỉ hiện khi xem tháng hiện tại.'],
    ['Màu của số để dành','số âm mới tô đỏ. Số dương mà chưa đạt mục tiêu tiết kiệm thì tô vàng, đạt rồi thì tô xanh — để không nhầm "để dành ít hơn mong muốn" với "âm tiền".'],
    ['Hạn mức một nhóm','chi phí cố định thuộc nhóm đó cộng phần linh hoạt đã phân bổ. Riêng Trả nợ lấy đúng kỳ nợ đến hạn trong tháng. Hạn mức lưu riêng từng tháng, tháng chưa đặt thì thừa kế tháng gần nhất trước đó.'],
    ['Chi phí cố định đã chi chưa','cộng mọi giao dịch trong tháng có mã đối tác trùng mã nhận diện. Nếu bật tùy chọn xấp xỉ thì chỉ tính giao dịch lệch không quá 15%.'],
@@ -2776,9 +2878,9 @@ function vSet(){
     <div class="sp"></div><button class="btn ghost" onclick="go('info')">Mở ghi chú cách tính</button></div>`;
 
   h+=`<h2>Câu lệnh cho AI</h2>
-    <details><summary style="font-size:13px;color:var(--ink-3);padding:4px 0">Xem lại câu lệnh đặt trong project</summary>
-      <div class="sp"></div><textarea class="mono" rows="5" readonly onclick="this.select()">${esc(promptText())}</textarea>
-      <div class="sp"></div><button class="btn ghost" onclick="copyPrompt()">Chép câu lệnh</button></details>`;
+    <div class="stack-note"><span>Chép câu lệnh này, gửi kèm ảnh chụp giao dịch cho AI, rồi dán kết quả vào tab Nhập. Chạm vào ô để chọn hết.</span></div>
+      <div class="sp"></div><textarea class="mono" rows="8" readonly onclick="this.select()">${esc(promptText())}</textarea>
+      <div class="sp"></div><button class="btn ghost" onclick="copyPrompt()">Chép câu lệnh</button>`;
 
   if(msg)h+=`<div class="${msgType==='ok'?'ok':'err'}">${esc(msg)}</div>`;
   const w=PAY();
@@ -2873,6 +2975,8 @@ function payDebt(id){
   save();flash('Đã ghi '+money(a)+'.','ok');
 }
 function tog(i){pending[i].keep=!pending[i].keep;render()}
+/* chọn hoặc bỏ chọn cả danh sách một lượt */
+function togAll(v){pending.forEach(t=>{t.keep=!!v});render()}
 function askSpend(i){const t=pending[i];t.t='chi';t.s='bidv';delete t.s2;t.decided=1;t.spend=true;t.c='';render()}
 function askKeep(i){const t=pending[i];t.decided=1;render()}
 function setName(i,v){const t=pending[i],s=String(v).trim().slice(0,60);

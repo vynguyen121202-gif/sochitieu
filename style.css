@@ -22,8 +22,12 @@
      Lớp ảnh vẫn chỉ cao 380px ở đỉnh; lớp gradient phủ cả màn và chuyển sang --paper,
      nên phần dưới luôn có nền chứ không trơ ra. position:fixed để cuộn bao nhiêu cũng còn. */
   body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
-    background-image:linear-gradient(180deg,rgba(255,255,255,.46) 0%,rgba(255,255,255,.34) 9%,rgba(243,246,251,.88) 26%,var(--paper) 38%),url("Background app.jpg");
-    background-size:cover,100% auto;background-position:center,center top;background-repeat:no-repeat,no-repeat}
+    /* Điểm dừng cuối KHÔNG được đục hẳn: --paper đục 100% sẽ sơn đè mất ảnh mây từ
+       38% trở xuống, phần dưới thành trắng phẳng. Giữ .92 để mây còn thấp thoáng,
+       đúng cách màn tối đang làm (điểm cuối .66, không bao giờ đục hết).
+       Và phải cover,cover như màn tối, nếu không bên dưới không còn ảnh để mà thấy. */
+    background-image:linear-gradient(180deg,rgba(255,255,255,.46) 0%,rgba(255,255,255,.34) 9%,rgba(243,246,251,.80) 26%,rgba(243,246,251,.90) 45%,rgba(243,246,251,.92) 100%),url("Background app.jpg");
+    background-size:cover,cover;background-position:center,center top;background-repeat:no-repeat,no-repeat}
   :root[data-theme="dark"] body::before{position:fixed;inset:0;
     transform:scale(1.15);transform-origin:50% 75%;
     background-image:linear-gradient(180deg,rgba(6,11,30,.50) 0%,rgba(6,11,30,.30) 24%,rgba(6,11,30,.52) 60%,rgba(6,11,30,.66) 100%),url("Background dark.jpg");

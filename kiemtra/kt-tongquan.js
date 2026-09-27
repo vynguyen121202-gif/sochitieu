@@ -3,7 +3,7 @@
 const fs=require('fs'), path=require('path'), vm=require('vm');
 const {soMau,lamMoiHat}=require('./so-mau.js');
 
-let code=fs.readFileSync(path.join('D:\\\\Website Sổ chi tiêu','app.js'),'utf8');
+let code=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
 code=code.slice(0,code.indexOf("try{\n  const mf="));
 code+=`
 globalThis.__set=(db,cur,mo)=>{DB=db;cursor=cur;tab='home';open=mo||{};msg='';memoClear();};
@@ -118,8 +118,8 @@ ok(h.indexOf('Thấp hơn')<0,'KHÔNG báo khi tiêu ít hơn tháng trước');
   ok(doan.indexOf('so với định mức ngày')>=0,'Thực tế được tiêu có ghi hụt/dôi so với định mức ngày');
 }
 { /* tiêu đề khối: phân biệt bằng MÀU CHỮ, không tô nền/viền ngoài */
-  const cs=fs.readFileSync(path.join('D:\\\\Website Sổ chi tiêu','style.css'),'utf8');
-  const js2=fs.readFileSync(path.join('D:\\\\Website Sổ chi tiêu','app.js'),'utf8');
+  const cs=fs.readFileSync(path.join(__dirname,'..','style.css'),'utf8');
+  const js2=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
   { const i=cs.indexOf('.daygroup[class*="dg-"]'), doan=cs.slice(i,cs.indexOf('.fcsum{',i));
     ok(doan.indexOf('border-left')<0,'tiêu đề khối không còn vạch màu mỗi khối một kiểu'); }
   ok(/\.dg-neu,\.dg-bud,\.dg-chi,\.dg-kq,\.dg-db1,\.dg-db2\{color:var\(--hdtx\)\}/.test(cs),
@@ -174,7 +174,7 @@ ok(h.indexOf('Thấp hơn')<0,'KHÔNG báo khi tiêu ít hơn tháng trước');
     'dòng phụ vẫn mờ, không bị hoá xanh theo');
 }
 { /* cảnh báo phải là HÀNG trong một khung, cùng cỡ với hàng .fcsum bên dưới */
-  const cs=fs.readFileSync(path.join('D:\\\\Website Sổ chi tiêu','style.css'),'utf8');
+  const cs=fs.readFileSync(path.join(__dirname,'..','style.css'),'utf8');
   const iA=cs.indexOf('.alerts{margin-top:12px'), khung=cs.slice(iA,iA+230);
   ok(khung.indexOf('border-radius:var(--r)')>=0&&khung.indexOf('background:var(--card)')>=0,
     'các cảnh báo nằm chung trong MỘT khung như .panel');
@@ -191,7 +191,7 @@ ok(h.indexOf('Thấp hơn')<0,'KHÔNG báo khi tiêu ít hơn tháng trước');
   ok(dai.length===0,'không câu cảnh báo nào dài quá một dòng',dai.join(' | '));
 }
 { /* KHÔNG ảnh nền nào được ép sai tỷ lệ — cả hai ảnh đều là ảnh dọc 561x1000 */
-  const cs=fs.readFileSync(path.join('D:\\\\Website Sổ chi tiêu','style.css'),'utf8');
+  const cs=fs.readFileSync(path.join(__dirname,'..','style.css'),'utf8');
   const iT=cs.indexOf('dark"] body::before'), doanT=cs.slice(iT,iT+520);
   ok(doanT.indexOf('background-size:cover,cover')>=0,
     'nền tối khai lại background-size:cover,cover — không bị kéo ngang');
@@ -209,7 +209,7 @@ ok(h.indexOf('Thấp hơn')<0,'KHÔNG báo khi tiêu ít hơn tháng trước');
     'không còn chỗ nào ép cả hai chiều của ảnh nền');
 }
 { /* nền sáng phải phủ kín màn, không còn dải 330px */
-  const c=fs.readFileSync(path.join('D:\\\\Website Sổ chi tiêu','style.css'),'utf8');
+  const c=fs.readFileSync(path.join(__dirname,'..','style.css'),'utf8');
   const i=c.indexOf('body::before{content'), doan=c.slice(i,i+260);
   ok(doan.indexOf('position:fixed')>=0,'nền sáng dùng position:fixed');
   ok(doan.indexOf('height:330px')<0,'không còn dải cao 330px');

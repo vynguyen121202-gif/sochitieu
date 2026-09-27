@@ -15,3 +15,9 @@ so-chi-tieu*.json
 # Vẫn nằm ở máy và Claude Code vẫn đọc bình thường.
 CLAUDE.md
 .claude/
+
+# Hai file nay CO SO LIEU THAT va TEN NGUOI NHA nuong san ben trong (luong tung ky,
+# so du tung nguon, ten cac khoan cho vay). Kho nay cong khai nen KHONG day len.
+# Van nam o may va chay binh thuong; cach dung ghi trong kiemtra/README.md.
+kiemtra/phac-thao-tongquan.html
+kiemtra/server-soi-so.js

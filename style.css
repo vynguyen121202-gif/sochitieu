@@ -241,3 +241,93 @@
     width:24px;height:3px;border-radius:0 0 3px 3px;background:var(--jade)}
   .sp{height:10px}
   @media (prefers-reduced-motion:no-preference){.view{animation:in .22s ease}@keyframes in{from{opacity:0}to{opacity:1}}}
+
+/* ===== nut xo (ban phac thao) ===== */
+.xo{border-top:1px solid var(--line-2)}
+.xo-bt{width:100%;display:flex;align-items:center;gap:12px;padding:13px 14px;min-height:56px;
+  text-align:left;background:none;border:0;transition:background .16s ease}
+.xo-bt:active{background:var(--rowb)}
+.xo-ch{flex:0 0 16px;width:16px;height:16px;display:grid;place-items:center;color:var(--ink-3);
+  transition:transform .3s cubic-bezier(.2,.8,.2,1),color .18s ease}
+.xo[data-open="1"] .xo-ch{transform:rotate(90deg);color:var(--tinttx)}
+.xo-mid{flex:1;min-width:0}
+.xo-t{font-size:14px;font-weight:600;letter-spacing:-.005em;display:block}
+.xo-c{font-size:11.5px;color:var(--ink-3);margin-top:2px;line-height:1.35;display:block}
+.xo-v{font-size:16px;font-weight:700;letter-spacing:-.02em;white-space:nowrap;text-align:right}
+.xo-v small{display:block;font-size:11px;font-weight:600;letter-spacing:0;margin-top:1px}
+.xo-bd{height:0;overflow:hidden;contain:layout paint;backface-visibility:hidden}
+.xo[data-open="1"]>.xo-bd{height:auto}
+.xo-in{padding:0 14px 11px}
+.xo-nest{border-left:2px solid var(--tintbd);padding-left:13px;margin-left:1px;
+  opacity:0;transform:translateY(-8px);
+  transition:opacity .22s ease,transform .3s cubic-bezier(.2,.8,.2,1)}
+.xo[data-open="1"] .xo-nest{opacity:1;transform:none}
+.xo-sub{display:flex;justify-content:space-between;align-items:baseline;gap:11px;padding:8px 0}
+.xo-sub+.xo-sub{border-top:1px solid var(--line-2)}
+.xo-sub .l{font-size:13px;min-width:0}
+.xo-sub .c{font-size:11px;color:var(--ink-3);margin-top:1px;line-height:1.35}
+.xo-sub .n{font-size:13px;font-weight:600;white-space:nowrap}
+.xo-sub.tt{border-top:1px solid var(--line);margin-top:2px;padding-top:9px}
+.xo-sub.tt .l{font-weight:700;font-size:11.5px;letter-spacing:.03em;text-transform:uppercase;color:var(--ink-2)}
+.xo-sub.tt .n{font-size:14.5px;font-weight:700}
+.xo-sub.gap{border-top:0;margin-top:6px}
+.xo-mau{font-weight:500;color:var(--ink-3)}
+/* ===== hai so ke nhau khi co khoan thu du kien ve ===== */
+.hai{display:flex;align-items:flex-start;gap:8px;margin:5px 0 3px}
+.hai .mot{flex:1;min-width:0}
+.hai .so{font-size:22px;font-weight:700;letter-spacing:-.025em;line-height:1.15}
+.hai .nhan{font-size:10.5px;color:var(--ink-3);margin-top:3px;line-height:1.3}
+.hai .mui{flex:0 0 auto;color:var(--ink-3);font-size:15px;font-weight:700;padding-top:4px}
+.so1{font-size:26px;font-weight:700;letter-spacing:-.025em;margin:2px 0;line-height:1.15}
+/* ===== vo boc cho MOI khoi xo xuong cua app =====
+   contain: gioi han pham vi tinh lai bo cuc trong vo, nen moi khung hinh trinh
+   duyet khong phai do lai ca trang — day la thu lam no muot tren dien thoai. */
+/* Noi dung LUC NAO CUNG duoc dung san, dong thi cao 0. Nho vay luc bam khong
+   phai ve lai trang — do moi la nguyen nhan that su lam chuyen dong giat. */
+.xow{overflow:hidden;contain:layout paint;backface-visibility:hidden}
+html.xo-chay .tm,html.xo-chay .panel,html.xo-chay .detail{contain:layout}
+.xow[data-open="0"]{height:0;content-visibility:hidden}
+.xow.chay[data-open="0"]{content-visibility:visible}
+.xow[data-open="1"]{height:auto}
+.xow>*{transition:opacity .22s ease,transform .3s cubic-bezier(.2,.8,.2,1)}
+.xow.an>*{opacity:0;transform:translateY(-8px)}
+.xow.chay{pointer-events:none}
+.xow.chay>*{will-change:transform,opacity;transform:translateZ(0)}
+.xow.an.chay>*{transform:translate3d(0,-8px,0)}
+/* ===== THU PHAM THAT SU CUA GIAT =====
+   style.css bat backdrop-filter:blur(12px) cho .panel .fold .strip nav ... o man toi.
+   Moi khung hinh bo cuc xe dich, MOI o mo do phai lay mau lai ca anh nen phia sau
+   roi lam mo lai — tren dien thoai la vai chuc lan mo anh moi giay. Tat trong luc
+   chay, bat lai khi xong. Mat mo nen 300ms, doi lay chuyen dong khong rot khung. */
+html.xo-chay :is(.panel,.kpi,.gtile,.fold,.strip,.empty,.days,.days-x,.alerts,.chip,
+  .arrow,.gear,.btn.ghost,.btn.danger,.warn,.err,.ok,nav){
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+/* ===== tieu de hai muc trong danh sach no =====
+   KHONG dung .daygroup dg-sub: luat .daygroup[class*="dg-"] manh hon nen no keo
+   nen xanh dac vao, chu do/xanh la dat tren do bi chim hoan toan. */
+.nohd{display:flex;align-items:center;gap:8px;padding:9px 14px;
+  font-size:11px;font-weight:800;letter-spacing:.05em;
+  background:var(--row);border-bottom:1px solid var(--line-2)}
+.nohd i{width:3px;height:13px;border-radius:2px;display:block;flex:none}
+.nohd.ra{color:var(--brick)} .nohd.ra i{background:var(--brick)}
+.nohd.vao{color:var(--pos)} .nohd.vao i{background:var(--pos)}
+/* Bo goc noi lien nut bam voi khoi dang mo — truoc lam bang style noi tuyen,
+   gio khong ve lai trang nua nen de CSS tu quyet theo trang thai cua vo. */
+.strip:has(+.xow[data-open="1"]),
+.fold:has(+.xow[data-open="1"]),
+.panel:has(+.xow[data-open="1"]){border-radius:var(--r) var(--r) 0 0}
+/* ===== khoi No: hai ben, hai mau, hai chieu mui ten ===== */
+.nohai{display:flex;gap:10px;margin-top:0}
+.nomot{flex:1;min-width:0;background:var(--card);border-radius:var(--r);
+  box-shadow:var(--shadow);padding:12px 13px;border-left:3px solid transparent}
+.nomot.ra{border-left-color:var(--brick)}
+.nomot.vao{border-left-color:var(--pos)}
+.nonhan{font-size:9.5px;font-weight:700;letter-spacing:.04em;line-height:1.3}
+.nomot.ra .nonhan{color:var(--brick)}
+.nomot.vao .nonhan{color:var(--pos)}
+.noso{font-size:19px;font-weight:700;letter-spacing:-.02em;margin-top:5px;line-height:1.15}
+.nomot.ra .noso{color:var(--brick)}
+.nomot.vao .noso{color:var(--pos)}
+.noph{font-size:10.5px;color:var(--ink-3);margin-top:3px;line-height:1.3}
+@media (prefers-reduced-motion:reduce){
+  .xo-bd,.xo-ch,.xo-nest,.xow,.xow>*{transition-duration:.01ms!important}}

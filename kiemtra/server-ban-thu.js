@@ -374,7 +374,7 @@ const MOI_GOI = 'if(open.pw)h+=paceWhy2(pa);';
 
 /* ══════════ 4+5. diem 3 — mot dinh dang so duy nhat ══════════ */
 const CU_STRIP = "      <span>${SRC.map(x=>esc(x.n.replace('Ví điện tử','Ví'))+' <b>'+short(bal[x.id]||0)+'</b>').join(' · ')}</span>";
-const MOI_STRIP = "      <span>${SRC.map(x=>esc(x.n.replace('Ví điện tử','Ví').replace('Tiền mặt','Mặt'))+' <b>'+money(bal[x.id]||0)+'</b>').join(' · ')}</span>";
+const MOI_STRIP = "      <span>${SRC.map(x=>esc(x.n.replace('Ví điện tử','Ví'))+' <b>'+money(bal[x.id]||0)+'</b>').join(' · ')}</span>";
 
 const CU_HERO = [
 "      <div class=\"sub\">${list.filter(t=>t.t==='chi').length} giao dịch · ${",

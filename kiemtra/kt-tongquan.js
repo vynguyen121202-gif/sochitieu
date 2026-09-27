@@ -13,7 +13,9 @@ globalThis.__fc=()=>forecast();
 globalThis.__m=()=>metrics(cursor);
 globalThis.__hmcy=()=>hanMucChuY(cursor);
 globalThis.__alerts=()=>alerts();
-globalThis.__spent=(g,d)=>spentOf(g,d);`;
+globalThis.__spent=(g,d)=>spentOf(g,d);
+globalThis.__bangTien=()=>bangTien(cursor);
+globalThis.__thanhKhoan=()=>thanhKhoan(cursor);`;
 
 function sanKhau(HOM){
   const R=Date, FD=class extends R{constructor(...a){if(!a.length)super(HOM+'T10:00:00');else super(...a);}
@@ -82,15 +84,24 @@ ok(h.indexOf('vượt hạn mức')>=0,'có cảnh báo vượt hạn mức (S�
 ok(h.indexOf('Tiền mặt')>=0&&h.indexOf('>Mặt ')<0,'thanh số dư ghi "Tiền mặt", không còn "Mặt"');
 ok(h.indexOf('Trung bình')>=0||h.indexOf('Đã chi')>=0,'ô tổng chi viết hoa đầu câu');
 ok(h.indexOf('TỔNG QUAN THÁNG NÀY')>=0,'có khối thực thu − thực chi (mục 8)');
-ok(h.indexOf('TỔNG QUAN THÁNG NÀY')<h.indexOf('TỔNG NGÂN SÁCH KHẢ DỤNG'),
-  'thực thu − thực chi nằm TRƯỚC tổng ngân sách');
+ok(h.indexOf('TỔNG QUAN THÁNG NÀY')<h.indexOf('HẠN MỨC LINH HOẠT'),
+  'Tổng quan tháng này nằm TRƯỚC Hạn mức linh hoạt');
 ok(h.indexOf('DỰ BÁO 1')>=0&&h.indexOf('DỰ BÁO 2')>=0,'đã đổi Cách 1/2 thành Dự báo 1/2');
 ok(h.indexOf('Dự chi trong tháng')>=0,'đã đổi "Sẽ chi cả tháng" thành "Dự chi trong tháng"');
 ok(h.indexOf('Trong đó cần góp mục tiêu tài chính')>=0,'có dòng góp mục tiêu tài chính');
 ok(h.indexOf('CHI TIẾT TỪNG NHÓM CỦA DỰ BÁO Ở TRÊN')>=0,'bảng chi tiết có nhãn nói rõ là con của khối trên');
-ok(h.indexOf('dg-bud')>=0&&h.indexOf('dg-chi')>=0&&h.indexOf('dg-kq')>=0,'ba khối trong bảng có ba màu khác nhau');
+ok(h.indexOf('dg-neu')>=0&&h.indexOf('dg-bud')>=0&&h.indexOf('dg-kq')>=0,'ba khối trong bảng có ba màu khác nhau');
+ok(h.indexOf('dg-chi')<0,'khối CHI TIÊU cũ đã gộp vào nút xổ Thực chi, không còn đếm hai lần');
 const m=c.__m();
-ok(h.indexOf(M(m.thu-m.chi))>=0,'số thực thu − thực chi có mặt trên trang ('+M(m.thu-m.chi)+')');
+{ /* Thuc thu / Thuc chi phai CONG VE dung so du — day la ly do doi cach tinh */
+  const bt=c.__bangTien();
+  ok(bt.dauThang+bt.tongVao-bt.tongRa===bt.cuoi,'số dư đầu + thực thu − thực chi = số dư cuối');
+  ok(bt.cuoi===bt.tien,'số dư cuối khớp balances() ('+M(bt.cuoi)+')');
+  ok(h.indexOf(M(bt.cuoi))>=0,'số dư hiện tại có mặt trên trang ('+M(bt.cuoi)+')');
+  ok(/số dư hiện tại/i.test(h),'có dòng Số dư hiện tại');
+  ok(h.indexOf(M(m.thu-m.chi))<0||m.thu-m.chi===bt.cuoi,
+    'KHÔNG còn hiệu thực thu − thực chi lơ lửng không giải thích được');
+}
 
 console.log('\nE2 · Vòng sửa 2');
 ok(h.indexOf('dg-db1')>=0&&h.indexOf('dg-db2')>=0,'Dự báo 1 và Dự báo 2 đều có tiêu đề khối');
@@ -110,12 +121,16 @@ ok(h.indexOf('Thấp hơn')<0,'KHÔNG báo khi tiêu ít hơn tháng trước');
     +(baoc.length?': '+baoc.map(x=>x.g.n+' +'+Math.round(x.pcT*100)+'%').join(' · '):''));
   ok(baoc.every(x=>x.nayKy===c.__spent(x.g.id,thangNay)),'vế "tháng này" lấy tổng cả tháng đang chạy');
 }
-{ /* KẾT QUẢ: ba số phải được tô màu, không còn dùng LN trắng trơn */
-  const i=h.indexOf('dg-kq'), doan=h.slice(i,i+2600);
-  ok((doan.match(/font-weight:700;color:var\(--/g)||[]).length===3,
-    'ba số trong KẾT QUẢ đều được tô màu như ô lớn',
-    'đếm được '+((doan.match(/font-weight:700;color:var\(--/g)||[]).length));
-  ok(doan.indexOf('so với định mức ngày')>=0,'Thực tế được tiêu có ghi hụt/dôi so với định mức ngày');
+{ /* KẾT QUẢ: mot nut xo, con so chinh nam ngay tren tieu de */
+  const i=h.indexOf('dg-kq'), doan=h.slice(i,i+3400);
+  ok(doan.indexOf('Số tiền còn lại được dùng để chi')>=0,'KẾT QUẢ có nút xổ Số tiền còn lại được dùng để chi');
+  ok(doan.indexOf('data-k="kq"')>=0&&doan.indexOf('class="xo"')>=0,
+    'nút xổ KẾT QUẢ có vỏ chạy chuyển động');
+  ok(doan.indexOf('cần để dành')>=0,'tiêu đề mang cặp số x / y cần để dành');
+  ok(doan.indexOf('vượt ')>=0||doan.indexOf('dư ')>=0,'có nói vượt hay dư so với số cần để dành');
+  const q=c.__thanhKhoan();
+  ok(!(q.lan>0&&q.tuDo>0),'luôn đúng một trong hai bằng 0 — không có cú nhảy ở ranh giới');
+  ok(q.A1===q.A0+q.henTong,'mốc sau = mốc hiện tại + thu nợ đã hẹn ngày');
 }
 { /* tiêu đề khối: phân biệt bằng MÀU CHỮ, không tô nền/viền ngoài */
   const cs=fs.readFileSync(path.join(__dirname,'..','style.css'),'utf8');
@@ -236,8 +251,40 @@ c2.__set(soMau(),new Date(cuoi.getFullYear(),cuoi.getMonth(),1),{pw:true});
 let h3=''; try{h3=c2.__vHome(); ok(true,'vHome() ngày cuối tháng chạy được');}catch(e){ok(false,'vHome() ngày cuối tháng','lỗi: '+e.message);}
 const pa2=c2.__pace();
 ok(pa2.conLai===0,'còn 0 ngày');
-ok(h3.indexOf('Ngày cuối tháng, còn bao nhiêu tiêu nốt bấy nhiêu')>=0||h3.indexOf('Thực tế được tiêu')>=0,
-  'ô Thực tế được tiêu không rơi về 0 vô lý');
+ok(h3.indexOf('THỰC TẾ ĐƯỢC TIÊU')>=0||h3.indexOf('Số tiền còn lại được dùng để chi')>=0,
+  'ngày cuối tháng vẫn hiện được số còn lại, không rơi về 0 vô lý');
 
+
+console.log('\nH · Bản v=8 — bảng từ, khối Nợ, nút xổ');
+{ /* bang tu da chot: mot khai niem mot ten */
+  ok(h.indexOf('HẠN MỨC LINH HOẠT')>=0,'dùng "Hạn mức linh hoạt"');
+  ok(h.indexOf('Số tiền còn lại được dùng để chi')>=0,'dùng "Số tiền còn lại được dùng để chi"');
+  ok(h.indexOf('Số tiền còn lại được tiêu')<0,'KHÔNG còn tên cũ "Số tiền còn lại được tiêu"');
+  ok(h.indexOf('tiêu dùng thật')<0,'KHÔNG đặt tên riêng cho cố định + linh hoạt (Vy chốt)');
+  ok(h.indexOf('Trung bình')<0,'đã bỏ "trung bình mỗi ngày" ở ô tổng chi');
+}
+{ /* khoi No: hai ben ro rang, chi hien khoan con */
+  ok(h.indexOf('KHOẢN PHẢI TRẢ')>=0&&h.indexOf('KHOẢN CHỜ THU')>=0,'khối Nợ tách hai bên');
+  ok(h.indexOf('TÔI PHẢI TRẢ')<0,'KHÔNG dùng tên cũ "Tôi phải trả"');
+  ok(h.indexOf('class="nohd')>=0,'tiêu đề hai mục dùng class riêng, không mượn daygroup');
+  ok(h.indexOf('nohd ra" style')<0&&h.indexOf('daygroup dg-sub" style="color')<0,
+    'KHÔNG đặt chữ màu lên dải xanh đặc (chữ sẽ chìm)');
+}
+{ /* moi khoi xo deu co vo chay chuyen dong, va KHONG boc nham co giu gia tri */
+  const vo=(h.match(/data-xo="/g)||[]).length;
+  ok(vo>=4,'các khối xổ đều có vỏ chuyển động ('+vo+' vỏ)');
+  ok((h.match(/data-open="/g)||[]).length>=4,'mỗi vỏ khai báo trạng thái đóng/mở');
+  const js=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
+  ok(js.indexOf('if(open.txCode){')>=0,
+    'open.txCode GIỮ NGUYÊN điều kiện — nó là mã nhóm, không phải cờ đúng/sai');
+  ok(h.indexOf('data-xo="txCode"')<0,'KHÔNG bọc txCode (bọc là panel lọc luôn mở với mã rỗng)');
+  ok(js.indexOf('xo-chay')>=0,'có tắt backdrop-filter trong lúc chạy chuyển động');
+  ok(js.indexOf('class="xomui"')>=0,'mũi tên bọc thẻ riêng để đổi tại chỗ, không vẽ lại trang');
+}
+{ /* thanh so du: so day du, doi chieu sao ke duoc */
+  ok(h.indexOf('Tiền mặt')>=0,'thanh số dư vẫn ghi "Tiền mặt" đầy đủ');
+  const b=c.__bangTien();
+  ok(h.indexOf(M(b.tien))>=0,'số dư tổng hiện dạng đầy đủ, không rút gọn');
+}
 console.log('\n'+(loi?'✗ CÒN '+loi+' LỖI':'✓ TẤT CẢ ĐỀU ĐẠT'));
 process.exit(loi?1:0);

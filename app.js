@@ -1245,6 +1245,24 @@ function togKS(code){
     if(g.id===code)g.subs.forEach(s=>{const j=ds.indexOf(s[0]);if(j>=0)ds.splice(j,1);});}
   DB.opts=Object.assign({},DB.opts,{khongKS:ds}); save(); render();
 }
+/* ---- chip "theo nhịp tiêu" ở tab Ngân sách ----
+   Tiết kiệm, Cho mượn, Trả nợ không có chip: dự báo không tính ba nhóm này. */
+const KHONG_NHIP={tk:1,muon:1,trano:1};
+function chipNhip(g){
+  if(KHONG_NHIP[g.id])return '';
+  const ks=khongKS(), ca=ks.includes(g.id), con=g.subs.filter(s=>ks.includes(s[0])).map(s=>s[1]);
+  const on=ca||con.length;
+  if(!g.subs.length)return `<button class="ns-chip nt ${on?'on':''}" onclick="togKS('${g.id}')">theo nhịp tiêu</button>`;
+  /* nhóm có mục con: bấm để xổ danh sách — bật cả nhóm hoặc từng mục (Xăng xe trong Di chuyển) */
+  return `<button class="ns-chip nt ${on?'on':''}" onclick="toggle('nt_${g.id}')">theo nhịp tiêu${
+    !ca&&con.length?': '+esc(con.join(', ')):''} <span class="xomui" data-mui="nt_${g.id}" data-a="▴" data-b="▾">${open['nt_'+g.id]?'▴':'▾'}</span></button>`;
+}
+function dsNhip(g){
+  const ks=khongKS(), ca=ks.includes(g.id);
+  const SW=(code,ten,on)=>`<div class="ns-sub"><span>${esc(ten)}</span>
+    <button class="fc-sw ${on?'on':''}" role="switch" aria-checked="${!!on}" aria-label="${esc(ten)}" onclick="togKS('${code}')"></button></div>`;
+  return `<div class="ns-subs">${SW(g.id,'Cả nhóm',ca)}${ca?'':g.subs.map(s=>SW(s[0],s[1],ks.includes(s[0]))).join('')}</div>`;
+}
 function forecast(){
   if('fc' in _memo)return _memo.fc;
   const now=new Date(), nd=daysIn(now), passed=now.getDate(), conLai=nd-passed;
@@ -1910,19 +1928,18 @@ function vBudPlan(p,dd,inc){
     const gs=FLEX().filter(loc); if(!gs.length)return;
     h+=`<div class="daygroup" style="border:1px solid var(--line);border-bottom:0;border-radius:var(--r) var(--r) 0 0;margin-top:12px">${ten}</div>
       <div class="panel" style="border-radius:0 0 var(--r) var(--r)">`;
+    /* Mỗi nhóm HAI tầng (Vy duyệt 28/09): tên đầy đủ + % + ô tiền; dưới là chip "cộng dồn" và
+       "theo nhịp tiêu" — thay danh sách công tắc "Không kiểm soát được" từng nằm ở khối Dự báo. */
     gs.forEach(g=>{
       const fx=fixedInGroup(g.id), flex=bud(g.id,cursor);
-      h+=`<div style="padding:11px 12px;border-bottom:1px solid var(--line-2)">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span class="spine" style="background:${gcA(g.c)};height:16px"></span>
-          <span style="flex:1;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.n)}</span>
-          <button style="background:none;border:0;padding:2px 6px;border-radius:20px;font-size:10.5px;font-weight:600;
-            background:${canRoll(g.id)?'var(--tintb)':'var(--greybg)'};color:${canRoll(g.id)?'var(--tinttx)':'var(--ink-3)'}"
-            onclick="toggleRoll('${g.id}')">cộng dồn</button>
-          <span style="font-size:11px;color:var(--ink-3);min-width:30px;text-align:right">${flex&&p.conLai>0?Math.round(flex/p.conLai*100)+'%':''}</span>
-          <input inputmode="text" value="${flex?short(flex):''}" placeholder="—" onchange="setB('${g.id}',this.value)"
-            style="width:96px;text-align:right;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--field)"></div>
-        ${fx?`<div class="cat-meta" style="margin-top:5px"><span>+ ${money(fx)} cố định = ${money(fx+flex)}</span></div>`:''}
+      h+=`<div class="ns-g">
+        <div class="ns-1"><span class="spine" style="background:${gcA(g.c)};height:18px"></span>
+          <span class="ns-n">${esc(g.n)}</span>
+          <span class="ns-pc">${flex&&p.conLai>0?Math.round(flex/p.conLai*100)+'%':''}</span>
+          <input inputmode="text" value="${flex?short(flex):''}" placeholder="—" onchange="setB('${g.id}',this.value)" aria-label="Hạn mức ${esc(g.n)}"></div>
+        ${fx?`<div class="ns-fx">+ ${money(fx)} cố định = ${money(fx+flex)}</div>`:''}
+        <div class="ns-2"><button class="ns-chip cd ${canRoll(g.id)?'on':''}" onclick="toggleRoll('${g.id}')">cộng dồn</button>${chipNhip(g)}</div>
+        ${g.subs.length&&!KHONG_NHIP[g.id]?`<div class="xow" data-xo="nt_${g.id}" data-open="${open['nt_'+g.id]?1:0}">${dsNhip(g)}</div>`:''}
       </div>`;
     });
     h+=`</div>`;
@@ -2563,18 +2580,11 @@ function cachTinhFc(f){
     ${R('Số tiền còn lại được dùng để chi',f.A1)}
     ${f.r1.map(r=>R('− '+esc(r.n),r.a,'sub')).join('')}
     ${R('CUỐI THÁNG',f.du1,'tot')}
-    <div class="daygroup dg-db2">THEO NHỊP TIÊU · CÒN ${f.conLai} NGÀY</div>`;
+    <div class="daygroup dg-db2 fc-dg"><span>THEO NHỊP TIÊU HẠN MỨC CÒN LẠI</span><small>còn ${f.conLai} ngày</small></div>`;
   x+=f.duocUoc?R('Số tiền còn lại được dùng để chi',f.A1)+f.r2.map(r=>R('− '+esc(r.n)+(r.cach==='da'?' <i>theo nhịp tiêu</i>':''),r.a,'sub')).join('')+R('CUỐI THÁNG',f.du2,'tot')
     :`<div class="fc-row"><span>chưa ước được, đợi qua mùng 5</span></div>`;
-  const ks=khongKS(), SW=(code,ten,sub)=>{const on=ks.includes(code);
-    return `<div class="fc-ks ${sub?'sub':''}"><span>${esc(ten)}</span>
-      <button class="fc-sw ${on?'on':''}" role="switch" aria-checked="${on}" aria-label="${esc(ten)}" onclick="togKS('${code}')"></button></div>`;};
-  x+=`<div class="daygroup fc-ksh">KHÔNG KIỂM SOÁT ĐƯỢC · tính theo nhịp tiêu</div>`;
-  GROUPS.filter(g=>g.k==='chi'&&!['tk','muon','trano'].includes(g.id)).forEach(g=>{
-    x+=SW(g.id,g.n,0);
-    if(!ks.includes(g.id))g.subs.forEach(s=>{x+=SW(s[0],s[1],1);});
-  });
-  return x+`</div>`;
+  /* công tắc chọn khoản đã chuyển sang tab Ngân sách (Vy duyệt 28/09) — ở đây chỉ còn đường dẫn */
+  return x+`<button class="fc-lnk" onclick="bTab='plan';go('budget')">Chọn khoản tính theo nhịp tiêu ở tab Ngân sách ›</button></div>`;
 }
 /* Mục tiêu — ĐẦU trang Tổng quan để Vy tự nhắc mình (28/09/2026). Mỗi mục tiêu MỘT dòng:
    tên · đã có / mục tiêu · phần trăm. Dòng đầu là tiết kiệm của chính tháng này:

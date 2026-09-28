@@ -515,3 +515,22 @@ input.dt{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius
 .ct-xo .ct-bt b{white-space:nowrap;font-weight:600}
 .ct-xo .xo-in.ct-in{padding:0}
 .xct-bd{margin-top:-1px}
+/* ---- Ngân sách: nhóm hai tầng + chip theo nhịp tiêu (v=13) ---- */
+.ns-g{padding:10px 12px;border-bottom:1px solid var(--line-2)}
+.ns-g:last-child{border-bottom:0}
+.ns-1{display:flex;align-items:center;gap:9px}
+.ns-n{flex:1;min-width:0;font-size:14px}
+.ns-pc{font-size:11px;color:var(--ink-3);min-width:30px;text-align:right}
+.ns-1 input{width:96px;text-align:right;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--field);min-height:40px}
+.ns-fx{font-size:11.5px;color:var(--ink-3);margin:4px 0 0 12px}
+.ns-2{display:flex;flex-wrap:wrap;gap:6px;margin:7px 0 0 12px}
+.ns-chip{border:1px solid var(--line);background:var(--rowb);color:var(--ink-3);border-radius:20px;
+  font-size:11.5px;font-weight:600;padding:4px 11px;min-height:32px}
+.ns-chip.cd.on{background:var(--tintb);border-color:var(--tintbd);color:var(--tinttx)}
+.ns-chip.nt.on{background:var(--warnbg);border-color:transparent;color:var(--warntx)}
+.ns-subs{margin:6px 0 0 12px;padding-left:10px;border-left:2px solid var(--line)}
+.ns-sub{display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:42px;font-size:13px;color:var(--ink-2)}
+.daygroup.fc-dg{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.daygroup.fc-dg small{font-size:11px;font-weight:500;letter-spacing:0;opacity:.85;white-space:nowrap;text-transform:none}
+.fc-lnk{display:block;width:100%;text-align:left;border:0;border-top:1px solid var(--line);background:var(--rowb);
+  color:var(--jade);font-weight:600;font-size:13px;padding:12px 14px;min-height:44px}

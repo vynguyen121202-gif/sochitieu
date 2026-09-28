@@ -11,6 +11,7 @@ globalThis.__vHome=()=>vHome();
 globalThis.__pace=()=>pace(cursor);
 globalThis.__fc=()=>forecast();
 globalThis.__ks=ds=>{DB.opts=Object.assign({},DB.opts);if(ds===undefined)delete DB.opts.khongKS;else DB.opts.khongKS=ds;memoClear();};
+globalThis.__vBud=()=>{bTab='plan';return vBudget();};
 globalThis.__m=()=>metrics(cursor);
 globalThis.__hmcy=()=>hanMucChuY(cursor);
 globalThis.__alerts=()=>alerts();
@@ -111,7 +112,14 @@ ok(h.indexOf('Hạn mức linh hoạt')<h.indexOf('TỔNG QUAN THÁNG NÀY'),'H�
 ok(h.indexOf('HẠN MỨC LINH HOẠT')<0&&h.indexOf('dg-bud')<0,'bảng Cách tính KHÔNG còn lặp phần Hạn mức linh hoạt');
 ok((h.match(/Hạn mức linh hoạt/g)||[]).length===1,'chữ "Hạn mức linh hoạt" xuất hiện đúng MỘT lần');
 ok(h.indexOf('TIÊU ĐỦ HẠN MỨC')>=0&&h.indexOf('THEO NHỊP TIÊU')>=0&&h.indexOf('THEO ĐÀ')<0&&h.indexOf('Theo đà')<0,'bảng có hai phần: tiêu đủ hạn mức · theo nhịp tiêu (không còn chữ "theo đà")');
-ok(h.indexOf('KHÔNG KIỂM SOÁT ĐƯỢC')>=0&&(h.match(/class="fc-sw on"/g)||[]).length===3,'có danh sách chọn khoản không kiểm soát, bật sẵn đúng 3');
+ok(h.indexOf('KHÔNG KIỂM SOÁT ĐƯỢC')<0&&h.indexOf('fc-sw')<0,'khối Dự báo KHÔNG còn danh sách công tắc (đã sang tab Ngân sách)');
+ok(h.indexOf('Chọn khoản tính theo nhịp tiêu ở tab Ngân sách')>=0,'khối Dự báo có đường dẫn sang tab Ngân sách');
+ok(h.indexOf('THEO NHỊP TIÊU HẠN MỨC CÒN LẠI</span><small>còn ')>=0,'tiêu đề THEO NHỊP TIÊU HẠN MỨC CÒN LẠI, "còn N ngày" là chú thích nhỏ bên phải');
+{ const b=c.__vBud();
+  ok((b.match(/class="ns-chip nt on"/g)||[]).length===3,'tab Ngân sách: bật sẵn đúng 3 chip theo nhịp tiêu (Ăn uống, Chợ, Di chuyển/Xăng xe)');
+  ok(b.indexOf('theo nhịp tiêu: Xăng xe')>=0,'Di chuyển ghi rõ chỉ Xăng xe tính theo nhịp tiêu');
+  ok(!/togKS('(tk|muon|trano)')|toggle('nt_(tk|muon|trano)')/.test(b),'Tiết kiệm, Cho mượn, Trả nợ KHÔNG có chip theo nhịp tiêu');
+  ok(b.indexOf('class="ns-n">Quần áo &amp; giày dép</span>')>=0,'tên nhóm hiện ĐẦY ĐỦ, không bị cắt'); }
 ok(h.indexOf('Để dành được')<0&&h.indexOf('để dành được')<0,'KHÔNG còn chữ "để dành được" (công thức cũ)');
 ok(h.indexOf('dg-neu')>=0&&h.indexOf('dg-kq')>=0,'hai khối trong bảng Cách tính có tiêu đề riêng');
 ok(h.indexOf('dg-chi')<0,'khối CHI TIÊU cũ đã gộp vào nút xổ Thực chi, không còn đếm hai lần');

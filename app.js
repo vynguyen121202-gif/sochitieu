@@ -2743,7 +2743,7 @@ function vHome(){
       return `<div class="fc-h"><span class="fc-l">${t}</span><div class="fc-r">
         <div class="fc-so"><b class="${v<0?'am':''}">${money(v)}</b>${f.B?` <span>/ ${money(f.B)}</span>`:''}</div>
         ${f.B?`<div class="fc-k ${k<0?'thieu':'du'}">${k<0?'thiếu '+money(-k):k?'dư '+money(k):'vừa đủ'}</div>`:''}</div></div>`;};
-    h+=`<h2 class="hl"><i style="background:${gcA('#47897A')}"></i><b>Dự báo cuối tháng</b>${f.B?'<em>so với cần để dành</em>':''}</h2>
+    h+=`<h2 class="hl"><i style="background:${gcA('#47897A')}"></i><b>Dự báo cuối tháng</b></h2>
       <div class="panel">${HANG('Tiêu đủ hạn mức',f.du1)}${HANG('Theo đà hiện tại',f.du2,!f.duocUoc)}</div>`;
     h+=`<button class="fold" id="sec-fc" style="margin-top:8px" onclick="toggle('fc')">
       <span style="font-size:13.5px"><span class="xomui" data-mui="fc" data-a="▾" data-b="▸">${open.fc?'▾':'▸'}</span> Cách tính</span></button>`;

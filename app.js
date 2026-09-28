@@ -56,6 +56,77 @@ function merchantKey(s){
 }
 const fid=t=>t.d+'|'+t.a+'|'+(t.p||merchantKey(t.n0||t.n).slice(0,24));
 const ddmm=s=>String(s).slice(8,10)+'/'+String(s).slice(5,7);
+/* ---- Ô nhập ngày kiểu Việt Nam dd/mm/yy — mọi ô ngày trong app dùng chung ----
+   Chỉ cần gõ số, app tự chèn dấu "/". Ngày bắt đầu bằng 4-9 thì chắc chắn là ngày
+   một chữ số (7 -> 07); tháng bắt đầu bằng 2-9 cũng vậy. Bỏ năm thì:
+   hướng "toi" (ngày hẹn thu/trả) lấy lần gần nhất CHƯA qua, hướng "qua" (ngày giao
+   dịch) lấy lần gần nhất ĐÃ qua. Sổ vẫn lưu YYYY-MM-DD, chỉ cách gõ và cách hiện đổi. */
+const vnd=s=>s?String(s).slice(8,10)+'/'+String(s).slice(5,7)+'/'+String(s).slice(2,4):'';
+function dtFmt(v){
+  let s=String(v).replace(/\D/g,''); if(!s)return '';
+  const d1=s[0]>'3'; const dd=d1?'0'+s[0]:s.slice(0,2); s=s.slice(d1?1:2);
+  if(!s)return dd;
+  const m1=s[0]>'1'; const mm=m1?'0'+s[0]:s.slice(0,2); s=s.slice(m1?1:2);
+  return dd+'/'+mm+(s?'/'+s.slice(0,2):'');
+}
+/* trả về 'YYYY-MM-DD', '' nếu ô trống, null nếu chưa đủ hoặc không có ngày đó */
+function dtRead(v,huong){
+  v=String(v||'').trim(); if(!v)return '';
+  const m=v.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2}))?$/); if(!m)return null;
+  const dd=+m[1], mm=+m[2], nay=new Date(), hn=iso(nay);
+  const mk=y=>{const t=new Date(y,mm-1,dd);return t.getDate()===dd&&t.getMonth()===mm-1?iso(t):null;};
+  if(m[3])return mk(2000+ +m[3]);
+  const y=nay.getFullYear(); let r=mk(y);
+  if(!r&&dd===29&&mm===2){                /* 29/02 bỏ năm: lấy năm nhuận gần nhất theo hướng */
+    for(let k=1;k<=4&&!r;k++)r=mk(huong==='qua'?y-k:y+k); return r;}
+  if(!r)return null;
+  if(huong==='toi'&&r<hn)r=mk(y+1);
+  if(huong==='qua'&&r>hn)r=mk(y-1);
+  return r;
+}
+const THU=['Chủ nhật','Thứ Hai','Thứ Ba','Thứ Tư','Thứ Năm','Thứ Sáu','Thứ Bảy'];
+function dtHint(el){
+  const h=el.nextElementSibling; if(!h||!h.classList.contains('dt-h'))return;
+  const v=el.value.trim(); h.className='dt-h';
+  if(!v){h.textContent='';return;}
+  const r=/^\d\d\/\d\d(\/\d\d)?$/.test(v)?dtRead(v,el.dataset.huong):null;
+  if(r===null){
+    if(/^\d\d\/\d\d(\/\d\d)?$/.test(v)){h.classList.add('bad');h.textContent='Không có ngày này trong lịch.';}
+    else h.textContent='gõ tiếp: ngày, tháng, năm (năm có thể bỏ)';
+    return;}
+  const t=new Date(r+'T00:00'), n=Math.round((t-new Date(iso(new Date())+'T00:00'))/864e5);
+  h.classList.add('ok');
+  h.textContent='→ '+THU[t.getDay()]+', '+r.slice(8,10)+'/'+r.slice(5,7)+'/'+r.slice(0,4)
+    +(n>0?' · còn '+n+' ngày':n===0?' · hôm nay':' · '+(-n)+' ngày trước');
+}
+function dtGo(el,e){ if(!e||!/^delete/.test(e.inputType||''))el.value=dtFmt(el.value); dtHint(el); }
+/* vẽ một ô ngày: id, ngày đang lưu (ISO), hướng 'toi' | 'qua', thuộc tính thêm */
+function dtInput(id,val,huong,them){
+  return '<input class="dt" id="'+id+'" inputmode="numeric" maxlength="8" autocomplete="off"'
+    +(/placeholder=/.test(them||'')?'':' placeholder="dd/mm/yy"')
+    +' data-huong="'+(huong||'qua')+'" value="'+vnd(val)+'" oninput="dtGo(this,event)" '+(them||'')+'>'
+    +'<div class="dt-h"></div>';
+}
+function dtSet(id,v){const el=document.getElementById(id);if(!el)return;el.value=v?vnd(v):'';dtHint(el);
+  el.dispatchEvent(new Event('change'));}
+/* ngày lương tới: lấy ngày thật của hai kỳ lương gần nhất trong sổ, không có thì lấy đầu khung ngày lương */
+function ngayLuongToi(){
+  const w=PAY(), ls=DB.txns.filter(t=>t.t==='thu'&&groupOf(t.c).id==='luong').map(t=>t.d).sort();
+  const lay=(k)=>{const x=ls.filter(d=>{const n=+d.slice(8,10);return n>=k[0]&&n<=k[1];}).pop();return x?+x.slice(8,10):k[0];};
+  const ngay=[lay(w.k1),lay(w.k2)].sort((a,b)=>a-b), hn=iso(new Date()), n=new Date();
+  for(let i=0;i<3;i++)for(const d of ngay){
+    const t=iso(new Date(n.getFullYear(),n.getMonth()+i,Math.min(d,28)));
+    if(t>hn)return t;}
+  return '';
+}
+/* nút chọn nhanh dưới ô ngày hẹn */
+function dtChips(id){
+  const n=new Date(), sau=n.getDate()>20, c=new Date(n.getFullYear(),n.getMonth()+(sau?2:1),0), l=ngayLuongToi();
+  return '<div class="dt-chips">'
+    +(l?'<button type="button" onclick="dtSet(\''+id+'\',\''+l+'\')">Ngày lương tới · '+ddmm(l)+'</button>':'')
+    +'<button type="button" onclick="dtSet(\''+id+'\',\''+iso(c)+'\')">Cuối tháng '+(c.getMonth()+1)+'</button>'
+    +'<button type="button" onclick="dtSet(\''+id+'\',\'\')">Chưa biết</button></div>';
+}
 /* cùng đối tác: ưu tiên mã đối tác, không có mã thì so tên nơi bán */
 function samePartner(a,b){
   if(a.p&&b.p)return a.p===b.p;
@@ -610,20 +681,13 @@ function commit(){
     const o={id:Date.now()+Math.random(),d:t.d,a:t.a,t:t.t,n:t.n,s:t.s||'bidv'};
     if(t.t==='mv')o.s2=t.s2||'vi'; else o.c=t.c;
     if(t.tm)o.tm=t.tm; if(t.b)o.b=t.b; if(t.p)o.p=t.p;
+    if(t.han)o._han=t.han;
     if(t.w)o.w=t.w; if(t.q)o.q=1; if(t.sg)o.sg=t.sg; if(t.n0&&t.n0!==t.n)o.n0=t.n0;
     return o;});
   const drop=new Set(pending.filter(t=>t.keep&&t.rep&&t.repDo===1).map(t=>t.rep.id));
   if(drop.size)DB.txns=DB.txns.filter(x=>!drop.has(String(x.id)));
   DB.txns=DB.txns.concat(add);
-  add.forEach(t=>{
-    const g=groupOf(t.c).id;
-    if((g==='divay'&&t.t==='thu')||(g==='muon'&&t.t==='chi')){
-      const d={id:'d'+Date.now()+Math.random().toString(36).slice(2,6),
-        name:cleanName(t.n), kind:g==='divay'?'no':'cho', mode:'canhan',
-        principal:t.a, start:t.d};
-      DB.debts.push(d);
-    }
-  });
+  add.forEach(t=>noTuGD(t,t._han)); add.forEach(t=>delete t._han);
   save();
   const nDrop=drop.size;
   pending=null; msg=''; cursor=new Date(); go('home'); autoBackup();
@@ -843,8 +907,10 @@ function thanhKhoan(d){
 }
 /* So du cuoi thang cua d — dung cho thang da dong so. Khong lay balances()
    vi balances() la so du HIEN TAI, thang sau co giao dich la sai ngay. */
-function balAt(d){
-  const k=ym(d), mk="ba"+k; if(mk in _memo)return _memo[mk];
+function balAt(d){ const b=balSrcAt(d); return (b.bidv||0)+(b.vi||0)+(b.tm||0); }
+/* cùng phép cộng như balAt nhưng giữ riêng từng nguồn, để xổ Số dư cuối tháng ra BIDV / Ví / Tiền mặt */
+function balSrcAt(d){
+  const k=ym(d), mk="bs"+k; if(mk in _memo)return _memo[mk];
   const b={bidv:+DB.opens.bidv||0, vi:+DB.opens.vi||0, tm:+DB.opens.tm||0};
   DB.txns.forEach(t=>{
     if((t.d||"").slice(0,7)>k)return;
@@ -853,7 +919,7 @@ function balAt(d){
     else if(t.t==="dc"){b[s2]=(b[s2]||0)+(t.dir==="-"?-t.a:t.a);}
     else b[s2]=(b[s2]||0)+(t.t==="thu"?t.a:-t.a);
   });
-  return _memo[mk]=(b.bidv||0)+(b.vi||0)+(b.tm||0);
+  return _memo[mk]=b;
 }
 /* ---------- moi dong tien that vao / ra, cong ve dung so du ---------- */
 function bangTien(d){
@@ -968,10 +1034,14 @@ function khoiTongKet(){
     money(t.tongRa),"",null,
     t.ra.map(function(v){return xoSub(v.n,v.s,money(v.a));}).join("")
     +xoTt("Tổng tiền đã ra",money(t.tongRa)));
-  x+='<div class="src total"><div><div class="src-n">Số dư cuối '+thang+'</div>'
-    +'<div class="src-m">'+money(t.dauThang)+' + '+money(t.tongVao)+' − '+money(t.tongRa)+'</div></div>'
-    +'<div class="src-a" style="color:'+(t.cuoi<0?"var(--brick)":"var(--pos)")+'">'
-    +money(t.cuoi)+'</div></div>';
+  /* Số dư cuối tháng = chính là phần giữ lại được của tháng đã đóng (Vy chốt 28/09/2026).
+     Xổ ra từng nguồn; cộng các nguồn phải ra đúng số đầu dòng. */
+  var bs=balSrcAt(cursor);
+  x+='<div class="xo-cuoi">'+xoBox("tkcuoi","Số dư cuối "+thang,
+    money(t.dauThang)+' + '+money(t.tongVao)+' − '+money(t.tongRa),
+    money(t.cuoi),t.cuoi<0?"neg":"pos",null,
+    SRC.map(function(s){return xoSub(s.n,"",money(bs[s.id]||0),(bs[s.id]||0)<0?"neg":"");}).join("")
+    +xoTt("Cộng ba nguồn",money(t.cuoi)))+'</div>';
   return x+'</div>';
 }
 /* ---------- ban giai thich moi ---------- */
@@ -1347,10 +1417,14 @@ function vTongKet(){
   h+=bao('Góp mục tiêu tài chính',s.gop,s.gopKH);
   h+=bao('Tiết kiệm và đầu tư',s.tkCon,s.budTK);
 
-  /* --- phân bổ --- */
-  h+=`<h2 class="hl"><i style="background:${gcA('#5476C4')}"></i><b>Phân bổ tiền để dành</b><em>${money(s.deDanh)}</em></h2>
+  /* --- Tiết kiệm & Đầu tư: phần còn dư cuối cùng Vy chuyển đi, trích góp mục tiêu TRƯỚC,
+     còn lại mới tới tiết kiệm riêng (vàng, gửi tiết kiệm). Tiền này đã rời BIDV / Ví / Tiền mặt
+     nên KHÔNG nằm trong Số dư cuối tháng ở trên, và không cộng hai số với nhau. --- */
+  h+=`<h2 class="hl"><i style="background:${gcA('#5476C4')}"></i><b>Tiết kiệm &amp; Đầu tư</b><em>${money(s.vaoTK)} / ${money(s.mucTieu)}</em></h2>
     <div class="panel">
-    ${R('1 · Góp mục tiêu tài chính','<div class="src-m">kế hoạch '+money(s.gopKH)+' mỗi tháng</div>',money(s.gop))}`;
+    ${R('Đã chuyển trong '+MONTH(cursor.getMonth()).toLowerCase(),'<div class="src-m">'+(s.vaoTK?'phần còn dư cuối cùng':'chưa chuyển khoản nào')+'</div>',
+      money(s.vaoTK),s.vaoTK<s.mucTieu?'var(--brick)':'var(--pos)')}
+    ${CON('1 · Góp mục tiêu tài chính<span style="font-size:11px;color:var(--ink-3)"> · trích trước · kế hoạch '+money(s.gopKH)+'</span>',money(s.gop))}`;
   gs.forEach(x=>{
     h+=`<div style="padding:11px 14px 11px 24px;border-bottom:1px solid var(--line-2);border-left:2px solid var(--tintbd)">
       <div class="cat-meta"><span style="color:var(--ink);font-size:13px;font-weight:500">${esc(x.g.name)}</span>
@@ -1367,13 +1441,9 @@ function vTongKet(){
       <div style="margin-top:8px"><button class="chk-btn" onclick="suaMucGop('${x.g.id}')">Sửa mức góp</button>
         ${x.tre&&x.den&&!x.g.auto?`<button class="chk-btn" style="margin-left:16px" onclick="gianHan('${x.g.id}','${x.den}')">Giãn hạn đến ${x.den.slice(5)}/${x.den.slice(0,4)}</button>`:''}</div>
     </div>`;});
-  h+=R('2 · Tiết kiệm &amp; đầu tư','<div class="src-m">hạn mức '+money(s.budTK)+'</div>',money(s.tkCon));
-  s.subRows.forEach(r=>h+=CON(esc(r.n)+'<span style="font-size:11px;color:var(--ink-3)"> · tổng đã góp '+money(r.tong)+'</span>',money(r.phan)));
-  h+=R('3 · Số dư trong tài khoản','<div class="src-m">tiền nhàn rỗi</div>',
-      (s.soDu<0?'−'+money(-s.soDu):money(s.soDu)),s.soDu<0?'var(--brick)':'');
-  h+=`<div class="src total"><div class="src-n">Cộng lại</div>
-    <div class="src-a" style="font-size:16px">${money(s.gop+s.tkCon+s.soDu)}</div></div></div>`;
-  if(s.soDu<0)h+=`<div class="sp"></div><div class="warn">Góp vào Tiết kiệm &amp; đầu tư ${money(s.vaoTK)} trong khi chỉ dư ra ${money(s.deDanh)} — chênh <b>${money(-s.soDu)}</b> lấy từ tiền các tháng trước.</div>`;
+  h+=CON('2 · Tiết kiệm riêng<span style="font-size:11px;color:var(--ink-3)"> · vàng, gửi tiết kiệm… — phần còn lại · hạn mức '+money(s.budTK)+'</span>',money(s.tkCon));
+  s.subRows.forEach(r=>h+=CON('<span style="padding-left:12px">'+esc(r.n)+'</span><span style="font-size:11px;color:var(--ink-3)"> · tổng đã góp '+money(r.tong)+'</span>',money(r.phan)));
+  h+=`</div>`;
   if(tongCan>s.gopKH&&s.gopKH)h+=`<div class="sp"></div><div class="warn">${gs.length} mục tiêu cần tổng <b>${money(tongCan)}</b> mỗi tháng mới kịp hạn, đang góp ${money(s.gopKH)} — thiếu <b>${money(tongCan-s.gopKH)}</b>. Cần giãn hạn, hạ mục tiêu, hoặc tăng mức góp.</div>`;
 
   /* --- khoản nợ --- */
@@ -1435,14 +1505,11 @@ function gianHan(id,den){
   g.due=den; save(); flash('Đã giãn hạn mục tiêu.','ok');
 }
 /* ---- Tổng kết một tháng đã đóng sổ ----
-   Để dành được = thực thu − thực chi, trong đó thực chi KHÔNG tính tiền chuyển vào
-   nhóm Tiết kiệm & đầu tư — cất tiền sang tiết kiệm là dời chỗ, không phải tiêu.
-   Cùng cách với khối Dự trù để dành chạy trong tháng, nên hai con số so được với nhau.
-   Phân bổ ba mục, cộng lại đúng bằng để dành:
-     1 góp mục tiêu tài chính — lấy từ tiền đã góp vào nhóm Tiết kiệm & đầu tư
-     2 phần góp thêm còn lại của nhóm đó
-     3 số dư còn trong tài khoản = thu − chi, ĐƯỢC PHÉP ÂM khi tháng đó góp vào
-       tiết kiệm nhiều hơn phần dư ra, tức phải bù bằng tiền các tháng trước. */
+   Phần giữ lại được của tháng CHÍNH LÀ Số dư cuối tháng (balAt), vẽ ở khoiTongKet() —
+   Vy chốt 28/09/2026, bỏ hẳn "để dành = thu − chi" vì nó không cộng về được số dư thật.
+   Hàm này chỉ còn lo khối Tiết kiệm & Đầu tư: tiền Vy chuyển vào nhóm đó (phần dư cuối
+   cùng) trích góp mục tiêu TRƯỚC, tối đa bằng mức góp kế hoạch; phần còn lại mới chia cho
+   tiết kiệm riêng (vàng, gửi tiết kiệm) theo đúng tỷ lệ số đã chuyển vào từng mục. */
 function tongKet(d){
   d=d||cursor;
   const mk='tket'+ym(d); if(mk in _memo)return _memo[mk];
@@ -1452,7 +1519,6 @@ function tongKet(d){
   const tkRows=l.filter(t=>t.t==='chi'&&groupOf(t.c).id==='tk');
   const vaoTK=sum(tkRows);
   const sub={}; tkRows.forEach(t=>{const k=labelOf(t.c);sub[k]=(sub[k]||0)+t.a;});
-  const tieuThat=chi-vaoTK, deDanh=thu-tieuThat, soDu=thu-chi;
   const gopKH=goalMonthly(), budTK=bud('tk',d);
   const gop=Math.min(vaoTK,gopKH), tkCon=vaoTK-gop;
   /* chia tiểu mục theo đúng tỷ lệ phần còn lại, dòng cuối nhận phần dư cho khỏi lệch làm tròn */
@@ -1465,7 +1531,7 @@ function tongKet(d){
     const b=avail(g.id,d), v=spentOf(g.id,d);
     return {g,b,v,chenh:v-b,pc:b?v/b:0,v5:spentOf(g.id,truoc)};})
     .filter(x=>x.b>0&&x.chenh>0).sort((a,b)=>b.chenh-a.chenh);
-  return _memo[mk]={thu,chi,vaoTK,sub,subRows,tieuThat,deDanh,soDu,gopKH,budTK,gop,tkCon,vuot,
+  return _memo[mk]={thu,chi,vaoTK,sub,subRows,gopKH,budTK,gop,tkCon,vuot,
     mucTieu:budTK+gopKH,soGD:l.filter(t=>t.t==='chi').length};
 }
 /* Mục tiêu chạy song song: mỗi mục tiêu có mức cần mỗi tháng riêng, tiền góp chia theo
@@ -2020,12 +2086,18 @@ function vDebt(){
       <div class="track" style="height:5px;margin:9px 0 7px"><i style="width:${pct}%;background:${gcA(col)}"></i></div>
       <div class="cat-meta"><span>Đã ${cho?'thu hồi':'thanh toán'} ${money(i.paid)} / ${money(i.total)}</span>
         <span class="${lv.cls==='red'?'over':''}">${i.done?'đã tất toán':i.nextDate?(d.mode==='gop'?'Kỳ kế tiếp ':'Đến hạn ')+i.nextDate.slice(8,10)+'/'+i.nextDate.slice(5,7)+(lv.k!=='far'?' · '+lv.txt:''):'Chưa xác định ngày'}</span></div>
+      ${d.mode!=='gop'&&!i.done&&!d.due&&!(nF&&nF.id===d.id)?`<div class="han-thieu">
+        Chưa có <b>${cho?'ngày dự kiến thu':'ngày dự kiến trả'}</b>${cho?' — có ngày thì app mới tính khoản này vào "Số tiền còn lại được dùng để chi".':'.'}
+        <div class="han-in"><div class="han-o">${dtInput('han-'+d.id,'','toi')}</div>
+          <button class="btn" onclick="luuHan('${d.id}')">Lưu</button></div>
+        <div class="err" id="loi-han-${d.id}" hidden></div></div>`:''}
       <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;padding-top:9px;border-top:1px solid var(--line-2)">
-        <button class="chk-btn" onclick="payDebt('${d.id}')">${cho?'Ghi thu hồi':'Ghi thanh toán'}</button>
+        <button class="chk-btn" onclick="moNo('thu','${d.id}')">${cho?'Ghi thu hồi':'Ghi thanh toán'}</button>
         <button class="chk-btn" style="${debtPick===d.id?'font-weight:700;text-decoration:underline':''}" onclick="pickForDebt('${d.id}')">Đối chiếu</button>
-        <button class="chk-btn" onclick="editDebt('${d.id}')">Sửa</button>
+        <button class="chk-btn" onclick="moNo('sua','${d.id}')">Sửa</button>
         <button class="chk-btn" style="color:var(--ink-3)" onclick="toggle('h_${d.id}')">Lịch sử</button>
         <button class="chk-btn" style="color:var(--brick);margin-left:auto" onclick="delDebt('${d.id}')">Xóa</button></div>`;
+    if(nF&&nF.id===d.id)x+=formNo(d);
     if(debtPick===d.id){
       const cands=debtCandidates(d);
       x+=`<div class="ask" style="margin-top:9px">
@@ -2040,14 +2112,14 @@ function vDebt(){
           <span class="src-a">${money(t.a)}</span></button>`;});
       x+=`</div>`;
     }
-    if(1){ h+='<div class="xow" data-xo="'+("h_"+d.id)+'" data-open="'+((open['h_'+d.id])?1:0)+'">';
+    if(1){ x+='<div class="xow" data-xo="'+("h_"+d.id)+'" data-open="'+((open['h_'+d.id])?1:0)+'">';
       const ps=debtTxns(d.id).slice().sort((a,b)=>b.d.localeCompare(a.d));
       x+=ps.length?ps.map(pp=>`<div class="cat-meta" style="margin-top:7px">
           <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ddmm(pp.d)} · ${esc(pp.n)}${pp.debt?'':' · tự nhận'}</span>
           <span style="display:flex;gap:9px;align-items:center;white-space:nowrap"><b>${money(pp.a)}</b>
           <button class="chk-btn" style="color:var(--ink-3)" onclick="unlinkDebt('${pp.id}')">gỡ</button></span></div>`).join('')
         :`<div class="cat-meta" style="margin-top:7px"><span>chưa có lần thanh toán nào</span></div>`;
-      h+='</div>';
+      x+='</div>';
     }
     return x+`</div>`;
   };
@@ -2055,7 +2127,9 @@ function vDebt(){
   if(noList.length){ h+=`<h2>Nợ phải trả</h2>`; noList.slice().sort(sortByDue).forEach(d=>h+=card(d)); }
   if(choList.length){ h+=`<h2>Nợ phải thu</h2>`; choList.slice().sort(sortByDue).forEach(d=>h+=card(d)); }
   if(!DB.debts.length)h+=`<div class="sp"></div><div class="empty"><b>Chưa có khoản nào</b>Ghi một giao dịch nhóm Đi vay hoặc Cho mượn, app sẽ tự tạo khoản ở đây.</div>`;
-  h+=`<div class="sp"></div><button class="btn ghost" onclick="newDebt()">+ Thêm khoản</button>`;
+  h+=`<div class="sp"></div>`+(nF&&nF.m==='moi'?`<div class="panel" style="padding:13px">${formNo(null)}</div>`
+    :`<div class="nf-btns"><button class="btn ghost" onclick="moNo('moi','cho')">+ Cho mượn</button>
+      <button class="btn ghost" onclick="moNo('moi','no')">+ Đi vay</button></div>`);
   if(msg)h+=`<div class="${msgType==='ok'?'ok':'err'}">${esc(msg)}</div>`;
   return h;
 }
@@ -2682,7 +2756,10 @@ function vImport(){
                <input class="rename" value="${esc(t.n)}" placeholder="${t.q?'Mua gì, ở đâu?':'Nội dung'}" onchange="setName(${i},this.value)">
                ${catBtn(t.c,t.t,'pending',i)}
                ${t.c&&groupOf(t.c).subs.length?`<button class="chk-btn" style="margin-left:8px" onclick="splitStart('pending',${i})">chia nhiều mục</button>`:''}
-               ${t.w?`<div class="tag">qua ví ${esc(t.w)}</div>`:''}`}
+               ${t.w?`<div class="tag">qua ví ${esc(t.w)}</div>`:''}
+               ${(()=>{const g=t.c?groupOf(t.c).id:'';const cho=g==='muon'&&t.t==='chi', vay=g==='divay'&&t.t==='thu';
+                 return cho||vay?`<div class="rev-han"><div class="cat-meta" style="margin:8px 0 5px"><span>${cho?'Dự kiến thu lại ngày':'Dự kiến trả ngày'}</span></div>
+                   ${dtInput('phan-'+i,t.han||'','toi','placeholder="dd/mm/yy · để trống nếu chưa biết" onchange="setHanP('+i+',this.value)"')}</div>`:'';})()}`}
           ${(()=>{const sf=suggestFixed(t);return sf?`<div class="ask" style="margin-top:8px">
             <div>Đây có phải khoản cố định "${esc(sf.name)}"? Gắn mã ${esc(t.p)} để tháng sau app tự nhận.</div>
             <button onclick="bindFixed('${sf.id}','${esc(t.p)}')">Gắn mã</button></div>`:'';})()}
@@ -2732,22 +2809,30 @@ function vImport(){
     <div class="two">
       <div class="fld"><span>Loại</span><select id="mt" onchange="_mt=this.value;render()">
         ${[['chi','Chi'],['thu','Thu'],['mv','Chuyển tiền']].map(([v,n])=>`<option value="${v}" ${_mt===v?'selected':''}>${n}</option>`).join('')}</select></div>
-      <div class="fld"><span>Số tiền</span><input id="ma" inputmode="text" placeholder="50k"></div>
+      <div class="fld"><span>Số tiền</span><input id="ma" inputmode="text" placeholder="50k" value="${esc(mNhap.a)}" oninput="mNhap.a=this.value"></div>
     </div>
-    <div class="fld"><span>Nội dung</span><input id="mn" placeholder="${_mt==='mv'?'Rút tiền mặt':'Cà phê sáng'}"></div>
+    <div class="fld"><span>Nội dung</span><input id="mn" placeholder="${_mt==='mv'?'Rút tiền mặt':'Cà phê sáng'}" value="${esc(mNhap.n)}" oninput="mNhap.n=this.value"></div>
     <div class="two">
       <div class="fld"><span>${_mt==='mv'?'Từ nguồn':'Nguồn tiền'}</span>
-        <select id="msrc">${SRC.map(s=>`<option value="${s.id}" ${s.id===(_mt==='chi'?'tm':'bidv')?'selected':''}>${s.n}</option>`).join('')}</select></div>
+        <select id="msrc" onchange="mNhap.s=this.value">${SRC.map(s=>`<option value="${s.id}" ${s.id===(mNhap.s||(_mt==='chi'?'tm':'bidv'))?'selected':''}>${s.n}</option>`).join('')}</select></div>
       <div class="fld"><span>${_mt==='mv'?'Sang nguồn':'Nhóm'}</span>
         ${_mt==='mv'
           ? `<select id="ms2">${SRC.map(s=>`<option value="${s.id}" ${s.id==='tm'?'selected':''}>${s.n}</option>`).join('')}</select>`
           : catBtn(manualCode,_mt,'manual','0')}</div>
     </div>
-    <div class="fld"><span>Ngày</span><input id="md" type="date" value="${iso(new Date())}"></div>
+    <div class="fld"><span>Ngày</span>${dtInput('md',mNhap.d||iso(new Date()),'qua','onchange="mNhapNgay(this)"')}</div>
+    ${(()=>{const g=manualCode&&_mt!=='mv'?groupOf(manualCode).id:'';
+      const vay=g==='divay'&&_mt==='thu', cho=g==='muon'&&_mt==='chi';
+      return vay||cho?`<div class="fld fld-han"><span>${cho?'Ngày dự kiến thu':'Ngày dự kiến trả'}
+        <em>— app tạo luôn khoản ${cho?'chờ thu':'phải trả'} bên tab Nợ</em></span>
+        ${dtInput('mhan',mNhap.han,'toi','placeholder="dd/mm/yy · để trống nếu chưa biết" onchange="mNhapNgay(this)"')}${dtChips('mhan')}</div>`:'';})()}
   </div><div class="sp"></div><button class="btn ghost" onclick="addManual()">Thêm giao dịch</button>`;
   return h;
 }
 let _mt='chi';
+/* chữ đang gõ ở phần Ghi tay — giữ lại khi mở bảng chọn nhóm rồi quay về, vì trang vẽ lại từ đầu */
+let mNhap={a:'',n:'',s:'',d:'',han:''};
+function mNhapNgay(el){const r=dtRead(el.value,el.dataset.huong);if(r!==null)mNhap[el.id==='mhan'?'han':'d']=r;}
 
 let listF='all', listQ='', rowOpen='', selMode=false, selIds={};
 function setListF(v){listF=v;render();}
@@ -2827,15 +2912,13 @@ function vList(){
         ${(t.t==='chi'||t.t==='thu')?`<div class="cat-meta" style="margin:0 0 7px"><span>Nhóm</span></div>${catBtn(t.c,t.t,'txn',t.id)}`:''}
         <div style="display:flex;gap:8px;margin-top:9px" onclick="event.stopPropagation()">
           <div style="flex:1"><div class="cat-meta" style="margin:0 0 5px"><span>Ngày</span></div>
-            <input type="date" value="${t.d}" onchange="setDate('${t.id}',this.value)"
-              style="width:100%;padding:8px 9px;border:1px solid var(--line);border-radius:7px;background:var(--field);font-size:13px"></div>
+            ${dtInput('td-'+t.id,t.d,'qua',`onchange="setDate('${t.id}',this.value)"`)}</div>
           <div style="width:112px"><div class="cat-meta" style="margin:0 0 5px"><span>Giờ</span></div>
             <input type="time" value="${t.tm||''}" onchange="setTime('${t.id}',this.value)"
-              style="width:100%;padding:8px 9px;border:1px solid var(--line);border-radius:7px;background:var(--field);font-size:13px"></div>
+              class="dt" style="width:100%"></div>
         </div>
         <div style="display:flex;gap:16px;margin-top:11px">
           <button class="chk-btn" onclick="event.stopPropagation();editName('${t.id}')">Sửa nội dung</button>
-          <button class="chk-btn" onclick="event.stopPropagation();editDate('${t.id}')">Sửa ngày giờ</button>
           ${(t.t==='chi'||t.t==='thu')&&groupOf(t.c).subs.length?`<button class="chk-btn" onclick="event.stopPropagation();splitStart('txn','${t.id}')">Tách nhiều mục</button>`:''}
           <button class="chk-btn" style="color:var(--brick);margin-left:auto" onclick="event.stopPropagation();del('${t.id}')">Xóa</button></div></div>`;
     }
@@ -3078,8 +3161,9 @@ function vInfo(){
    ['Thu nhập trong dự trù','tách giao dịch nhóm Lương thành hai kỳ theo ngày, lấy ngày đầu của kỳ 2 làm ranh giới. Kỳ đã về thì lấy đúng số thật; kỳ chưa về thì ước bằng trung bình kỳ đó của tối đa 3 tháng có ghi chép, chưa có lịch sử mới lấy phần còn thiếu so với kế hoạch. Thưởng và thu khác cộng thêm, không giữ chỗ. Cả hai kỳ đã về thì thu nhập tháng chốt bằng số thực nhận, dù cao hay thấp hơn kế hoạch.'],
    ['Dự trù để dành theo kế hoạch','thu nhập tháng − tổng số mọi nhóm (trừ Tiết kiệm) sẽ chi cả tháng, mỗi nhóm lấy số lớn hơn giữa hạn mức khả dụng và số đã tiêu. Tiêu vừa đủ hạn mức thì bằng đúng hạn mức Tiết kiệm.'],
    ['Dự trù để dành theo đà','thu nhập tháng − đã chi tới hôm nay − cố định và nợ còn phải trả − tốc độ chi linh hoạt nhân số ngày còn lại. Trước ngày 5 không ước.'],
-   ['Tổng kết tháng đã đóng','mở lại một tháng đã qua thì khối nhịp tiêu biến mất, thay bằng bản tổng kết. Để dành được = thực thu − thực chi, trong đó thực chi gồm cố định, nợ và mọi nhóm chi nhưng KHÔNG tính tiền góp vào Tiết kiệm & đầu tư — cất tiền sang tiết kiệm là dời chỗ, không phải tiêu. Cùng cách tính với khối Dự trù để dành chạy trong tháng, nên hai con số so được với nhau. Mỗi dòng có cờ so với tháng liền trước, màu theo ý nghĩa: chi giảm là xanh, thu và để dành tăng là xanh.'],
-   ['Phân bổ tiền để dành','chia làm ba mục, cộng lại đúng bằng số để dành. Một là góp mục tiêu tài chính, lấy từ tiền đã góp vào nhóm Tiết kiệm & đầu tư, tối đa bằng mức góp kế hoạch. Hai là phần góp thêm còn lại của nhóm đó; các tiểu mục như Gửi tiết kiệm, Mua vàng chia theo đúng tỷ lệ phần còn lại này, dòng cuối nhận phần dư cho khỏi lệch làm tròn. Ba là số dư còn trong tài khoản, bằng thu trừ chi — số này ÂM khi tháng đó góp vào tiết kiệm nhiều hơn phần dư ra, tức phải bù bằng tiền các tháng trước.'],
+   ['Tổng kết tháng đã đóng','mở lại một tháng đã qua thì khối nhịp tiêu biến mất, thay bằng bản tổng kết: số dư đầu tháng + Thực thu − Thực chi = Số dư cuối tháng. Số dư cuối tháng chính là phần Vy giữ lại được của tháng đó. Bấm vào nó để xem tiền nằm ở BIDV, Ví và Tiền mặt bao nhiêu; ba nguồn cộng lại phải đúng bằng số đầu dòng. Số này cộng lại từ đầu sổ tới hết tháng, không lấy số dư hôm nay, nên xem lại tháng cũ vẫn đúng.'],
+   ['Tiết kiệm & Đầu tư (tháng đã đóng)','tiền Vy chuyển vào nhóm Tiết kiệm & Đầu tư trong tháng — tức phần còn dư cuối cùng. Chia theo thứ tự: một là góp mục tiêu tài chính, trích trước, tối đa bằng mức góp kế hoạch; hai là tiết kiệm riêng như vàng, gửi tiết kiệm, nhận phần còn lại, chia theo đúng tỷ lệ số đã chuyển vào từng mục. Tiền này đã rời ba nguồn nên KHÔNG nằm trong Số dư cuối tháng, hai số không cộng với nhau.'],
+   ['Ngày gõ tay','mọi ô ngày gõ theo kiểu dd/mm/yy, chỉ cần gõ số, app tự thêm dấu /. Bỏ năm thì: ngày hẹn thu/trả lấy lần gần nhất chưa tới, ngày giao dịch lấy lần gần nhất đã qua. Dưới ô luôn hiện app đã hiểu thành thứ mấy, ngày nào, để Vy kiểm tra trước khi lưu.'],
    ['Mục tiêu chạy song song','mỗi mục tiêu có mức cần mỗi tháng riêng: mục tiêu ghi hạn thì lấy phần còn thiếu chia số tháng còn lại, mục tiêu không ghi hạn thì lấy mốc 12 tháng. Tiền góp mỗi tháng chia cho các mục tiêu theo tỷ lệ mức cần, nên mục tiêu nào cũng nhích chứ không phải đợi mục tiêu trước đầy. Góp đến là tháng đạt đủ nếu giữ mức góp đang có; góp đến muộn hơn hạn mong muốn thì báo màu vàng.'],
    ['Khoản trả góp','tổng phải trả = số kỳ nhân tiền mỗi kỳ. Phí thu hộ = tổng phải trả − gốc. Kỳ kế tiếp = ngày kỳ đầu cộng số kỳ đã thanh toán.'],
    ['Tỷ lệ tiết kiệm','chi nhóm Tiết kiệm chia thu nhập. Mục tiêu từ 25% trở lên.'],
@@ -3252,61 +3336,132 @@ function askZoom(){
 }
 function clearFilter(){filterCode='';render();}
 /* ---- khoản nợ ---- */
-function newDebt(kind,name,amount){
-  const k=kind||(confirm('Đây là khoản Vy đi vay?\nOK = tôi đi vay · Hủy = tôi cho người khác mượn')?'no':'cho');
-  const nm=name||prompt('Tên khoản nợ (tên người hoặc tên món):','');
-  if(!nm)return null;
-  const a=amount||parseAmt(prompt('Số tiền gốc:','')||'');
-  if(!a||isNaN(a))return null;
-  const gop=k==='no'&&confirm('Đây là khoản trả góp hàng tháng?\nOK = trả góp · Hủy = trả một lần');
-  const d={id:'d'+Date.now(),name:nm.slice(0,40),kind:k,mode:gop?'gop':'canhan',
-    principal:a,start:iso(new Date())};
+/* ---- Nhập khoản nợ ngay trong trang, không còn hộp thoại ----
+   nF: form đang mở — {m:'moi',k:'cho'|'no'} · {m:'sua',id} · {m:'thu',id}. Chỉ một form mở một lúc.
+   Giá trị đọc thẳng từ ô lúc bấm Lưu, nên đổi lựa chọn trong form không cần vẽ lại trang. */
+let nF=null;
+/* báo lỗi ngay trong form, KHÔNG vẽ lại trang — vẽ lại thì mất hết chữ Vy vừa gõ */
+function loiO(id,t){const e=document.getElementById(id);if(!e){flash(t,'err');return;}e.textContent=t;e.hidden=false;}
+const nfLoi=t=>loiO('nf-loi',t);
+function moNo(m,x){nF=m==='moi'?{m,k:x}:{m,id:x};msg='';render();
+  setTimeout(()=>{const el=document.querySelector('.nform input');if(el&&m!=='thu')el.focus();},0);}
+function dongNo(){nF=null;render();}
+/* nút gạt: ghi lựa chọn vào data-v của khung, bật/tắt các phần có data-when="khung:giá trị" */
+function segChon(b){
+  const p=b.parentElement, f=p.closest('.nform')||document;
+  p.dataset.v=b.dataset.v; [...p.children].forEach(x=>x.classList.toggle('on',x===b));
+  f.querySelectorAll('[data-when^="'+p.id+':"]').forEach(e=>{e.hidden=e.dataset.when!==p.id+':'+b.dataset.v;});
+}
+const nfv=id=>{const e=document.getElementById(id);return e?e.value:'';};
+/* tạo khoản nợ từ một giao dịch Đi vay / Cho mượn — dùng chung cho dán từ AI và ghi tay */
+function noTuGD(t,han){
+  const g=groupOf(t.c).id;
+  if(!((g==='divay'&&t.t==='thu')||(g==='muon'&&t.t==='chi')))return null;
+  const d={id:'d'+Date.now()+Math.random().toString(36).slice(2,6),
+    name:cleanName(t.n), kind:g==='divay'?'no':'cho', mode:'canhan', principal:t.a, start:t.d};
+  if(han)d.due=han;
+  DB.debts.push(d); return d;
+}
+function luuNoMoi(){
+  const k=nF.k, nm=nfv('nf-ten').trim(), a=parseAmt(nfv('nf-tien'));
+  if(!nm){nfLoi('Chưa ghi tên người hoặc tên món.');return;}
+  if(!a||isNaN(a)){nfLoi('Số tiền chưa hợp lệ.');return;}
+  const gop=k==='no'&&(document.getElementById('nf-cach')||{dataset:{}}).dataset.v==='gop';
+  const d={id:'d'+Date.now()+Math.random().toString(36).slice(2,6),name:nm.slice(0,40),kind:k,mode:gop?'gop':'canhan',principal:a,start:iso(new Date())};
   if(gop){
-    d.periods=parseInt(prompt('Trả trong bao nhiêu kỳ (tháng)?','12'),10)||12;
-    d.per=parseAmt(prompt('Mỗi kỳ trả bao nhiêu?','')||'')||Math.round(a/d.periods);
-    const day=parseInt(prompt('Ngày trả hàng tháng (1-28):','15'),10)||15;
+    d.periods=parseInt(nfv('nf-ky'),10)||12;
+    d.per=parseAmt(nfv('nf-kytien'))||Math.round(a/d.periods);
+    const day=parseInt(nfv('nf-ngay'),10)||15;
     d.start=iso(new Date()).slice(0,8)+String(Math.min(28,Math.max(1,day))).padStart(2,'0');
   }else{
-    const du=prompt('Ngày dự kiến trả (YYYY-MM-DD), để trống nếu chưa biết:','');
-    if(du&&/^\d{4}-\d{2}-\d{2}$/.test(du.trim()))d.due=du.trim();
+    const h=dtRead(nfv('nf-han'),'toi'); if(h===null){nfLoi('Ngày hẹn chưa đúng — gõ dạng dd/mm/yy.');return;}
+    if(h)d.due=h;
   }
-  DB.debts.push(d);save();render();return d;
+  DB.debts.push(d); nF=null; save(); flash('Đã thêm khoản "'+d.name+'".','ok');
 }
-function editDebt(id){
-  const d=DB.debts.find(x=>x.id===id);if(!d)return;
-  const nm=prompt('Tên khoản nợ:',d.name); if(nm)d.name=nm.slice(0,40);
+function luuSuaNo(){
+  const d=DB.debts.find(x=>x.id===nF.id); if(!d)return;
+  const nm=nfv('nf-ten').trim(); if(nm)d.name=nm.slice(0,40);
+  const g=parseAmt(nfv('nf-tien')); if(g&&!isNaN(g))d.principal=g;
   if(d.mode==='gop'){
-    const p=parseInt(prompt('Số kỳ:',d.periods),10); if(p)d.periods=p;
-    const per=parseAmt(prompt('Mỗi kỳ trả bao nhiêu:',money(d.per))||''); if(per)d.per=per;
-    const g=parseAmt(prompt('Số tiền gốc:',money(d.principal))||''); if(g)d.principal=g;
-    const day=parseInt(prompt('Ngày trả hàng tháng (1-28):',d.start.slice(8,10)),10);
+    const p=parseInt(nfv('nf-ky'),10); if(p)d.periods=p;
+    const per=parseAmt(nfv('nf-kytien')); if(per&&!isNaN(per))d.per=per;
+    const day=parseInt(nfv('nf-ngay'),10);
     if(day)d.start=d.start.slice(0,8)+String(Math.min(28,Math.max(1,day))).padStart(2,'0');
   }else{
-    const g=parseAmt(prompt('Số tiền gốc:',money(d.principal))||''); if(g)d.principal=g;
-    const du=prompt('Ngày dự kiến trả (YYYY-MM-DD):',d.due||'');
-    if(du&&/^\d{4}-\d{2}-\d{2}$/.test(du.trim()))d.due=du.trim(); else if(du==='')delete d.due;
+    const h=dtRead(nfv('nf-han'),'toi'); if(h===null){nfLoi('Ngày hẹn chưa đúng — gõ dạng dd/mm/yy.');return;}
+    if(h)d.due=h; else delete d.due;
   }
-  save();flash('Đã cập nhật.','ok');
+  nF=null; save(); flash('Đã cập nhật.','ok');
 }
+/* điền ngày hẹn thẳng trên thẻ, cho khoản tạo tự động chưa có ngày */
+function luuHan(id){
+  const nfLoi=t=>loiO('loi-han-'+id,t);
+  const d=DB.debts.find(x=>x.id===id); if(!d)return;
+  const h=dtRead(nfv('han-'+id),'toi');
+  if(!h){nfLoi(h===''?'Chưa gõ ngày.':'Ngày chưa đúng — gõ dạng dd/mm/yy.');return;}
+  d.due=h; save(); flash('Đã đặt ngày hẹn '+vnd(h)+'.','ok');
+}
+/* các form vẽ trong thẻ nợ */
+function formNo(d){
+  const cho=(nF.m==='moi'?nF.k:d.kind)==='cho', gop=d&&d.mode==='gop';
+  const F=(nhan,o)=>'<div class="nf"><label>'+nhan+'</label>'+o+'</div>';
+  const IN=(id,v,them)=>'<input id="'+id+'" value="'+esc(v==null?'':v)+'" '+(them||'')+'>';
+  const tien=(id,v,ph)=>IN(id,v?money(v):'','inputmode="numeric" placeholder="'+(ph||'0')+'" oninput="this.value=fmtTien(this.value)"');
+  const han=(v)=>F(cho?'Ngày dự kiến thu':'Ngày dự kiến trả',dtInput('nf-han',v,'toi')+dtChips('nf-han'));
+  const gopF=(p)=>'<div class="two2">'+F('Số kỳ (tháng)',IN('nf-ky',p.periods||12,'inputmode="numeric"'))
+    +F('Ngày trả hằng tháng',IN('nf-ngay',p.day||25,'inputmode="numeric"'))+'</div>'
+    +F('Mỗi kỳ trả',tien('nf-kytien',p.per,'để trống = chia đều'));
+  const nut=(ten,fn)=>'<div class="err" id="nf-loi" hidden></div><div class="nf-btns"><button class="btn" onclick="'+fn+'()">'+ten+'</button>'
+    +'<button class="btn ghost" onclick="dongNo()">Hủy</button></div>';
+  let x='<div class="nform">';
+  if(nF.m==='moi'){
+    x+='<div class="nf-ttl">'+(cho?'Khoản cho mượn mới':'Khoản đi vay mới')+'</div>'
+      +F('Tên người hoặc tên món',IN('nf-ten','','placeholder="VD: Chị Mai" autocomplete="off"'))
+      +F('Số tiền',tien('nf-tien',0));
+    if(!cho)x+=F('Cách trả','<div class="seg" id="nf-cach" data-v="1">'
+        +'<button type="button" class="on" data-v="1" onclick="segChon(this)">Trả một lần</button>'
+        +'<button type="button" data-v="gop" onclick="segChon(this)">Trả góp</button></div>')
+      +'<div data-when="nf-cach:gop" hidden>'+gopF({})+'</div>';
+    x+='<div'+(cho?'':' data-when="nf-cach:1"')+'>'+han('')+'</div>'+nut('Lưu khoản','luuNoMoi');
+  }else if(nF.m==='sua'){
+    x+=F('Tên người hoặc tên món',IN('nf-ten',d.name,'autocomplete="off"'))+F('Số tiền gốc',tien('nf-tien',d.principal));
+    x+=gop?gopF({periods:d.periods,per:d.per,day:+String(d.start).slice(8,10)}):han(d.due||'');
+    x+=nut('Lưu thay đổi','luuSuaNo');
+  }else{
+    const i=debtInfo(d);
+    x+=F(cho?'Thu về bao nhiêu':'Trả bao nhiêu',tien('nf-a',i.nextAmt||i.left))
+      +F(cho?'Tiền vào nguồn nào':'Trả từ nguồn nào','<div class="seg" id="nf-src" data-v="bidv">'
+        +SRC.map((s,k)=>'<button type="button" class="'+(k?'':'on')+'" data-v="'+s.id+'" onclick="segChon(this)">'+s.n+'</button>').join('')+'</div>')
+      +F(cho?'Ngày thu':'Ngày trả',dtInput('nf-d',iso(new Date()),'qua'))
+      +nut(cho?'Ghi thu hồi':'Ghi thanh toán','payDebt');
+  }
+  return x+'</div>';
+}
+/* gõ toàn số thì tự chấm hàng nghìn; gõ kiểu "1tr", "500k" thì để nguyên, parseAmt đọc được */
+const fmtTien=v=>{v=String(v);if(!/^[\d.]*$/.test(v))return v;const d=v.replace(/\D/g,'');return d?money(+d):'';};
 function delDebt(id){
   const d=DB.debts.find(x=>x.id===id);if(!d)return;
   if(!confirm('Xóa khoản "'+d.name+'"? Các giao dịch đã ghi vẫn giữ nguyên.'))return;
   DB.txns.forEach(t=>{if(t.debt===id)delete t.debt;});
   DB.debts=DB.debts.filter(x=>x.id!==id);save();render();
 }
-function payDebt(id){
-  const d=DB.debts.find(x=>x.id===id);if(!d)return;
-  const i=debtInfo(d);
-  const a=parseAmt(prompt((d.kind==='cho'?'Thu về':'Trả')+' bao nhiêu?',money(i.nextAmt||i.left))||'');
-  if(!a||isNaN(a)){flash('Số tiền chưa hợp lệ.','err');return;}
-  const sc=(prompt('Từ nguồn nào? gõ 1 BIDV, 2 Ví, 3 Tiền mặt','1')||'1').trim();
-  const s=sc==='2'?'vi':sc==='3'?'tm':'bidv';
-  DB.txns.push({id:Date.now()+Math.random(),d:iso(new Date()),a,
+function payDebt(){
+  const d=DB.debts.find(x=>x.id===nF.id);if(!d)return;
+  const a=parseAmt(nfv('nf-a'));
+  if(!a||isNaN(a)){nfLoi('Số tiền chưa hợp lệ.');return;}
+  const s=(document.getElementById('nf-src')||{dataset:{}}).dataset.v||'bidv';
+  const ngay=dtRead(nfv('nf-d'),'qua');
+  if(!ngay){nfLoi('Ngày chưa đúng — gõ dạng dd/mm/yy.');return;}
+  nF=null;
+  DB.txns.push({id:Date.now()+Math.random(),d:ngay,a,
     t:d.kind==='cho'?'thu':'chi', c:d.kind==='cho'?'thuno':(d.mode==='gop'?'trano_gop':'trano_cn'),
     s, n:(d.kind==='cho'?'Thu về từ ':'Trả nợ ')+d.name, debt:d.id});
   save();flash('Đã ghi '+money(a)+'.','ok');
 }
 function tog(i){pending[i].keep=!pending[i].keep;render()}
+/* ngày hẹn cho dòng Cho mượn / Đi vay trong màn xem lại — lưu vào dòng chờ, KHÔNG vẽ lại */
+function setHanP(i,v){const h=dtRead(v,'toi');if(h===null)return;if(h)pending[i].han=h;else delete pending[i].han;}
 /* chọn hoặc bỏ chọn cả danh sách một lượt */
 function togAll(v){pending.forEach(t=>{t.keep=!!v});render()}
 function askSpend(i){const t=pending[i];t.t='chi';t.s='bidv';delete t.s2;t.decided=1;t.spend=true;t.c='';render()}
@@ -3322,23 +3477,14 @@ function setCat(i,v){const t=pending[i];t.c=v;learn(t,v);save();render()}
 function reCat(id,v){const t=DB.txns.find(x=>String(x.id)===id);if(!t)return;t.c=v;learn(t,v);save();render()}
 function del(id){DB.txns=DB.txns.filter(x=>String(x.id)!==id);save();render()}
 function setDate(id,v){
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(v))return;
+  v=dtRead(v,'qua'); if(v===null||v===''){if(v===null)flash('Ngày chưa đúng — gõ dạng dd/mm/yy.','err');return;}
   const t=DB.txns.find(x=>String(x.id)===id); if(!t)return;
-  t.d=v; save(); flash('Đã đổi ngày thành '+v.slice(8,10)+'/'+v.slice(5,7)+'.','ok');
+  t.d=v; save(); flash('Đã đổi ngày thành '+vnd(v)+'.','ok');
 }
 function setTime(id,v){
   const t=DB.txns.find(x=>String(x.id)===id); if(!t)return;
   if(/^\d{2}:\d{2}$/.test(v))t.tm=v; else delete t.tm;
   save(); render();
-}
-function editDate(id){
-  const t=DB.txns.find(x=>String(x.id)===id); if(!t)return;
-  const d1=prompt('Ngày giao dịch (YYYY-MM-DD):',t.d); if(d1===null)return;
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(d1.trim())){flash('Ngày chưa đúng dạng.','err');return;}
-  const t1=prompt('Giờ (HH:MM), để trống nếu không có:',t.tm||''); if(t1===null)return;
-  t.d=d1.trim();
-  if(t1.trim()&&/^\d{1,2}:\d{2}$/.test(t1.trim()))t.tm=t1.trim().padStart(5,'0'); else delete t.tm;
-  save(); flash('Đã sửa ngày giờ.','ok');
 }
 function editName(id){const t=DB.txns.find(x=>String(x.id)===id);if(!t)return;
   const v=prompt('Nội dung giao dịch:',t.n); if(v===null)return;
@@ -3419,13 +3565,18 @@ function addManual(){
   const type=document.getElementById('mt').value;
   const a=parseAmt(document.getElementById('ma').value), n=document.getElementById('mn').value.trim();
   if(!a||isNaN(a)){flash('Số tiền chưa hợp lệ.','err');return;}
-  const o={id:Date.now()+Math.random(),d:document.getElementById('md').value||iso(new Date()),
+  const ngay=dtRead(document.getElementById('md').value,'qua');
+  if(!ngay){flash(ngay===''?'Chưa gõ ngày.':'Ngày chưa đúng — gõ dạng dd/mm/yy.','err');return;}
+  const hEl=document.getElementById('mhan'), han=hEl?dtRead(hEl.value,'toi'):'';
+  if(han===null){flash('Ngày hẹn chưa đúng — gõ dạng dd/mm/yy.','err');return;}
+  const o={id:Date.now()+Math.random(),d:ngay,
     a,t:type,n:n||(type==='mv'?'Chuyển tiền':'Giao dịch'),s:document.getElementById('msrc').value};
   if(type==='mv'){o.s2=document.getElementById('ms2').value;
     if(o.s2===o.s){flash('Hai nguồn phải khác nhau.','err');return;}}
   else{o.c=manualCode;
     if(!o.c){flash('Chưa chọn nhóm.','err');return;}}
-  DB.txns.push(o);manualCode='';save();msg='';cursor=new Date();go('home');autoBackup();
+  DB.txns.push(o); noTuGD(o,han);
+  manualCode=''; mNhap={a:'',n:'',s:'',d:'',han:''}; save();msg='';cursor=new Date();go('home');autoBackup();
 }
 function applyBackup(d){
   if(!d||!Array.isArray(d.txns))throw 0;

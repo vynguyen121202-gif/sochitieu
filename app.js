@@ -2560,11 +2560,11 @@ function cachTinhFc(f){
   const R=(t,v,cls)=>`<div class="fc-row ${cls||''}"><span>${t}</span><b>${money(v)}</b></div>`;
   let x=`<div class="panel fc-det">
     <div class="daygroup dg-db1">TIÊU ĐỦ HẠN MỨC</div>
-    ${R('Còn được chi',f.A1)}
+    ${R('Số tiền còn lại được dùng để chi',f.A1)}
     ${f.r1.map(r=>R('− '+esc(r.n),r.a,'sub')).join('')}
     ${R('CUỐI THÁNG',f.du1,'tot')}
     <div class="daygroup dg-db2">THEO NHỊP TIÊU · CÒN ${f.conLai} NGÀY</div>`;
-  x+=f.duocUoc?R('Còn được chi',f.A1)+f.r2.map(r=>R('− '+esc(r.n)+(r.cach==='da'?' <i>theo nhịp tiêu</i>':''),r.a,'sub')).join('')+R('CUỐI THÁNG',f.du2,'tot')
+  x+=f.duocUoc?R('Số tiền còn lại được dùng để chi',f.A1)+f.r2.map(r=>R('− '+esc(r.n)+(r.cach==='da'?' <i>theo nhịp tiêu</i>':''),r.a,'sub')).join('')+R('CUỐI THÁNG',f.du2,'tot')
     :`<div class="fc-row"><span>chưa ước được, đợi qua mùng 5</span></div>`;
   const ks=khongKS(), SW=(code,ten,sub)=>{const on=ks.includes(code);
     return `<div class="fc-ks ${sub?'sub':''}"><span>${esc(ten)}</span>

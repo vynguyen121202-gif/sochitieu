@@ -10,6 +10,7 @@ globalThis.__set=(db,cur,mo)=>{DB=db;cursor=cur;tab='home';open=mo||{};msg='';me
 globalThis.__vHome=()=>vHome();
 globalThis.__pace=()=>pace(cursor);
 globalThis.__fc=()=>forecast();
+globalThis.__ks=ds=>{DB.opts=Object.assign({},DB.opts);if(ds===undefined)delete DB.opts.khongKS;else DB.opts.khongKS=ds;memoClear();};
 globalThis.__m=()=>metrics(cursor);
 globalThis.__hmcy=()=>hanMucChuY(cursor);
 globalThis.__alerts=()=>alerts();
@@ -67,16 +68,32 @@ ok(cong===b.chiTong,'linh hoạt + cố định + tiết kiệm + cho mượn + 
 console.log('      linh hoạt '+M(pa.daChi)+' · cố định '+M(b.coDinh)+' · tiết kiệm '+M(b.ngoai.tk)
   +' · cho mượn '+M(b.ngoai.muon)+' · trả nợ '+M(b.ngoai.trano)+' = '+M(b.chiTong));
 
-console.log('\nC · Tốc độ chi linh hoạt theo từng nhóm — số không được đổi');
+console.log('\nC · Dự báo cuối tháng (v=12, Vy duyệt 28/09) — đoán SỐ DƯ CUỐI THÁNG, khởi từ A1');
 const f=c.__fc();
-const tongNhom=f.bd.filter(g=>g.lh).reduce((s,g)=>s+g.lh/(f.passed||1),0);
-ok(Math.abs(tongNhom-f.rate)<1,'cộng tốc độ từng nhóm = tốc độ chung',
-  M(tongNhom)+' ≠ '+M(f.rate));
-console.log('      '+f.bd.filter(g=>g.lh).length+' nhóm, tốc độ chung '+M(f.rate)+' mỗi ngày');
+{
+  const q=c.__thanhKhoan();
+  eq2(f.A1,q.A1,'khởi từ A1 của Số tiền còn lại được dùng để chi');
+  eq2(f.B,q.B,'so với B = phần cần để dành');
+  eq2(f.du1,f.A1-f.r1.reduce((s,r)=>s+r.a,0),'tiêu đủ hạn mức = A1 − Σ hạn mức linh hoạt còn của từng nhóm');
+  eq2(f.du2,f.A1-f.r2.reduce((s,r)=>s+r.a,0),'theo đà = A1 − Σ từng nhóm — các dòng cộng khớp từng đồng');
+  ok(f.r1.concat(f.r2).every(r=>Number.isInteger(r.a)),'mỗi nhóm đã làm tròn ra đồng TRƯỚC khi cộng');
+  ok(!f.r1.concat(f.r2).some(r=>['tk','muon','trano'].includes(r.id)),'KHÔNG tính Tiết kiệm, Cho mượn, Trả nợ vào phần sẽ chi');
+  ok(!('keHoach' in f)&&!('theoDa' in f)&&!('inc' in f),'KHÔNG còn công thức cũ "thu nhập − chi"');
+  const an=f.r2.find(r=>r.id==='an');
+  ok(!an||an.cach==='da','Ăn uống (mặc định không kiểm soát) tính theo đà');
+}
 
-console.log('\nD · Mục 11.1 — Dự báo 1 KHÔNG trừ góp mục tiêu (theo lựa chọn của Vy)');
-ok(f.keHoach===f.inc-f.raPlan,'để dành được = thu nhập − dự chi, y như cũ',
-  M(f.inc)+' − '+M(f.raPlan)+' ≠ '+M(f.keHoach));
+console.log('\nD · Chọn khoản không kiểm soát được');
+{
+  const truoc=c.__fc().du2;
+  c.__ks(['an','cho','di_xang']); const f0=c.__fc();
+  c.__ks([]); const fKhong=c.__fc();
+  ok(fKhong.r2.every(r=>r.cach==='hm')&&fKhong.du2===fKhong.du1,'không chọn khoản nào → theo đà = tiêu đủ hạn mức');
+  c.__ks(['di_xang']); const fx=c.__fc(), di=fx.r2.find(r=>r.id==='di');
+  ok(!di||di.a>=(fx.r1.find(r=>r.id==='di')||{a:0}).a,'chỉ chọn Xăng xe → Di chuyển lấy số LỚN HƠN giữa đà xăng và hạn mức còn');
+  c.__ks(undefined); eq2(c.__fc().du2,f0.du2,'chưa chọn gì (sổ cũ) → mặc định Ăn uống, Chợ, Xăng xe');
+  eq2(truoc,f0.du2,'mặc định cho cùng kết quả với danh sách đặt tay giống hệt');
+}
 
 console.log('\nE · Tháng đang theo dõi — thứ tự và nội dung trang');
 const h=c.__vHome();
@@ -91,10 +108,9 @@ ok(h.indexOf('Trung bình')>=0||h.indexOf('Đã chi')>=0,'ô tổng chi viết h
 ok(h.indexOf('TỔNG QUAN THÁNG NÀY')>=0,'có khối thực thu − thực chi (mục 8)');
 ok(h.indexOf('TỔNG QUAN THÁNG NÀY')<h.indexOf('HẠN MỨC LINH HOẠT'),
   'Tổng quan tháng này nằm TRƯỚC Hạn mức linh hoạt');
-ok(h.indexOf('DỰ BÁO 1')>=0&&h.indexOf('DỰ BÁO 2')>=0,'đã đổi Cách 1/2 thành Dự báo 1/2');
-ok(h.indexOf('Dự chi trong tháng')>=0,'đã đổi "Sẽ chi cả tháng" thành "Dự chi trong tháng"');
-ok(h.indexOf('Trong đó cần góp mục tiêu tài chính')>=0,'có dòng góp mục tiêu tài chính');
-ok(h.indexOf('CHI TIẾT TỪNG NHÓM CỦA DỰ BÁO Ở TRÊN')>=0,'bảng chi tiết có nhãn nói rõ là con của khối trên');
+ok(h.indexOf('TIÊU ĐỦ HẠN MỨC')>=0&&h.indexOf('THEO ĐÀ HIỆN TẠI')>=0,'bảng Cách tính có hai phần: tiêu đủ hạn mức · theo đà');
+ok(h.indexOf('KHÔNG KIỂM SOÁT ĐƯỢC')>=0&&(h.match(/class="fc-sw on"/g)||[]).length===3,'có danh sách chọn khoản không kiểm soát, bật sẵn đúng 3');
+ok(h.indexOf('Để dành được')<0&&h.indexOf('để dành được')<0,'KHÔNG còn chữ "để dành được" (công thức cũ)');
 ok(h.indexOf('dg-neu')>=0&&h.indexOf('dg-bud')>=0&&h.indexOf('dg-kq')>=0,'ba khối trong bảng có ba màu khác nhau');
 ok(h.indexOf('dg-chi')<0,'khối CHI TIÊU cũ đã gộp vào nút xổ Thực chi, không còn đếm hai lần');
 const m=c.__m();
@@ -115,10 +131,13 @@ const m=c.__m();
 }
 
 console.log('\nE2 · Vòng sửa 2');
-ok(h.indexOf('dg-db1')>=0&&h.indexOf('dg-db2')>=0,'Dự báo 1 và Dự báo 2 đều có tiêu đề khối');
-ok(h.indexOf('Tiêu vừa đủ hạn mức sẽ để dành được')>=0,'có dòng tổng quát "tiêu vừa đủ hạn mức…"');
-ok(h.indexOf('Nếu giữ đà đang tiêu sẽ để dành được')>=0,'có dòng tổng quát "nếu giữ đà đang tiêu…"');
-ok(h.indexOf('fcsum-1')<h.indexOf('id="sec-fc"'),'hai dòng tổng quát nằm NGOÀI/TRƯỚC ô xổ xuống');
+ok(h.indexOf('dg-db1')>=0&&h.indexOf('dg-db2')>=0,'hai phần của bảng Cách tính đều có tiêu đề');
+{ const fq=c.__fc();
+  ok(h.includes('<b class="">'+M(fq.du1)+'</b> <span>/ '+M(fq.B)+'</span>')||h.includes('<b class="am">'+M(fq.du1)+'</b>'),
+    'dòng "Tiêu đủ hạn mức" ghi dạng x / y: '+M(fq.du1)+' / '+M(fq.B));
+  ok(h.includes((fq.du1<fq.B?'thiếu '+M(fq.B-fq.du1):'dư '+M(fq.du1-fq.B))),'ngay dưới ghi thiếu / dư đúng số');
+  ok(h.indexOf('Tiêu đủ hạn mức')<h.indexOf('id="sec-fc"'),'hai dòng tóm tắt nằm TRƯỚC nút "Cách tính"');
+  ok(!/class="bar"/.test(h),'KHÔNG có thanh tiến độ (Vy bỏ)'); }
 ok(h.indexOf('🚩')<0,'đã bỏ cờ 🚩');
 ok(h.indexOf('cùng kỳ tháng trước')<0,'không còn so cùng kỳ');
 ok(h.indexOf('Thấp hơn')<0,'KHÔNG báo khi tiêu ít hơn tháng trước');
@@ -173,7 +192,7 @@ ok(h.indexOf('Thấp hơn')<0,'KHÔNG báo khi tiêu ít hơn tháng trước');
   { /* Sáu khối CÙNG XUẤT HIỆN trên Tổng quan tháng đang theo dõi phải khác tông nhau.
        (Các tiêu đề trong khối Tổng kết tháng cũ nằm ở màn khác nên không xét chung.) */
     const TEN=['Tổng ngân sách khả dụng','Hạn mức cần chú ý','Cơ cấu chi tiêu',
-               'Dự báo để dành','Nợ','Mục tiêu đang thực hiện'];
+               'Dự báo cuối tháng','Nợ','Mục tiêu đang thực hiện'];
     const ma=[...js2.matchAll(/gcA\('(#[0-9A-Fa-f]{6})'\)}"><\/i><b>([^<]+)<\/b>/g)]
       .map(m=>({m:m[1],t:m[2]})).filter(x=>TEN.includes(x.t));
     /* So bằng HSL chứ không bằng khoảng cách RGB thô: hai màu cùng sắc nhưng khác
@@ -249,7 +268,7 @@ ok(h2.indexOf('Cơ cấu chi tiêu')>=0,'vẫn có Cơ cấu chi tiêu');
 ok(h2.indexOf('Tổng kết')>=0,'vẫn có Tổng kết tháng');
 ok(h2.indexOf('CẦN XỬ LÝ')<0,'KHÔNG còn cảnh báo vượt hạn mức');
 ok(h2.indexOf('Hạn mức cần chú ý')<0,'KHÔNG còn Hạn mức cần chú ý');
-ok(h2.indexOf('Dự báo để dành')<0,'KHÔNG còn Dự báo để dành');
+ok(h2.indexOf('Dự báo cuối tháng')<0,'tháng cũ KHÔNG hiện Dự báo cuối tháng');
 ok(h2.indexOf('<b>Nợ</b>')<0,'KHÔNG còn khối Nợ');
 ok(h2.indexOf('Mục tiêu đang thực hiện')<0,'KHÔNG còn Mục tiêu');
 ok(h2.trimEnd().endsWith('</div>'),'trang kết thúc gọn sau Cơ cấu chi tiêu');

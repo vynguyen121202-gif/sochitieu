@@ -407,3 +407,30 @@ input.dt{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius
   background:var(--okbg);color:var(--pos);font-size:13px}
 .chot-xong b{color:var(--ink)}
 .chot-sua{padding:9px 14px;font-size:12.5px;background:var(--warnbg);color:var(--warntx);border-top:1px solid var(--line)}
+/* ---- Dự báo cuối tháng (v=12) — số dự báo ĐẬM, cùng cỡ với số cần để dành ---- */
+.fc-h{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:12px 14px;border-top:1px solid var(--line-2)}
+.fc-h:first-child{border-top:0}
+.fc-l{font-size:13.5px;color:var(--ink-2);padding-top:1px}
+.fc-r{text-align:right}
+.fc-so{font-size:15px;white-space:nowrap}
+.fc-so b{font-weight:700;color:var(--ink)}
+.fc-so b.am{color:var(--brick)}
+.fc-so span{font-weight:400;color:var(--ink-3)}
+.fc-k{font-size:12.5px;font-weight:600;margin-top:2px;color:var(--ink-3)}
+.fc-k.thieu{color:var(--brick)}.fc-k.du{color:var(--pos)}
+.fc-det{border-radius:0 0 var(--r) var(--r);border-top:0}
+.fc-row{display:flex;justify-content:space-between;gap:10px;padding:9px 14px;border-top:1px solid var(--line-2);font-size:13.5px}
+.fc-row b{font-weight:600;white-space:nowrap}
+.fc-row.sub{padding-left:24px;font-size:13px}
+.fc-row i{font-style:normal;font-size:11px;color:var(--amber);font-weight:600;margin-left:4px}
+.fc-row.tot{background:var(--rowb);border-top:1px solid var(--line)}
+.fc-row.tot span{font-size:12px;font-weight:700;letter-spacing:.03em;color:var(--ink-2)}
+.fc-row.tot b{font-size:15px;font-weight:700}
+.daygroup.fc-ksh{background:var(--rowb);color:var(--ink-2);border-top:1px solid var(--line)}
+.fc-ks{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 14px;min-height:46px;
+  border-top:1px solid var(--line-2);font-size:13.5px}
+.fc-ks.sub{padding-left:28px;font-size:13px;color:var(--ink-2)}
+.fc-sw{flex:none;width:44px;height:26px;border-radius:13px;border:0;background:var(--dim);position:relative;padding:0}
+.fc-sw::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;
+  box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .15s}
+.fc-sw.on{background:var(--amber)}.fc-sw.on::after{left:21px}

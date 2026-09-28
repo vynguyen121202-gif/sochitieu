@@ -73,7 +73,11 @@ c=san('2026-10-01T10:00:00');
 c.__set(so([['2026-09-28',IDNGAY(2026,9,28,18,0)]]),new Date(2026,9,1));
 g=c.__g();
 ok(g&&g.so===2&&g.trong[0]==='2026-09-30'&&g.trong[1]==='2026-09-29','quet ca sang thang truoc: dem dung 2 ngay 29+30/09','ra '+JSON.stringify(g&&g.trong));
-ok(c.__v().includes('Đã 2 ngày chưa cập nhật giao dịch'),'mung 1 van hien khoi nhac');
+/* từ v=9: mùng 1, ngày trống của tháng trước nằm trong khối CHỐT SỔ, không báo trùng ở khối nhắc.
+   Lỗi cũ là mùng 1 không nhắc gì cả — nên vẫn phải thấy đủ hai ngày, chỉ là ở chỗ khác. */
+{const h=c.__v();
+ ok(h.includes('Chốt sổ tháng 9')&&h.includes(', 29/09')&&h.includes(', 30/09'),'mung 1: khoi chot so van liet ke 29/09 va 30/09');
+ ok(!h.includes('Đã 2 ngày chưa cập nhật giao dịch'),'mung 1: KHONG bao trung hai ngay do o khoi nhac ghi so');}
 
 console.log('\nG · So trong / truoc ngay ghi chep dau tien');
 c=san('2026-09-19T10:00:00');

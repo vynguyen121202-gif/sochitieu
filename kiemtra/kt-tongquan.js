@@ -95,7 +95,13 @@ ok(h.indexOf('dg-chi')<0,'khối CHI TIÊU cũ đã gộp vào nút xổ Thực 
 const m=c.__m();
 { /* Thuc thu / Thuc chi phai CONG VE dung so du — day la ly do doi cach tinh */
   const bt=c.__bangTien();
-  ok(bt.dauThang+bt.tongVao-bt.tongRa===bt.cuoi,'số dư đầu + thực thu − thực chi = số dư cuối');
+  /* từ v=9 (Vy chốt 28/09): cho vay và vay đi ra hai dòng ròng riêng, vẫn phải cộng về đúng số dư */
+  ok(bt.dauThang+bt.tongVao-bt.tongRa-bt.choRong-bt.vayRong===bt.cuoi,
+    'số dư đầu + thực thu − thực chi − cho vay ròng − trả nợ cá nhân ròng = số dư cuối');
+  ok(bt.choRong===bt.muon-bt.thuno&&bt.vayRong===bt.traCN-bt.divay,'hai dòng ròng = cho mượn − thu nợ · trả nợ cá nhân − đi vay');
+  ok(!bt.vao.some(v=>/Thu nợ|Đi vay/.test(v.n)),'Thực thu KHÔNG còn Thu nợ, Đi vay');
+  ok(!bt.ra.some(v=>/Cho mượn|Trả nợ/.test(v.n)),'Thực chi KHÔNG còn Cho mượn, Trả nợ cá nhân');
+  ok(h.indexOf('cho mượn và trả nợ')<0,'không còn chú thích "trong đó cho mượn và trả nợ"');
   ok(bt.cuoi===bt.tien,'số dư cuối khớp balances() ('+M(bt.cuoi)+')');
   ok(h.indexOf(M(bt.cuoi))>=0,'số dư hiện tại có mặt trên trang ('+M(bt.cuoi)+')');
   ok(/số dư hiện tại/i.test(h),'có dòng Số dư hiện tại');

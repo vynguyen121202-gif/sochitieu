@@ -1094,7 +1094,7 @@ function paceWhy2(pa){
   x+='<div class="daygroup dg-neu">TỔNG QUAN THÁNG NÀY</div>'+bangSoDu(t,thang);
   x+=ctT('Số dư hiện tại',CT_SODU+(Math.round(t.cuoi)===Math.round(t.tien)?' · khớp sao kê':' · CHƯA khớp sao kê'),
     '<b class="'+(t.cuoi<0?'am':'duong')+'">'+money(t.cuoi)+'</b>');
-  /* KẾT QUẢ dừng ở "Còn được dùng để chi" (Vy 28/09) — phần cần để dành đã nằm trên thẻ.
+  /* KẾT QUẢ dừng ở "Số tiền còn lại được dùng để chi" (Vy 28/09) — phần cần để dành đã nằm trên thẻ.
      Dòng bằng 0 của Lương chưa về thì ẩn; ký hiệu đánh số theo đúng những dòng đang hiện. */
   x+='<div class="daygroup dg-kq">KẾT QUẢ</div>';
   var so=6, cong=[], tru=[], hen='';
@@ -1104,7 +1104,7 @@ function paceWhy2(pa){
   var f='số dư'+cong.map(function(s){return ' + '+s;}).join('')+tru.map(function(s){return ' − '+s;}).join('')
     +(hen?' · sau khi thu + '+hen:'');
   /* hiện tại và sau khi thu đặt CẠNH NHAU, hai màu khác nhau (Vy 28/09) */
-  x+=ctT('Còn được dùng để chi',f,q.henTong
+  x+=ctT('Số tiền còn lại được dùng để chi',f,q.henTong
     ?'<span class="ct-hai"><b class="'+(q.A0<0?'am':'duong')+'">'+money(q.A0)+'</b> <i>→</i> <b class="sau">'+money(q.A1)+'</b></span>'
     :'<b class="'+(q.A1<0?'am':'duong')+'">'+money(q.A1)+'</b>');
   return x+'</div>';
@@ -2563,13 +2563,13 @@ function cachTinhFc(f){
     ${R('Còn được chi',f.A1)}
     ${f.r1.map(r=>R('− '+esc(r.n),r.a,'sub')).join('')}
     ${R('CUỐI THÁNG',f.du1,'tot')}
-    <div class="daygroup dg-db2">THEO ĐÀ HIỆN TẠI · CÒN ${f.conLai} NGÀY</div>`;
-  x+=f.duocUoc?R('Còn được chi',f.A1)+f.r2.map(r=>R('− '+esc(r.n)+(r.cach==='da'?' <i>theo đà</i>':''),r.a,'sub')).join('')+R('CUỐI THÁNG',f.du2,'tot')
+    <div class="daygroup dg-db2">THEO NHỊP TIÊU · CÒN ${f.conLai} NGÀY</div>`;
+  x+=f.duocUoc?R('Còn được chi',f.A1)+f.r2.map(r=>R('− '+esc(r.n)+(r.cach==='da'?' <i>theo nhịp tiêu</i>':''),r.a,'sub')).join('')+R('CUỐI THÁNG',f.du2,'tot')
     :`<div class="fc-row"><span>chưa ước được, đợi qua mùng 5</span></div>`;
   const ks=khongKS(), SW=(code,ten,sub)=>{const on=ks.includes(code);
     return `<div class="fc-ks ${sub?'sub':''}"><span>${esc(ten)}</span>
       <button class="fc-sw ${on?'on':''}" role="switch" aria-checked="${on}" aria-label="${esc(ten)}" onclick="togKS('${code}')"></button></div>`;};
-  x+=`<div class="daygroup fc-ksh">KHÔNG KIỂM SOÁT ĐƯỢC · tính theo đà</div>`;
+  x+=`<div class="daygroup fc-ksh">KHÔNG KIỂM SOÁT ĐƯỢC · tính theo nhịp tiêu</div>`;
   GROUPS.filter(g=>g.k==='chi'&&!['tk','muon','trano'].includes(g.id)).forEach(g=>{
     x+=SW(g.id,g.n,0);
     if(!ks.includes(g.id))g.subs.forEach(s=>{x+=SW(s[0],s[1],1);});
@@ -2666,7 +2666,7 @@ function vHome(){
       h+=`<h2 class="hl"><i style="background:${gcA('#5476C4')}"></i><b>Tổng ngân sách khả dụng</b>
         <em>${pa.ngayCon>1?'còn '+pa.ngayCon+' ngày':'ngày cuối tháng'}</em></h2>`;
       h+=`<div class="panel kd">
-        <div class="kd-lb">Còn được dùng để chi</div>
+        <div class="kd-lb">Số tiền còn lại được dùng để chi</div>
         ${q.henTong
           ?`<div class="kd-hai"><div><b class="${q.A0<0?'am':'duong'}">${money(q.A0)}</b><span>hiện tại</span></div>
               <i>→</i><div><b class="sau">${money(q.A1)}</b><span>sau khi thu ${dm(q.henCuoi)}</span></div></div>`
@@ -2764,7 +2764,7 @@ function vHome(){
         <div class="fc-so"><b class="${v<0?'am':''}">${money(v)}</b>${f.B?` <span>/ ${money(f.B)}</span>`:''}</div>
         ${f.B?`<div class="fc-k ${k<0?'thieu':'du'}">${k<0?'thiếu '+money(-k):k?'dư '+money(k):'vừa đủ'}</div>`:''}</div></div>`;};
     h+=`<h2 class="hl"><i style="background:${gcA('#47897A')}"></i><b>Dự báo cuối tháng</b></h2>
-      <div class="panel">${HANG('Tiêu đủ hạn mức',f.du1)}${HANG('Theo đà hiện tại',f.du2,!f.duocUoc)}</div>`;
+      <div class="panel">${HANG('Tiêu đủ hạn mức',f.du1)}${HANG('Theo nhịp tiêu',f.du2,!f.duocUoc)}</div>`;
     h+=nutXem('fc','sec-fc');
     h+='<div class="xow" data-xo="fc" data-open="'+(open.fc?1:0)+'">'+cachTinhFc(f)+'</div>';
   }
@@ -3240,7 +3240,7 @@ function vInfo(){
    ['Định mức ngày','KẾ HOẠCH mỗi ngày: hạn mức linh hoạt chia số ngày trong tháng, cố định suốt tháng. Ví dụ 5.050.000 ÷ 30 = 168.333.'],
    ['Thực tế được tiêu','tiền THẬT còn tiêu tự do chia số ngày còn lại, TÍNH CẢ HÔM NAY. Tiêu tự do là Số tiền còn lại được dùng để chi trừ phần cần để dành — đúng con số ở dòng trên cùng thẻ. Khi đang lấn phần để dành thì ô này bằng 0 và ghi rõ đang lấn bao nhiêu. So với Định mức ngày: thấp hơn là đỏ, cao hơn là xanh. Ngày cuối tháng chia cho 1 ngày.'],
    ['Dự báo cuối tháng — tiêu đủ hạn mức','đoán SỐ DƯ CUỐI THÁNG, đúng con số tháng đóng sổ kết ở đó. Lấy Số tiền còn lại được dùng để chi (tiền thật đã trừ nợ, cố định chưa trả, cộng thu nợ đã hẹn) trừ hạn mức linh hoạt còn lại của từng nhóm. Đặt cạnh phần cần để dành: thấp hơn thì ghi thiếu bao nhiêu, cao hơn thì ghi dư.'],
-   ['Dự báo cuối tháng — theo đà hiện tại','như trên, nhưng khoản Vy đánh dấu KHÔNG KIỂM SOÁT ĐƯỢC (mặc định Ăn uống, Chợ & siêu thị, Xăng xe) tính theo đà: đã tiêu chia số ngày đã qua nhân số ngày còn lại. Khoản khác chỉ tiêu trong phần hạn mức còn lại, vì hết hạn mức thì Vy thôi chi. Nhóm chỉ có vài mục con không kiểm soát thì lấy số lớn hơn giữa đà của các mục đó và hạn mức còn của cả nhóm. Mỗi nhóm làm tròn ra đồng rồi mới cộng. Trước ngày 5 không ước. Chọn khoản không kiểm soát ở cuối bảng Cách tính của khối dự báo.'],
+   ['Dự báo cuối tháng — theo nhịp tiêu','như trên, nhưng khoản Vy đánh dấu KHÔNG KIỂM SOÁT ĐƯỢC (mặc định Ăn uống, Chợ & siêu thị, Xăng xe) tính theo đà: đã tiêu chia số ngày đã qua nhân số ngày còn lại. Khoản khác chỉ tiêu trong phần hạn mức còn lại, vì hết hạn mức thì Vy thôi chi. Nhóm chỉ có vài mục con không kiểm soát thì lấy số lớn hơn giữa đà của các mục đó và hạn mức còn của cả nhóm. Mỗi nhóm làm tròn ra đồng rồi mới cộng. Trước ngày 5 không ước. Chọn khoản không kiểm soát ở cuối bảng Cách tính của khối dự báo.'],
    ['So với tháng trước','trong khối Hạn mức cần chú ý, mỗi nhóm so tổng chi từ đầu tháng tới hôm nay với TỔNG CẢ THÁNG trước của chính nhóm đó. Hai vế cùng lấy tổng chi thô của nhóm, không trừ khoản cố định ở vế nào. Vì tháng này còn đang chạy nên app chỉ báo khi đã vượt hẳn tháng trước — tiêu ít hơn thì không nhắc, và tháng trước nhóm đó chưa tiêu đồng nào thì không có gì để so.'],
    ['Nhắc ghi sổ','đếm từ hôm qua lùi dần xem có bao nhiêu ngày liên tiếp sổ không có giao dịch nào, dừng khi gặp ngày có ghi chép. Một ngày trống thì nhắc đúng ngày đó; từ hai ngày trở lên thì báo số ngày kèm lần cuối cập nhật. "Lần cuối" là lúc Vy bấm Lưu, không phải giờ của khoản chi — app suy ra từ mã giao dịch vốn đã mang sẵn mốc thời gian. Bấm "Không phát sinh giao dịch" thì những ngày đang bị nhắc được đánh dấu là ngày thật sự không tiêu gì và thôi nhắc. Chỉ hiện khi xem tháng hiện tại.'],
    ['Hạn mức một nhóm','chi phí cố định thuộc nhóm đó cộng phần linh hoạt đã phân bổ. Riêng Trả nợ lấy đúng kỳ nợ đến hạn trong tháng. Hạn mức lưu riêng từng tháng, tháng chưa đặt thì thừa kế tháng gần nhất trước đó.'],

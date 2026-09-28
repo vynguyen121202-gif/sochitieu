@@ -110,7 +110,7 @@ ok(h.indexOf('TỔNG QUAN THÁNG NÀY')>=0,'có khối thực thu − thực chi
 ok(h.indexOf('Hạn mức linh hoạt')<h.indexOf('TỔNG QUAN THÁNG NÀY'),'Hạn mức linh hoạt nằm trong thẻ, trên bảng Cách tính');
 ok(h.indexOf('HẠN MỨC LINH HOẠT')<0&&h.indexOf('dg-bud')<0,'bảng Cách tính KHÔNG còn lặp phần Hạn mức linh hoạt');
 ok((h.match(/Hạn mức linh hoạt/g)||[]).length===1,'chữ "Hạn mức linh hoạt" xuất hiện đúng MỘT lần');
-ok(h.indexOf('TIÊU ĐỦ HẠN MỨC')>=0&&h.indexOf('THEO ĐÀ HIỆN TẠI')>=0,'bảng Cách tính có hai phần: tiêu đủ hạn mức · theo đà');
+ok(h.indexOf('TIÊU ĐỦ HẠN MỨC')>=0&&h.indexOf('THEO NHỊP TIÊU')>=0&&h.indexOf('THEO ĐÀ')<0&&h.indexOf('Theo đà')<0,'bảng có hai phần: tiêu đủ hạn mức · theo nhịp tiêu (không còn chữ "theo đà")');
 ok(h.indexOf('KHÔNG KIỂM SOÁT ĐƯỢC')>=0&&(h.match(/class="fc-sw on"/g)||[]).length===3,'có danh sách chọn khoản không kiểm soát, bật sẵn đúng 3');
 ok(h.indexOf('Để dành được')<0&&h.indexOf('để dành được')<0,'KHÔNG còn chữ "để dành được" (công thức cũ)');
 ok(h.indexOf('dg-neu')>=0&&h.indexOf('dg-kq')>=0,'hai khối trong bảng Cách tính có tiêu đề riêng');
@@ -156,7 +156,7 @@ ok(h.indexOf('Thấp hơn')<0,'KHÔNG báo khi tiêu ít hơn tháng trước');
 { /* KẾT QUẢ: mot nut xo, con so chinh nam ngay tren tieu de */
   const i=h.indexOf('dg-kq'), doan=h.slice(i,i+3400);
   /* v=12: KẾT QUẢ trải phẳng, có ký hiệu (6)…(9), "Còn được dùng để chi" MỘT dòng */
-  ok(doan.indexOf('Còn được dùng để chi')>=0,'KẾT QUẢ có dòng Còn được dùng để chi');
+  ok(doan.indexOf('Số tiền còn lại được dùng để chi')>=0,'KẾT QUẢ có dòng Số tiền còn lại được dùng để chi');
   /* chỉnh 28/09: KẾT QUẢ dừng ở Còn được dùng để chi; Lương chưa về = 0 thì ẩn */
   ok(doan.indexOf('Cần để dành')<0&&doan.indexOf('>Thiếu<')<0&&doan.indexOf('>Dư<')<0,'KẾT QUẢ KHÔNG còn Cần để dành / Thiếu / Dư');
   { const q=c.__thanhKhoan();
@@ -305,7 +305,7 @@ ok(h3.indexOf('THỰC TẾ ĐƯỢC TIÊU')>=0||h3.indexOf('Số tiền còn l�
 console.log('\nH · Bản v=8 — bảng từ, khối Nợ, nút xổ');
 { /* bang tu da chot: mot khai niem mot ten */
   ok(h.indexOf('Hạn mức linh hoạt')>=0,'dùng "Hạn mức linh hoạt"');
-  ok(h.indexOf('Còn được dùng để chi')>=0,'dùng "Còn được dùng để chi" (bản gọn Vy duyệt 28/09)');
+  ok(h.indexOf('Số tiền còn lại được dùng để chi')>=0&&h.indexOf('>Còn được dùng để chi')<0,'dùng đúng tên "Số tiền còn lại được dùng để chi" (Vy đổi lại 28/09)');
   ok(h.indexOf('Số tiền còn lại được tiêu')<0,'KHÔNG còn tên cũ "Số tiền còn lại được tiêu"');
   ok(h.indexOf('tiêu dùng thật')<0,'KHÔNG đặt tên riêng cho cố định + linh hoạt (Vy chốt)');
   ok(h.indexOf('Trung bình')<0,'đã bỏ "trung bình mỗi ngày" ở ô tổng chi');

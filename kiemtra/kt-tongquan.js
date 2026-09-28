@@ -55,8 +55,8 @@ ok(pa.choMuon===2000000,'cho mượn tháng này = 2.000.000','ra '+M(pa.choMuon
   const q=c.__thanhKhoan(), tu=pa.ngayCon?q.tuDo/pa.ngayCon:0, h=c.__vHome();
   eq2(pa.ngayCon,pa.nd-pa.qua+1,'số ngày còn lại TÍNH CẢ HÔM NAY = '+pa.nd+' − '+pa.qua+' + 1');
   ok(!('conDuoc' in pa)&&!('moiNgay' in pa),'pace() KHÔNG còn conDuoc (công thức cũ từ hạn mức) và moiNgay (bỏ từ v=8)');
-  ok(h.includes('>'+M(tu)+'</div>'),'ô THỰC TẾ ĐƯỢC TIÊU = tiêu tự do '+M(q.tuDo)+' ÷ '+pa.ngayCon+' ngày = '+M(tu));
-  ok(h.includes('>'+M(pa.chuan)+'</div>')&&h.includes('Kế hoạch, cố định cả tháng'),'ô ĐỊNH MỨC NGÀY giữ nguyên = hạn mức linh hoạt ÷ số ngày');
+  ok(h.includes('<span>THỰC TẾ ĐƯỢC TIÊU</span><b>'+M(tu)+'</b>'),'ô THỰC TẾ ĐƯỢC TIÊU = tiêu tự do '+M(q.tuDo)+' ÷ '+pa.ngayCon+' ngày = '+M(tu));
+  ok(h.includes('<span>ĐỊNH MỨC NGÀY</span><b>'+M(pa.chuan)+'</b><small>kế hoạch</small>'),'ô ĐỊNH MỨC NGÀY giữ nguyên = hạn mức linh hoạt ÷ số ngày, ghi "kế hoạch"');
   ok(!/Hụt |Dôi ra/.test(h.slice(h.indexOf('THỰC TẾ ĐƯỢC TIÊU'),h.indexOf('THỰC TẾ ĐƯỢC TIÊU')+600)),'không còn chữ "Hụt / Dôi ra" kiểu cũ ở ô Thực tế');
 }
 
@@ -106,12 +106,14 @@ ok(h.indexOf('vượt hạn mức')>=0,'có cảnh báo vượt hạn mức (S�
 ok(h.indexOf('Tiền mặt')>=0&&h.indexOf('>Mặt ')<0,'thanh số dư ghi "Tiền mặt", không còn "Mặt"');
 ok(h.indexOf('Trung bình')>=0||h.indexOf('Đã chi')>=0,'ô tổng chi viết hoa đầu câu');
 ok(h.indexOf('TỔNG QUAN THÁNG NÀY')>=0,'có khối thực thu − thực chi (mục 8)');
-ok(h.indexOf('TỔNG QUAN THÁNG NÀY')<h.indexOf('HẠN MỨC LINH HOẠT'),
-  'Tổng quan tháng này nằm TRƯỚC Hạn mức linh hoạt');
+/* v=12: Hạn mức linh hoạt chỉ còn MỘT chỗ — trong thẻ, TRƯỚC nút Cách tính; bảng Cách tính không lặp lại */
+ok(h.indexOf('Hạn mức linh hoạt')<h.indexOf('TỔNG QUAN THÁNG NÀY'),'Hạn mức linh hoạt nằm trong thẻ, trên bảng Cách tính');
+ok(h.indexOf('HẠN MỨC LINH HOẠT')<0&&h.indexOf('dg-bud')<0,'bảng Cách tính KHÔNG còn lặp phần Hạn mức linh hoạt');
+ok((h.match(/Hạn mức linh hoạt/g)||[]).length===1,'chữ "Hạn mức linh hoạt" xuất hiện đúng MỘT lần');
 ok(h.indexOf('TIÊU ĐỦ HẠN MỨC')>=0&&h.indexOf('THEO ĐÀ HIỆN TẠI')>=0,'bảng Cách tính có hai phần: tiêu đủ hạn mức · theo đà');
 ok(h.indexOf('KHÔNG KIỂM SOÁT ĐƯỢC')>=0&&(h.match(/class="fc-sw on"/g)||[]).length===3,'có danh sách chọn khoản không kiểm soát, bật sẵn đúng 3');
 ok(h.indexOf('Để dành được')<0&&h.indexOf('để dành được')<0,'KHÔNG còn chữ "để dành được" (công thức cũ)');
-ok(h.indexOf('dg-neu')>=0&&h.indexOf('dg-bud')>=0&&h.indexOf('dg-kq')>=0,'ba khối trong bảng có ba màu khác nhau');
+ok(h.indexOf('dg-neu')>=0&&h.indexOf('dg-kq')>=0,'hai khối trong bảng Cách tính có tiêu đề riêng');
 ok(h.indexOf('dg-chi')<0,'khối CHI TIÊU cũ đã gộp vào nút xổ Thực chi, không còn đếm hai lần');
 const m=c.__m();
 { /* Thuc thu / Thuc chi phai CONG VE dung so du — day la ly do doi cach tinh */
@@ -153,10 +155,13 @@ ok(h.indexOf('Thấp hơn')<0,'KHÔNG báo khi tiêu ít hơn tháng trước');
 }
 { /* KẾT QUẢ: mot nut xo, con so chinh nam ngay tren tieu de */
   const i=h.indexOf('dg-kq'), doan=h.slice(i,i+3400);
-  ok(doan.indexOf('Số tiền còn lại được dùng để chi')>=0,'KẾT QUẢ có nút xổ Số tiền còn lại được dùng để chi');
-  ok(doan.indexOf('data-k="kq"')>=0&&doan.indexOf('class="xo"')>=0,
-    'nút xổ KẾT QUẢ có vỏ chạy chuyển động');
-  ok(doan.indexOf('cần để dành')>=0,'tiêu đề mang cặp số x / y cần để dành');
+  /* v=12: KẾT QUẢ trải phẳng, có ký hiệu (6)…(9), "Còn được dùng để chi" MỘT dòng */
+  ok(doan.indexOf('Còn được dùng để chi')>=0,'KẾT QUẢ có dòng Còn được dùng để chi');
+  ok(doan.indexOf('<span class="ct-sy">9</span>Cần để dành')>=0,'KẾT QUẢ có (9) Cần để dành');
+  ok(h.indexOf('(1) + (2) − (3) − (4) − (5)')>=0,'Số dư hiện tại ghi công thức bằng ký hiệu (1)…(5)');
+  ok(h.indexOf('<span class="ct-sy">4</span>Tiền đang cho vay <span class="ct-f">cho mượn − thu nợ</span>')>=0,'(4) Tiền đang cho vay, chú thích "cho mượn − thu nợ"');
+  ok(h.indexOf('<span class="ct-sy">5</span>Trả nợ <span class="ct-f">trả nợ − đi vay</span>')>=0,'(5) Trả nợ, chú thích "trả nợ − đi vay"');
+  ok(h.indexOf('Trả nợ cá nhân − đi vay')<0&&h.indexOf('không tính là chi hay thu')<0,'KHÔNG còn chú thích dài kiểu cũ');
   ok(doan.indexOf('vượt ')>=0||doan.indexOf('dư ')>=0,'có nói vượt hay dư so với số cần để dành');
   const q=c.__thanhKhoan();
   ok(!(q.lan>0&&q.tuDo>0),'luôn đúng một trong hai bằng 0 — không có cú nhảy ở ranh giới');
@@ -192,7 +197,7 @@ ok(h.indexOf('Thấp hơn')<0,'KHÔNG báo khi tiêu ít hơn tháng trước');
   { /* Sáu khối CÙNG XUẤT HIỆN trên Tổng quan tháng đang theo dõi phải khác tông nhau.
        (Các tiêu đề trong khối Tổng kết tháng cũ nằm ở màn khác nên không xét chung.) */
     const TEN=['Tổng ngân sách khả dụng','Hạn mức cần chú ý','Cơ cấu chi tiêu',
-               'Dự báo cuối tháng','Nợ','Mục tiêu đang thực hiện'];
+               'Dự báo cuối tháng','Nợ','Mục tiêu'];
     const ma=[...js2.matchAll(/gcA\('(#[0-9A-Fa-f]{6})'\)}"><\/i><b>([^<]+)<\/b>/g)]
       .map(m=>({m:m[1],t:m[2]})).filter(x=>TEN.includes(x.t));
     /* So bằng HSL chứ không bằng khoảng cách RGB thô: hai màu cùng sắc nhưng khác
@@ -226,8 +231,10 @@ ok(h.indexOf('Thấp hơn')<0,'KHÔNG báo khi tiêu ít hơn tháng trước');
   const i=cs.indexOf('  .al{display:flex'), doan=cs.slice(i,i+430);
   ok(doan.indexOf('border-radius:0')>=0,'từng cảnh báo không còn là thẻ bo góc riêng');
   ok(doan.indexOf('margin:0')>=0,'không còn khoảng hở giữa các cảnh báo');
-  ok(/\.al \.tx\{[^}]*white-space:nowrap/.test(cs),'mỗi cảnh báo gói gọn một dòng');
-  ok(/\.al \.tx\{[^}]*text-overflow:ellipsis/.test(cs),'chữ dài thì cắt bằng dấu …, không xuống dòng');
+  ok(/\.al \.al-tx\{[^}]*white-space:nowrap/.test(cs),'mỗi cảnh báo gói gọn một dòng');
+  ok(/padding:5px 12px;min-height:34px/.test(cs),'cảnh báo mỏng: cao 34px (Vy 28/09)');
+  ok(fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8').indexOf('<span class="tx">${a.t}')<0,'cảnh báo KHÔNG còn dùng class .tx (trùng dòng giao dịch, làm phình 27px)');
+  ok(/\.al \.al-tx\{[^}]*text-overflow:ellipsis/.test(cs),'chữ dài thì cắt bằng dấu …, không xuống dòng');
   const pAl=+doan.match(/padding:(\d+)px/)[1];
   ok(pAl<=8,'lề dọc cảnh báo ≤ 8px, mỏng hơn hẳn các hàng khác','đang '+pAl+'px');
   /* mọi cảnh báo phải cao bằng nhau -> không câu nào được dài quá một dòng ở khổ 390px.
@@ -288,8 +295,8 @@ ok(h3.indexOf('THỰC TẾ ĐƯỢC TIÊU')>=0||h3.indexOf('Số tiền còn l�
 
 console.log('\nH · Bản v=8 — bảng từ, khối Nợ, nút xổ');
 { /* bang tu da chot: mot khai niem mot ten */
-  ok(h.indexOf('HẠN MỨC LINH HOẠT')>=0,'dùng "Hạn mức linh hoạt"');
-  ok(h.indexOf('Số tiền còn lại được dùng để chi')>=0,'dùng "Số tiền còn lại được dùng để chi"');
+  ok(h.indexOf('Hạn mức linh hoạt')>=0,'dùng "Hạn mức linh hoạt"');
+  ok(h.indexOf('Còn được dùng để chi')>=0,'dùng "Còn được dùng để chi" (bản gọn Vy duyệt 28/09)');
   ok(h.indexOf('Số tiền còn lại được tiêu')<0,'KHÔNG còn tên cũ "Số tiền còn lại được tiêu"');
   ok(h.indexOf('tiêu dùng thật')<0,'KHÔNG đặt tên riêng cho cố định + linh hoạt (Vy chốt)');
   ok(h.indexOf('Trung bình')<0,'đã bỏ "trung bình mỗi ngày" ở ô tổng chi');

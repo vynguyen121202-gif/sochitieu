@@ -69,14 +69,14 @@
   /* Mỗi cảnh báo gói gọn MỘT dòng: cao bằng nhau, không cái nào tự phình ra vì chữ dài.
      Bấm vào là mở chi tiết nên không cần đọc hết ngay tại đây. */
   .al{display:flex;justify-content:space-between;gap:8px;width:100%;text-align:left;
-    padding:8px 14px;font-size:12.5px;font-weight:500;background:transparent;line-height:1.4;
+    padding:5px 12px;min-height:34px;font-size:12.5px;font-weight:500;background:transparent;line-height:1.35;
     border:0;border-left:3px solid;border-bottom:1px solid var(--line-2);border-radius:0;
     margin:0;color:var(--ink-2);box-shadow:none}
   .al:last-child{border-bottom:0}
   .al{align-items:center}
   .al .ic{flex:none;width:14px;height:14px;border-radius:50%;display:grid;place-items:center;
     font-size:9.5px;font-weight:700;color:#fff;line-height:1}
-  .al .tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .al .al-tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   /* Gom mọi cảnh báo vào một khung như .panel, mỗi cảnh báo là một HÀNG —
      cùng cỡ với các hàng .fcsum / .src bên dưới, thay vì bốn thẻ rời cồng kềnh. */
   .alerts{margin-top:12px;margin-bottom:2px;background:var(--card);border:1px solid var(--line);
@@ -434,3 +434,74 @@ input.dt{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius
 .fc-sw::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;
   box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .15s}
 .fc-sw.on{background:var(--amber)}.fc-sw.on::after{left:21px}
+/* ---- Tổng quan gọn (v=12, Vy duyệt 28/09) ---- */
+.mt1{display:flex;align-items:center;gap:10px;width:100%;padding:9px 14px;min-height:44px;border:0;
+  border-top:1px solid var(--line-2);background:none;text-align:left}
+.mt1:first-child{border-top:0}
+.mt1 .l{flex:1;min-width:0;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mt1 .fc-so{font-size:14px}
+.mt-pc{flex:none;min-width:44px;text-align:center;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:20px}
+.mt-pc.thieu{background:var(--errbg);color:var(--errtx)}.mt-pc.du{background:var(--okbg);color:var(--pos)}
+.kd{padding:14px}
+.kd-lb{font-size:12.5px;color:var(--ink-2);text-align:center}
+.kd-mot{text-align:center;margin-top:2px}
+.kd-mot b,.kd-hai b{font-size:26px;font-weight:700;letter-spacing:-.02em;line-height:1.2}
+.kd-hai{display:flex;justify-content:center;align-items:flex-start;gap:12px;margin-top:2px;text-align:center}
+.kd-hai span{display:block;font-size:11px;color:var(--ink-3)}
+.kd-hai i{font-style:normal;color:var(--ink-3);padding-top:8px}
+.kd b.duong,.ct b.duong{color:var(--pos)} .kd b.am,.ct b.am{color:var(--brick)} .kd b.sau,.ct b.sau{color:var(--jade)}
+.kd-need{text-align:center;margin-top:6px;font-size:13px}
+.kd-need .fc-so{font-size:13px}.kd-need .fc-k{display:inline;font-size:13px}
+.kd-chip{text-align:center;margin-top:8px}
+.kd-chip button{border:0;border-radius:20px;background:var(--rowb);color:var(--ink-2);font-size:12px;padding:6px 12px;min-height:32px}
+.kd-hm{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;margin-top:12px;
+  padding:12px 0 4px;border:0;border-top:1px solid var(--line-2);background:none;font-size:13px;color:var(--ink);min-height:44px}
+.kd-hm .fc-so{font-size:13.5px}
+.kd-bar{margin-top:4px}
+.kd-hmx{margin-top:8px;border-left:2px solid var(--tintbd);padding-left:12px}
+.kd-g{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:6px 0;font-size:13px;
+  border-top:1px solid var(--line-2)}
+.kd-g:first-child{border-top:0}
+.kd-g small{display:block;font-size:11px;color:var(--ink-3)}
+.kd-g small.am{color:var(--brick)}.kd-g small.duong{color:var(--pos)}
+.kd-g .fc-so{font-size:13px}
+.kd-g.tt{border-top:1px solid var(--line);font-weight:700}
+.kd-g0{font-size:11.5px;color:var(--ink-3);padding:10px 0 2px}
+.kd-tiles{display:flex;gap:8px;margin-top:12px}
+.kd-tile{flex:1;text-align:center;padding:9px 4px;border-radius:12px;background:var(--rowb)}
+.kd-tile span{display:block;font-size:10.5px;letter-spacing:.04em;color:var(--ink-3)}
+.kd-tile b{display:block;font-size:18px;font-weight:700;margin-top:1px}
+.kd-tile small{display:block;font-size:11px;color:var(--ink-3)}
+.kd-tile small.am{color:var(--brick)}.kd-tile small.duong{color:var(--pos)}
+.kd-tile.xanh{background:var(--tint)}.kd-tile.xanh b{color:var(--tinttx)}
+.ct-r{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:9px 14px;
+  border-top:1px solid var(--line-2);font-size:13.5px}
+.ct-r b{white-space:nowrap;font-weight:600}
+.ct-n{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 7px;min-width:0}
+.ct-sy{flex:none;font-size:11px;font-weight:700;color:var(--tinttx);background:var(--tint);border-radius:6px;padding:0 5px}
+.ct-f{font-size:11.5px;color:var(--ink-3);font-weight:400}
+.ct-r.sub{padding:6px 14px 6px 34px;font-size:12.5px;color:var(--ink-2)}
+.ct-r.sub b{font-weight:500}
+.ct-r.tot{background:var(--rowb);border-top:1px solid var(--line)}
+.ct-r.tot .ct-n{font-weight:700}
+.ct-r.tot b{font-size:15px;font-weight:700}
+.ct-r.ghi{border-top:0;padding-top:0;justify-content:flex-end;background:var(--rowb)}
+.ct-hai{white-space:nowrap}.ct-hai i{font-style:normal;color:var(--ink-3)}
+/* hộp thoại bắt đầu theo dõi: bo tròn, cùng tông, hơi trong suốt */
+.bd-veil{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:18px;
+  background:rgba(29,34,48,.28);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+:root[data-theme="dark"] .bd-veil{background:rgba(4,8,22,.45)}
+.bd-hop{width:100%;max-width:400px;border-radius:26px;padding:22px 18px 18px;border:1px solid var(--tintbd);
+  background:rgba(255,255,255,.86);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  box-shadow:0 18px 50px rgba(0,0,0,.25)}
+:root[data-theme="dark"] .bd-hop{background:rgba(20,30,62,.84)}
+.bd-hop h3{margin:0;font-size:17px}
+.bd-hop p{margin:4px 0 14px;font-size:13px;color:var(--ink-2)}
+.bd-hop input.dt{text-align:center;font-size:18px;min-height:48px;border-color:var(--tintbd)}
+.bd-hop .dt-h{text-align:center}
+.bd-chips{justify-content:center}
+.bd-hop .btn{margin-top:14px}
+.bd-hop .bd-huy{margin-top:8px}
+.bd-hop .err{margin-top:10px}
+.bd-row{display:flex;justify-content:space-between;align-items:center}
+.bd-row .bd-v{color:var(--ink-2);font-size:13.5px;margin-right:12px}

@@ -9,17 +9,24 @@ globalThis.__f={chotCan,khoiChot,vHome,khongTieu,chotKhop,chotSo,chotDieuChinh,h
 globalThis.__that=(s,v)=>{chotThat[s]=v;};
 globalThis.__cur=d=>{cursor=d;memoClear();};
 globalThis.__fp=(it,d)=>fixedPaid(it,d);
-globalThis.__pace=d=>pace(d);`;
+globalThis.__pace=d=>pace(d);
+globalThis.__goiY=()=>goiYBatDau();
+globalThis.__luuBD=()=>luuBatDau();
+globalThis.__moBD=()=>{open.batDau=1;};
+globalThis.__render=()=>render();`;
 
 let HOM='2026-10-01', hoi=[], traLoi=true;
 const R=Date, FD=class extends R{constructor(...a){if(!a.length)super(HOM+'T09:00:00');else super(...a);}
   static now(){return new R(HOM+'T09:00:00').getTime();}};
+let O={};
+const o=(id,value)=>{O[id]={id,value:value||'',dataset:{},hidden:false,textContent:''};};
+const appEl={innerHTML:''}, navEl={innerHTML:''};
 const el={innerHTML:'',scrollIntoView(){},appendChild(){},click(){},remove(){},style:{},dataset:{},value:''};
 const ctx={console,Intl,Date:FD,Math,JSON,Object,Array,String,Number,isNaN,parseInt,parseFloat,
   setTimeout:()=>0,clearTimeout(){},localStorage:{getItem:()=>null,setItem(){}},navigator:{},
   Blob:function(){},File:function(){},URL:{createObjectURL:()=>'x',revokeObjectURL(){}},
   confirm:q=>{hoi.push(q);return traLoi;}, prompt:()=>null,
-  document:{getElementById:()=>el,createElement:()=>el,querySelector:()=>null,head:el,body:el,documentElement:el}};
+  document:{getElementById:id=>id==='app'?appEl:id==='nav'?navEl:(O[id]||el),createElement:()=>el,querySelector:()=>null,head:el,body:el,documentElement:el}};
 ctx.window=ctx; ctx.globalThis=ctx;
 ctx.window.matchMedia=()=>({matches:false,addEventListener(){},addListener(){}});
 ctx.window.scrollTo=()=>{}; ctx.window.scrollY=0;
@@ -142,8 +149,8 @@ console.log('\nD · Chốt rồi: con số đứng yên, sửa phải hỏi lạ
 console.log('\nE · Sổ cũ');
 {
   const cu=F.migrate({txns:[],v:10,goals:[],opens:{}});
-  ok(cu.v===11&&cu.chot&&!Object.keys(cu.chot).length,'sổ v10 qua migrate → v11, chot rỗng (chưa chốt tháng nào)');
-  ok(SRC_APP.includes("if((d.v||1)<11)d=migrate(d);"),'load và khôi phục sao lưu đều chạy migrate khi sổ dưới v11');
+  ok(cu.v===12&&cu.chot&&!Object.keys(cu.chot).length&&cu.batDau==='','sổ v10 qua migrate → v12, chot rỗng, batDau trống (sẽ hỏi)');
+  ok((SRC_APP.match(/if\(\(d\.v\|\|1\)<12\)d=migrate\(d\);/g)||[]).length===2,'load VÀ khôi phục sao lưu đều chạy migrate khi sổ dưới v12');
 }
 
 console.log('\nF · Khoản cố định chỉ khớp giao dịch CÙNG NHÓM (lỗi 26/09/2026)');
@@ -158,6 +165,50 @@ console.log('\nF · Khoản cố định chỉ khớp giao dịch CÙNG NHÓM (l
   eq(fp.tien,3000000,'tiền ăn đã trả = 1.500.000 × 2 = 3.000.000 (KHÔNG phải 4.500.000)');
   ok(!fp.rows.some(t=>t.c==='muon'),'khoản Cho mượn cùng số tài khoản KHÔNG bị tính là tiền ăn');
   eq(p.choMuon,1500000,'nhịp tiêu thấy đủ 1.500.000 cho mượn');
+}
+
+console.log('\nG · Bắt đầu theo dõi từ (v=12) — lỗi 28/09: một giao dịch gõ nhầm ngày 09/04 làm app yêu cầu chốt tháng 8');
+{
+  HOM='2026-09-28'; const db=so(); db.ngayOK={'2026-09-14':1,'2026-09-21':1};
+  db.txns.push({id:nid++,d:'2026-04-09',t:'mv',a:10000,s:'bidv',s2:'vi',n:'Nạp ví (gõ nhầm ngày)'});
+  ctx.__set(db,T9);
+  ok(F.chotCan()&&F.chotCan().k==='2026-08','CHƯA đặt ngày bắt đầu: tái hiện đúng lỗi — app yêu cầu chốt tháng 8');
+  eq(ctx.__goiY(),'2026-09-01','gợi ý = 01/09: tháng đầu tiên có từ 10 giao dịch, bỏ qua giao dịch lẻ tháng 4');
+  appEl.innerHTML=""; ctx.__render();
+  ok(appEl.innerHTML.includes('Bắt đầu theo dõi từ ngày nào?'),'chưa đặt → hộp thoại hiện lên');
+  ok(!appEl.innerHTML.includes('bd-huy'),'hộp thoại BẮT BUỘC: không có nút Hủy');
+  ok(appEl.innerHTML.includes('không yêu cầu chốt sổ')&&!/đòi chốt|không bắt/.test(appEl.innerHTML),'chữ "không yêu cầu", không "đòi", không "bắt"');
+  O={}; o('bd-ngay','01/10/26'); o('bd-loi','');
+  ctx.__luuBD(); ok(!db.batDau&&/chưa tới/.test(O['bd-loi'].textContent),'ngày chưa tới (01/10) → không lưu, báo ngay trong hộp thoại');
+  O={}; o('bd-ngay','01/09/26'); o('bd-loi','');
+  ctx.__luuBD(); eq(db.batDau,'2026-09-01','lưu 01/09/26 → 2026-09-01');
+  ctx.__set(db,T9);
+  ok(F.chotCan()===null,'đặt 01/09 rồi → ngày 28/09 KHÔNG yêu cầu chốt tháng 8 nữa');
+  appEl.innerHTML=""; ctx.__render();
+  ok(!appEl.innerHTML.includes('Bắt đầu theo dõi từ ngày nào?'),'đã đặt → hộp thoại không hiện nữa');
+  HOM='2026-10-01'; ctx.__set(db,T10);
+  const c=F.chotCan();
+  ok(c&&c.k==='2026-09'&&!c.trong.includes('2026-04-09'),'ngày 01/10 vẫn yêu cầu chốt tháng 9 như thường');
+  HOM='2026-09-28'; db.batDau='2026-09-10'; ctx.__set(db,T10);
+  HOM='2026-10-01'; ctx.__set(db,T10);
+  ok(!F.chotCan().trong.some(d=>d<'2026-09-10'),'ngày trống TRƯỚC ngày bắt đầu không bị kể là chưa ghi');
+  ctx.__moBD(); appEl.innerHTML=""; ctx.__render();
+  ok(appEl.innerHTML.includes('bd-huy')&&appEl.innerHTML.includes('value="10/09/26"'),'mở lại từ Cài đặt: có nút Hủy, điền sẵn ngày đang đặt');
+}
+
+console.log('\nH · Tổng quan gọn (v=12)');
+{
+  HOM='2026-09-28'; const db=so(); db.batDau='2026-09-01';
+  db.bm={'2026-09':{tk:2000000}}; db.budgets={tk:2000000};
+  db.txns.push({id:nid++,d:'2026-09-10',t:'chi',a:300000,c:'muon',s:'bidv',n:'Cho mượn'},
+               {id:nid++,d:'2026-09-12',t:'chi',a:500000,c:'tk_gui',s:'bidv',n:'Gửi tiết kiệm'});
+  ctx.__set(db,T9); const h=F.vHome(), bt=F.bangTien(T9);
+  ok(h.includes('<div class="sum">'+M(bt.tongRa)+'</div>'),'"Đã chi" = đúng dòng (3) Thực chi '+M(bt.tongRa));
+  ok(!h.includes('<div class="sum">'+M(bt.tongRa+300000)+'</div>'),'"Đã chi" KHÔNG gồm 300.000 cho mượn');
+  ok(h.indexOf('<b>Mục tiêu</b>')>=0&&h.indexOf('<b>Mục tiêu</b>')<h.indexOf('id="sec-bal"'),'khối Mục tiêu nằm ĐẦU trang, trên thanh số dư');
+  ok(h.includes('<span class="l">Tiết kiệm tháng 9</span>')&&h.includes('<b>'+M(500000)+'</b> <span>/ '+M(2000000)+'</span>'),'dòng Tiết kiệm tháng 9: 500.000 / 2.000.000');
+  ok(h.includes('<span class="mt-pc thieu">25%</span>'),'mỗi mục tiêu MỘT dòng, kèm phần trăm 25%');
+  ok(!h.includes('Mục tiêu đang thực hiện'),'KHÔNG còn khối "Mục tiêu đang thực hiện" ở cuối trang');
 }
 
 console.log(loi?'\n✗ '+loi+' lỗi':'\n✓ đạt hết');

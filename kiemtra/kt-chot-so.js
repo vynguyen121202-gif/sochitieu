@@ -7,7 +7,9 @@ globalThis.__set=(db,cur)=>{DB=db;cursor=cur||new Date();tab='home';open={};msg=
 globalThis.__f={chotCan,khoiChot,vHome,khongTieu,chotKhop,chotSo,chotDieuChinh,hoiChot,del,setDate,balAt,migrate,
   bangTien,khoiTongKet};
 globalThis.__that=(s,v)=>{chotThat[s]=v;};
-globalThis.__cur=d=>{cursor=d;memoClear();};`;
+globalThis.__cur=d=>{cursor=d;memoClear();};
+globalThis.__fp=(it,d)=>fixedPaid(it,d);
+globalThis.__pace=d=>pace(d);`;
 
 let HOM='2026-10-01', hoi=[], traLoi=true;
 const R=Date, FD=class extends R{constructor(...a){if(!a.length)super(HOM+'T09:00:00');else super(...a);}
@@ -142,6 +144,20 @@ console.log('\nE · Sổ cũ');
   const cu=F.migrate({txns:[],v:10,goals:[],opens:{}});
   ok(cu.v===11&&cu.chot&&!Object.keys(cu.chot).length,'sổ v10 qua migrate → v11, chot rỗng (chưa chốt tháng nào)');
   ok(SRC_APP.includes("if((d.v||1)<11)d=migrate(d);"),'load và khôi phục sao lưu đều chạy migrate khi sổ dưới v11');
+}
+
+console.log('\nF · Khoản cố định chỉ khớp giao dịch CÙNG NHÓM (lỗi 26/09/2026)');
+{
+  HOM='2026-09-28'; const db=so();
+  db.fixedItems=[{id:'fx1',name:'Tiền ăn gửi nhà',code:'an',a:3000000,mp:'7600000000'}];
+  db.txns.push({id:nid++,d:'2026-09-07',t:'chi',a:1500000,c:'an_ngoai',s:'bidv',p:'7600000000',n:'Chuyển tiền ăn'},
+               {id:nid++,d:'2026-09-17',t:'chi',a:1500000,c:'an_ngoai',s:'bidv',p:'7600000000',n:'Chuyển tiền ăn'},
+               {id:nid++,d:'2026-09-26',t:'chi',a:1500000,c:'muon',s:'bidv',p:'7600000000',n:'Cho mẹ mượn'});
+  ctx.__set(db,T9);
+  const fp=ctx.__fp(db.fixedItems[0],T9), p=ctx.__pace(T9);
+  eq(fp.tien,3000000,'tiền ăn đã trả = 1.500.000 × 2 = 3.000.000 (KHÔNG phải 4.500.000)');
+  ok(!fp.rows.some(t=>t.c==='muon'),'khoản Cho mượn cùng số tài khoản KHÔNG bị tính là tiền ăn');
+  eq(p.choMuon,1500000,'nhịp tiêu thấy đủ 1.500.000 cho mượn');
 }
 
 console.log(loi?'\n✗ '+loi+' lỗi':'\n✓ đạt hết');

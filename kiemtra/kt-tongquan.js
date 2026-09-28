@@ -34,6 +34,7 @@ function sanKhau(HOM){
 let loi=0;
 const ok=(dk,t,them)=>{if(dk)console.log('  ✓ '+t);else{loi++;console.log('  ✗ '+t+(them?'\n      → '+them:''));}};
 const M=n=>new Intl.NumberFormat('vi-VN').format(Math.round(n));
+const eq2=(a,b,t)=>ok(a===b,t,'được '+JSON.stringify(a)+', cần '+JSON.stringify(b));
 
 lamMoiHat();
 const db=soMau();
@@ -48,11 +49,15 @@ c.__set(db,thangNay,{pw:true,fc:true,fcd:true,nono:true});
 console.log('\nA · Mục 7 — số còn lại được tiêu đã trừ cho mượn');
 const pa=c.__pace();
 ok(pa.choMuon===2000000,'cho mượn tháng này = 2.000.000','ra '+M(pa.choMuon));
-ok(pa.conDuoc===pa.duTru-pa.daChi-pa.choMuon,
-  'còn lại = ngân sách − chi linh hoạt − cho mượn',
-  M(pa.duTru)+' − '+M(pa.daChi)+' − '+M(pa.choMuon)+' ≠ '+M(pa.conDuoc));
-console.log('      ('+M(pa.duTru)+' − '+M(pa.daChi)+' − '+M(pa.choMuon)+' = '+M(pa.conDuoc)+')');
-ok(pa.conDuoc!==Math.max(0,pa.duTru-pa.daChi),'khác hẳn công thức cũ (cũ ra '+M(Math.max(0,pa.duTru-pa.daChi))+')');
+/* từ v=11 (Vy duyệt 28/09): Thực tế được tiêu tính từ TIỀN THẬT, không từ hạn mức */
+{
+  const q=c.__thanhKhoan(), tu=pa.ngayCon?q.tuDo/pa.ngayCon:0, h=c.__vHome();
+  eq2(pa.ngayCon,pa.nd-pa.qua+1,'số ngày còn lại TÍNH CẢ HÔM NAY = '+pa.nd+' − '+pa.qua+' + 1');
+  ok(!('conDuoc' in pa)&&!('moiNgay' in pa),'pace() KHÔNG còn conDuoc (công thức cũ từ hạn mức) và moiNgay (bỏ từ v=8)');
+  ok(h.includes('>'+M(tu)+'</div>'),'ô THỰC TẾ ĐƯỢC TIÊU = tiêu tự do '+M(q.tuDo)+' ÷ '+pa.ngayCon+' ngày = '+M(tu));
+  ok(h.includes('>'+M(pa.chuan)+'</div>')&&h.includes('Kế hoạch, cố định cả tháng'),'ô ĐỊNH MỨC NGÀY giữ nguyên = hạn mức linh hoạt ÷ số ngày');
+  ok(!/Hụt |Dôi ra/.test(h.slice(h.indexOf('THỰC TẾ ĐƯỢC TIÊU'),h.indexOf('THỰC TẾ ĐƯỢC TIÊU')+600)),'không còn chữ "Hụt / Dôi ra" kiểu cũ ở ô Thực tế');
+}
 
 console.log('\nB · Mục 6 — năm dòng chi tiêu cộng lại đúng bằng tổng chi');
 const b=pa.bd;
@@ -256,7 +261,8 @@ const c2=sanKhau(cuoi.getFullYear()+'-'+String(cuoi.getMonth()+1).padStart(2,'0'
 c2.__set(soMau(),new Date(cuoi.getFullYear(),cuoi.getMonth(),1),{pw:true});
 let h3=''; try{h3=c2.__vHome(); ok(true,'vHome() ngày cuối tháng chạy được');}catch(e){ok(false,'vHome() ngày cuối tháng','lỗi: '+e.message);}
 const pa2=c2.__pace();
-ok(pa2.conLai===0,'còn 0 ngày');
+ok(pa2.conLai===0&&pa2.ngayCon===1,'ngày cuối: còn 1 ngày tính cả hôm nay (không còn nhánh "0 ngày")');
+ok(h3.includes('ngày cuối tháng')&&!h3.includes('Infinity')&&!h3.includes('NaN'),'ngày cuối tháng: không chia cho 0');
 ok(h3.indexOf('THỰC TẾ ĐƯỢC TIÊU')>=0||h3.indexOf('Số tiền còn lại được dùng để chi')>=0,
   'ngày cuối tháng vẫn hiện được số còn lại, không rơi về 0 vô lý');
 

@@ -506,7 +506,7 @@ Cách làm việc:
 - Nếu một ảnh mờ hoặc thiếu thông tin, thay dòng đó bằng: KHÔNG ĐỌC ĐƯỢC | lý do ngắn gọn. Tuyệt đối không đoán số.
 
 Ví dụ:
-2026-08-22 10:07 | vi | chi | 20000 | Nạp data Viettel | hd_dt |  | 0981980039
+2026-08-22 10:07 | vi | chi | 20000 | Nạp data Viettel | hd_dt |  | 0900000000
 2026-09-02 14:23 | bidv | chi | 950000 | Chuyển tiền đi chơi Phước Hải | gt_dichoi | 235490 | 7170145678910`;
 }
 async function copyPrompt(){
@@ -1180,12 +1180,15 @@ function pace(d){
     .map(gid=>({id:gid,n:groupOf(gid).n,a:spent[gid]})).sort((x,y)=>y.a-x.a);
   const now=new Date(), nd=daysIn(d), cur=ym(d)===ym(now);
   const qua=cur?now.getDate():nd, conLai=Math.max(0,nd-qua);
-  return _memo[mk]={duTru,daChi,nd,qua,conLai,choMuon:ngoai.muon,
+  /* ngayCon TÍNH CẢ HÔM NAY: tiền còn lại phải nuôi nốt hôm nay lẫn các ngày sau.
+     Ngày cuối tháng = 1, nên không cần nhánh riêng "còn 0 ngày" nữa. */
+  const ngayCon=cur?nd-qua+1:0;
+  return _memo[mk]={duTru,daChi,nd,qua,conLai,ngayCon,choMuon:ngoai.muon,
     bd:{gr,chiTong,fx,coDinh,ngoai,khongHM},
     tyChi:duTru?daChi/duTru:0, tyNgay:qua/nd,
-    moiNgay:qua?daChi/qua:0, chuan:duTru/nd,
-    /* tiền cho mượn đã ra khỏi túi nên trừ luôn; để âm cho thấy đang tiêu lố */
-    conDuoc:duTru-daChi-ngoai.muon};
+    /* Định mức ngày: KẾ HOẠCH, cố định cả tháng. Thực tế được tiêu thì tính từ tiền thật
+       ở thanhKhoan() (tiêu tự do ÷ ngayCon), không từ hạn mức — Vy duyệt 28/09/2026. */
+    chuan:duTru/nd};
 }
 function metrics(d){
   const list=monthTx(d);
@@ -1281,6 +1284,9 @@ const fixedItems=()=>Array.isArray(DB.fixedItems)?DB.fixedItems:[];
 /* một giao dịch có thuộc về khoản cố định này không */
 function hitFixed(it,t){
   if(t.t!=='chi'||!it.mp)return false;
+  /* phải CÙNG NHÓM với khoản cố định: một tài khoản có thể nhận cả tiền ăn lẫn tiền cho mượn
+     (lỗi 26/09/2026) — khớp theo mã đối tác suông thì cho mượn bị tính thành tiền ăn */
+  if(!t.c||groupOf(t.c).id!==groupOf(it.code).id)return false;
   const key=String(it.mp).trim(); if(!key)return false;
   const inP=t.p&&String(t.p).indexOf(key)>=0;
   const inN=noAccent(t.n0||t.n).indexOf(noAccent(key))>=0;
@@ -1824,7 +1830,7 @@ function vFixed(){
       <div class="fld"><span>Ngày trả</span><input id="fxd" inputmode="numeric" value="${ed&&ed.day?ed.day:''}" placeholder="5"></div></div>
     <div class="fld"><span>Thuộc nhóm</span>${catBtn(fxCode||(ed?ed.code:''),'chi','fixed','0')}</div>
     <div class="fld"><span>Mã nhận diện — số tài khoản hoặc số ví</span>
-      <input id="fxm" value="${ed&&ed.mp?esc(ed.mp):''}" placeholder="7600371502"></div>
+      <input id="fxm" value="${ed&&ed.mp?esc(ed.mp):''}" placeholder="VD: 1234567890"></div>
     <div class="fld"><label style="display:flex;align-items:center;gap:9px;font-size:13.5px;color:var(--ink-2)">
       <button class="chk ${fxAmt?'on':''}" style="width:18px;height:18px;font-size:11px;margin:0" onclick="fxAmt=!fxAmt;render()">${fxAmt?'✓':''}</button>
       Chỉ khớp khi số tiền xấp xỉ</label></div>
@@ -2524,60 +2530,6 @@ function chainPanel(key){
     <div class="sp"></div><button class="btn ghost" onclick="chainAck('${esc(key)}')">Đã kiểm tra, không báo mốc này nữa</button>`;
   return x;
 }
-/* Số tiền còn lại được dùng để chi tiêu — số nào trừ số nào */
-function paceWhy(pa){
-  const b=pa.bd;
-  const m=metrics(cursor), hieu=m.thu-m.chi;
-  let x=`<div class="panel" style="border-radius:0 0 var(--r) var(--r);border-top:0">
-    <div class="daygroup dg-neu">TỔNG QUAN THÁNG NÀY</div>`;
-  x+=LN('Thực thu',m.thu,'Lương, thưởng, thu khác — không tính đi vay và thu nợ');
-  x+=LN('Thực chi',m.chi,'Mọi giao dịch chi trong tháng',1);
-  x+=`<div class="src total"><div><div class="src-n">THỰC THU − THỰC CHI</div>
-      <div class="src-m">${money(m.thu)} − ${money(m.chi)}</div></div>
-      <div class="src-a" style="color:${hieu<0?'var(--brick)':'var(--pos)'}">${money(hieu)}</div></div>
-    <div class="daygroup dg-bud">TỔNG NGÂN SÁCH KHẢ DỤNG</div>`;
-  b.gr.forEach(g=>{
-    const extra=[g.o?(g.o>0?'bù sang +':'bù đi ')+money(g.o):'',g.dr?'rút từ tồn +'+money(g.dr):'']
-      .filter(Boolean).join(' · ');
-    x+=LN(esc(g.n),g.tot,extra?'hạn mức '+money(g.b)+' · '+extra:'');
-  });
-  if(!b.gr.length)x+=`<div class="src" style="padding:9px 14px"><div class="src-m">Chưa đặt hạn mức nhóm nào.</div></div>`;
-  x+=`<div class="src total"><div><div class="src-n">TỔNG NGÂN SÁCH KHẢ DỤNG</div>
-      <div class="src-m">Tổng hạn mức các khoản linh hoạt — không gồm Tiết kiệm, Trả nợ, Cho mượn và chi phí cố định</div></div>
-      <div class="src-a">${money(pa.duTru)}</div></div>
-    <div class="daygroup dg-chi">CHI TIÊU</div>`;
-  /* đúng từng phân loại mục, không gom lại — cộng đủ năm dòng ra tổng chi tháng */
-  x+=LN('Chi linh hoạt',pa.daChi,'Phần trừ vào ngân sách khả dụng ở trên');
-  if(b.coDinh)x+=LN('Chi phí cố định',b.coDinh,
-    b.fx.length+' khoản đã khớp: '+b.fx.map(f=>esc(f.it.name||f.t.n||'không tên')).join(', '));
-  if(b.ngoai.tk)x+=LN('Tiết kiệm & đầu tư',b.ngoai.tk,'Chuyển sang tiết kiệm, không phải tiêu mất');
-  if(b.ngoai.muon)x+=LN('Cho mượn',b.ngoai.muon,'Tiền ra khỏi túi, sẽ thu lại sau');
-  if(b.ngoai.trano)x+=LN('Trả nợ',b.ngoai.trano,'Nghĩa vụ nợ đã trả trong tháng');
-  x+=`<div class="src total"><div><div class="src-n">TỔNG CHI THÁNG NÀY</div>
-      <div class="src-m">${[pa.daChi,b.coDinh,b.ngoai.tk,b.ngoai.muon,b.ngoai.trano].filter(Boolean).map(short).join(' + ')}</div></div>
-      <div class="src-a">${money(b.chiTong)}</div></div>`;
-  if(b.khongHM.length){
-    x+=`<div class="daygroup dg-sub">ĐÃ TIÊU MÀ CHƯA ĐẶT HẠN MỨC</div>`;
-    b.khongHM.forEach(k=>x+=LN(esc(k.n),k.a,'đang trừ vào ngân sách chung'));
-  }
-  x+=`<div class="daygroup dg-kq">KẾT QUẢ</div>`;
-  /* ba số này tô đúng màu của ba ô lớn phía trên: còn lại (xanh/đỏ) · định mức ngày (xanh dương)
-     · thực tế được tiêu (so với định mức ngày, hụt thì đỏ) */
-  const dmn=Math.round(pa.duTru/pa.nd);
-  const ttd=pa.conLai?Math.round(pa.conDuoc/pa.conLai):pa.conDuoc;
-  x+=LNC('Số tiền còn lại được dùng để chi tiêu',pa.conDuoc,
-    money(pa.duTru)+' − '+money(pa.daChi)+' (chi linh hoạt)'
-    +(pa.choMuon?' − '+money(pa.choMuon)+' (cho mượn)':''),
-    pa.conDuoc<0?'var(--brick)':'var(--pos)');
-  x+=LNC('Định mức ngày',dmn,money(pa.duTru)+' ÷ '+pa.nd+' ngày trong tháng','var(--tinttx)');
-  x+=LNC('Thực tế được tiêu',ttd,
-    (pa.conLai?money(pa.conDuoc)+' ÷ '+pa.conLai+' ngày còn lại':'Ngày cuối tháng, còn bao nhiêu tiêu nốt bấy nhiêu')
-    +' · '+(ttd<dmn?'↓ Hụt '+money(dmn-ttd):'↑ Dôi ra '+money(ttd-dmn))+' so với định mức ngày',
-    ttd<dmn?'var(--brick)':'var(--pos)');
-  x+=`</div>`;
-  if(b.khongHM.length)x+=`<div class="sp"></div><div class="stack-note"><span>${b.khongHM.length} nhóm đang tiêu mà chưa có hạn mức riêng, nên phần đó ăn vào ngân sách chung. Đặt hạn mức cho chúng ở tab Ngân sách thì con số sẽ sát hơn.</span></div>`;
-  return x;
-}
 /* Dự trù để dành — chi tiết từng nhóm cho cả hai cách */
 function fcDetail(f){
   const trong=`<div class="src" style="padding:9px 14px"><div class="src-m">Không có nhóm nào.</div></div>`;
@@ -2675,9 +2627,12 @@ function vHome(){
     if(cur&&pa.duTru>0){
       const nhanh=pa.tyChi>pa.tyNgay;
       /* ngày cuối tháng không còn ngày nào để chia: còn bao nhiêu tiêu nốt bấy nhiêu hôm nay */
-      const chuan=pa.chuan, tuNay=pa.conLai?pa.conDuoc/pa.conLai:pa.conDuoc, lech=tuNay-chuan;
+      /* Thực tế được tiêu = tiêu tự do ÷ số ngày còn lại tính cả hôm nay. Tiêu tự do = max(0, A1 − B)
+         — tiền thật đã trừ nợ, cố định và phần phải để dành, cùng con số ở dòng trên của thẻ. */
+      const qk=thanhKhoan(cursor);
+      const chuan=pa.chuan, tuNay=pa.ngayCon?qk.tuDo/pa.ngayCon:0, lech=tuNay-chuan;
       h+=`<h2 class="hl"><i style="background:${gcA('#5476C4')}"></i><b>Tổng ngân sách khả dụng</b>
-        <em>${pa.conLai?'còn '+pa.conLai+' ngày':'ngày cuối tháng'}</em></h2>`;
+        <em>${pa.ngayCon>1?'còn '+pa.ngayCon+' ngày, tính cả hôm nay':'ngày cuối tháng'}</em></h2>`;
       h+=`<div class="panel" style="padding:14px" onclick="toggle('pw')">
         ${(()=>{
           const q=thanhKhoan(cursor);
@@ -2702,7 +2657,7 @@ function vHome(){
             +(q.lan?"vượt "+money(q.lan):"dư "+money(q.tuDo))+'</b></div>';
           if(q.treo.length)r+='<div class="src-m" style="margin-top:4px">Chưa tính '+q.treo.length
             +' khoản cho vay chưa thu · '+money(q.treo.reduce((s,v)=>s+v.a,0))+' — chưa hẹn ngày</div>';
-          r+='<div class="src-m" style="margin-top:4px">Còn '+pa.conLai+' ngày · Đã tiêu '
+          r+='<div class="src-m" style="margin-top:4px">Còn '+pa.ngayCon+' ngày tính cả hôm nay · Đã tiêu '
             +money(pa.daChi)+' / '+money(pa.duTru)+' hạn mức</div>';
           return r+'</div>';})()}
         <div class="pace" style="margin-top:13px"><i style="width:${Math.min(100,pa.tyChi*100)}%;background:${nhanh?'var(--amber)':'var(--jade)'}"></i>
@@ -2711,11 +2666,13 @@ function vHome(){
           <div style="flex:1;text-align:center;padding:10px 4px;border-radius:8px;background:var(--tint)">
             <div style="font-size:10.5px;color:var(--tinttx2)">ĐỊNH MỨC NGÀY</div>
             <div style="font-size:18px;font-weight:600;margin-top:3px;color:var(--tinttx)">${money(chuan)}</div>
-            <div style="font-size:11px;color:var(--tinttx2)">Cố định cả tháng</div></div>
+            <div style="font-size:11px;color:var(--tinttx2)">Kế hoạch, cố định cả tháng</div></div>
           <div style="flex:1;text-align:center;padding:10px 4px">
             <div style="font-size:10.5px;color:var(--ink-3)">THỰC TẾ ĐƯỢC TIÊU</div>
             <div style="font-size:18px;font-weight:600;margin-top:3px">${money(tuNay)}</div>
-            <div style="font-size:11px;font-weight:500;color:${lech<0?'var(--brick)':'var(--pos)'}">${lech<0?'↓ Hụt '+money(-lech):'↑ Dôi ra '+money(lech)}</div></div>
+            <div style="font-size:11px;font-weight:500;color:${qk.lan||lech<0?'var(--brick)':'var(--pos)'}">${
+              qk.lan?'Đang lấn Tiết kiệm '+money(qk.lan)
+              :lech<0?'↓ Thấp hơn kế hoạch '+money(-lech):'↑ Cao hơn kế hoạch '+money(lech)}</div></div>
         </div></div>`;
       h+='<div class="xow" data-xo="pw" data-open="'+(open.pw?1:0)+'">'+paceWhy2(pa)+'</div>';
 
@@ -2965,7 +2922,7 @@ function vImport(){
   let h=`<h2>Dán kết quả đọc chi tiêu từ A.I</h2>
     <div class="stack-note"><span>Mở BIDV và ví, chụp các giao dịch trong ngày, thả vào chat của tháng, chép kết quả rồi dán xuống đây.</span></div>
     <div class="sp"></div>
-    <textarea id="paste" rows="7" placeholder="2026-08-22 10:07 | vi | chi | 20000 | Nạp data Viettel | hd_dt |  | 0981980039"></textarea>
+    <textarea id="paste" rows="7" placeholder="2026-08-22 10:07 | vi | chi | 20000 | Nạp data Viettel | hd_dt |  | 0900000000"></textarea>
     <div class="sp"></div><button class="btn" onclick="doPaste()">Đọc kết quả</button>`;
   h+=khoiBoQua();
   if(msg)h+=`<div class="${msgType==='ok'?'ok':'err'}">${esc(msg)}</div>`;
@@ -3315,8 +3272,8 @@ function vInfo(){
    ['Hạn mức cần chú ý','xét riêng phần linh hoạt của từng nhóm: hạn mức trừ đi khoản cố định của nhóm, đã chi trừ đi phần cố định đã trả. Nhóm hiện lên khi tiêu quá hạn mức (đã vượt), tiêu vừa hết (đã hết), đã dùng từ 80% trở lên (sắp hết), hoặc đã dùng vượt nhịp tháng quá 15 điểm phần trăm (tiêu nhanh). Nhóm thuần chi phí cố định không xét. Xếp nhóm dùng nhiều phần trăm nhất lên đầu.'],
    ['Nhịp tiêu — mẫu số','tổng hạn mức các nhóm linh hoạt, trừ Tiết kiệm, trừ Trả nợ, trừ Cho mượn, cộng khoản bù qua lại giữa các nhóm và phần hạn mức tồn đã chủ động rút trong tháng.'],
    ['Nhịp tiêu — tử số','tổng chi cùng phạm vi, loại giao dịch đã khớp chi phí cố định — kể cả khoản cố định chưa gắn mã, khớp theo số tiền xấp xỉ 15%. Chạm vào khối Số tiền còn lại được dùng để chi để xem bảng số nào trừ số nào.'],
-   ['Định mức ngày','mẫu số chia số ngày trong tháng, cố định suốt tháng.'],
-   ['Thực tế được tiêu','ngân sách còn lại chia số ngày còn lại, đổi theo thực tế mỗi ngày. Ngày cuối tháng không còn ngày nào để chia thì lấy thẳng ngân sách còn lại. LƯU Ý: ô này và ô Định mức ngày vẫn tính theo cách CŨ — chúng lấy hạn mức trừ chi linh hoạt trừ cho mượn, không phải con số tiền thật ở khối trên. Hai cách trả lời hai câu khác nhau nên hai số không bằng nhau; đang chờ làm rõ nốt.'],
+   ['Định mức ngày','KẾ HOẠCH mỗi ngày: hạn mức linh hoạt chia số ngày trong tháng, cố định suốt tháng. Ví dụ 5.050.000 ÷ 30 = 168.333.'],
+   ['Thực tế được tiêu','tiền THẬT còn tiêu tự do chia số ngày còn lại, TÍNH CẢ HÔM NAY. Tiêu tự do là Số tiền còn lại được dùng để chi trừ phần cần để dành — đúng con số ở dòng trên cùng thẻ. Khi đang lấn phần để dành thì ô này bằng 0 và ghi rõ đang lấn bao nhiêu. So với Định mức ngày: thấp hơn là đỏ, cao hơn là xanh. Ngày cuối tháng chia cho 1 ngày.'],
    ['Dự báo 1 — nếu tiêu vừa đủ hạn mức','thu nhập tháng trừ dự chi trong tháng. Dòng "Trong đó cần góp mục tiêu tài chính" chỉ hiện ra cho biết, KHÔNG trừ vào kết quả, vì tiền góp mục tiêu vẫn nằm trong phần để dành. Tên cũ là "Cách 1 — sẽ chi cả tháng".'],
    ['Dự báo 2 — tốc độ chi linh hoạt','mỗi nhóm lấy số đã tiêu chia số ngày đã qua ra tốc độ riêng của nhóm, rồi cộng tốc độ các nhóm lại. Bằng đúng tổng đã tiêu chia số ngày đã qua, chỉ bày ra cho biết nhóm nào đang chạy nhanh. Trả nợ và Cho mượn là khoản một lần nên không tính vào tốc độ, nhưng tiền đã cho mượn vẫn nằm trong dòng "đã chi tới hôm nay".'],
    ['So với tháng trước','trong khối Hạn mức cần chú ý, mỗi nhóm so tổng chi từ đầu tháng tới hôm nay với TỔNG CẢ THÁNG trước của chính nhóm đó. Hai vế cùng lấy tổng chi thô của nhóm, không trừ khoản cố định ở vế nào. Vì tháng này còn đang chạy nên app chỉ báo khi đã vượt hẳn tháng trước — tiêu ít hơn thì không nhắc, và tháng trước nhóm đó chưa tiêu đồng nào thì không có gì để so.'],

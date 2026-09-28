@@ -505,3 +505,13 @@ input.dt{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius
 .bd-hop .err{margin-top:10px}
 .bd-row{display:flex;justify-content:space-between;align-items:center}
 .bd-row .bd-v{color:var(--ink-2);font-size:13.5px;margin-right:12px}
+/* ---- Chỉnh 28/09 (tiếp): nút Xem chi tiết, dòng xổ trong bảng ký hiệu, không bẻ chữ lẻ ---- */
+.nw{white-space:nowrap}
+.fold.xct span{color:var(--jade);font-weight:600}
+.ct-t,.ct-f{white-space:nowrap}
+.ct-xo{border-top:1px solid var(--line-2)}
+.ct-xo .xo-bt.ct-bt{min-height:44px;padding:9px 14px;gap:8px;font-size:13.5px;color:var(--ink);text-align:left}
+.ct-xo .ct-bt .ct-n{flex:1}
+.ct-xo .ct-bt b{white-space:nowrap;font-weight:600}
+.ct-xo .xo-in.ct-in{padding:0}
+.xct-bd{margin-top:-1px}

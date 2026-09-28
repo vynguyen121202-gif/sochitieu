@@ -157,10 +157,19 @@ ok(h.indexOf('Thấp hơn')<0,'KHÔNG báo khi tiêu ít hơn tháng trước');
   const i=h.indexOf('dg-kq'), doan=h.slice(i,i+3400);
   /* v=12: KẾT QUẢ trải phẳng, có ký hiệu (6)…(9), "Còn được dùng để chi" MỘT dòng */
   ok(doan.indexOf('Còn được dùng để chi')>=0,'KẾT QUẢ có dòng Còn được dùng để chi');
-  ok(doan.indexOf('<span class="ct-sy">9</span>Cần để dành')>=0,'KẾT QUẢ có (9) Cần để dành');
+  /* chỉnh 28/09: KẾT QUẢ dừng ở Còn được dùng để chi; Lương chưa về = 0 thì ẩn */
+  ok(doan.indexOf('Cần để dành')<0&&doan.indexOf('>Thiếu<')<0&&doan.indexOf('>Dư<')<0,'KẾT QUẢ KHÔNG còn Cần để dành / Thiếu / Dư');
+  { const q=c.__thanhKhoan();
+    ok(q.luongChuaVe?doan.indexOf('Lương chưa về')>=0:doan.indexOf('Lương chưa về')<0,'Lương chưa về: có thì hiện, bằng 0 thì ẩn'); }
   ok(h.indexOf('(1) + (2) − (3) − (4) − (5)')>=0,'Số dư hiện tại ghi công thức bằng ký hiệu (1)…(5)');
-  ok(h.indexOf('<span class="ct-sy">4</span>Tiền đang cho vay <span class="ct-f">cho mượn − thu nợ</span>')>=0,'(4) Tiền đang cho vay, chú thích "cho mượn − thu nợ"');
-  ok(h.indexOf('<span class="ct-sy">5</span>Trả nợ <span class="ct-f">trả nợ − đi vay</span>')>=0,'(5) Trả nợ, chú thích "trả nợ − đi vay"');
+  ok(h.indexOf('<span class="ct-sy">4</span><span class="ct-t">Tiền đang cho vay</span> <span class="ct-f">cho mượn − thu nợ</span>')>=0,'(4) Tiền đang cho vay, chú thích "cho mượn − thu nợ"');
+  ok(h.indexOf('<span class="ct-sy">5</span><span class="ct-t">Trả nợ</span> <span class="ct-f">trả nợ − đi vay</span>')>=0,'(5) Trả nợ, chú thích "trả nợ − đi vay"');
+  ok(['ct2','ct3','ct4','ct5'].every(k=>h.indexOf('class="xo ct-xo" data-k="'+k+'"')>=0||k==='ct4'||k==='ct5'),'(2) Thực thu, (3) Thực chi có nút xổ như bản cũ');
+  ok(h.indexOf('data-k="ct1"')<0,'(1) Số dư đầu tháng không có gì để xổ');
+  ok(h.indexOf('Xem chi tiết</span></button>')>=0&&h.indexOf(' Cách tính</span>')<0,'nút "Cách tính" đổi thành "Xem chi tiết"');
+  ok(h.indexOf('class="fold xct" style="margin-top:8px" onclick="toggle(\'hmcy\')"')>=0||h.indexOf('Hạn mức cần chú ý')<0,'Hạn mức cần chú ý có nút xổ');
+  ok(h.indexOf('data-xo="hmcy" data-open="0"')>=0||h.indexOf('Hạn mức cần chú ý')<0,'Hạn mức cần chú ý THU GỌN mặc định');
+  ok(h.indexOf('<span class="nw">Tiền mặt <b>')>=0,'thanh số dư: "Tiền mặt 309.000" là một khối không bẻ đôi');
   ok(h.indexOf('Trả nợ cá nhân − đi vay')<0&&h.indexOf('không tính là chi hay thu')<0,'KHÔNG còn chú thích dài kiểu cũ');
   ok(doan.indexOf('vượt ')>=0||doan.indexOf('dư ')>=0,'có nói vượt hay dư so với số cần để dành');
   const q=c.__thanhKhoan();

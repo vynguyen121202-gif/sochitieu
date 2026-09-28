@@ -1036,21 +1036,33 @@ const xoTS=(a,b2)=>money(a)+' <span class="xo-mau">/ '+money(b2)+'</span>';
    (4) Tiền đang cho vay = cho mượn − thu nợ · (5) Trả nợ = trả nợ cá nhân − đi vay.
    Hai dòng này mang dấu: âm là tiền về túi nhiều hơn ra. Trả góp nằm trong (3) Thực chi. */
 const soAm=v=>v<0?'−'+money(-v):money(v);
-function ctR(sy,ten,v,f){return '<div class="ct-r"><span class="ct-n">'+(sy?'<span class="ct-sy">'+sy+'</span>':'')
-  +ten+(f?' <span class="ct-f">'+f+'</span>':'')+'</span><b>'+soAm(v)+'</b></div>';}
+/* tên và chú thích mỗi cái là MỘT khối không bẻ đôi (ct-t, ct-f nowrap): thiếu chỗ thì cả khối
+   xuống dòng, không để một chữ lẻ loi ở dòng dưới (Vy 28/09) */
+function ctN(sy,ten,f){return '<span class="ct-n">'+(sy?'<span class="ct-sy">'+sy+'</span>':'')
+  +'<span class="ct-t">'+ten+'</span>'+(f?' <span class="ct-f">'+f+'</span>':'')+'</span>';}
+function ctR(sy,ten,v,f){return '<div class="ct-r">'+ctN(sy,ten,f)+'<b>'+soAm(v)+'</b></div>';}
 function ctS(ten,v){return '<div class="ct-r sub"><span>'+ten+'</span><b>'+soAm(v)+'</b></div>';}
-function ctT(ten,f,giaTri){return '<div class="ct-r tot"><span class="ct-n">'+ten+(f?' <span class="ct-f">'+f+'</span>':'')
-  +'</span>'+giaTri+'</div>';}
+function ctT(ten,f,giaTri){return '<div class="ct-r tot">'+ctN('',ten,f)+giaTri+'</div>';}
+/* dòng có khoản con: bấm để xổ, CÙNG cơ chế chuyển động xoTog() với các nút xổ cũ.
+   Đóng lại vẫn đọc được ký hiệu, tên, chú thích và số. */
+function ctX(k,sy,ten,v,f,con){
+  if(!con)return ctR(sy,ten,v,f);
+  var op=XO[k]?1:0;
+  return '<div class="xo ct-xo" data-k="'+k+'" data-open="'+op+'">'
+    +'<button class="xo-bt ct-bt" onclick="xoTog(this)" aria-expanded="'+(op?'true':'false')+'">'+XOCH
+    +ctN(sy,ten,f)+'<b>'+soAm(v)+'</b></button>'
+    +'<div class="xo-bd"><div class="xo-in ct-in">'+con+'</div></div></div>';
+}
 const CT_SODU='(1) + (2) − (3) − (4) − (5)';
 /* dòng (1)…(5), dùng chung cho tháng đang chạy và tháng đã đóng sổ */
 function bangSoDu(t,thang){
-  var x=ctR(1,'Số dư đầu '+thang,t.dauThang);
-  x+=ctR(2,'Thực thu',t.tongVao); t.vao.forEach(function(v){x+=ctS(esc(v.n),v.a);});
-  x+=ctR(3,'Thực chi',t.tongRa); t.ra.forEach(function(v){x+=ctS(esc(v.n),v.a);});
-  x+=ctR(4,'Tiền đang cho vay',t.choRong,'cho mượn − thu nợ');
-  if(t.muon)x+=ctS('Cho mượn',t.muon); if(t.thuno)x+=ctS('Thu nợ',-t.thuno);
-  x+=ctR(5,'Trả nợ',t.vayRong,'trả nợ − đi vay');
-  if(t.traCN)x+=ctS('Trả nợ cá nhân',t.traCN); if(t.divay)x+=ctS('Đi vay',-t.divay);
+  var x=ctR(1,'Số dư đầu '+thang,t.dauThang), c;
+  x+=ctX('ct2',2,'Thực thu',t.tongVao,'',t.vao.map(function(v){return ctS(esc(v.n),v.a);}).join(''));
+  x+=ctX('ct3',3,'Thực chi',t.tongRa,'',t.ra.map(function(v){return ctS(esc(v.n),v.a);}).join(''));
+  c=(t.muon?ctS('Cho mượn',t.muon):'')+(t.thuno?ctS('Thu nợ',-t.thuno):'');
+  x+=ctX('ct4',4,'Tiền đang cho vay',t.choRong,'cho mượn − thu nợ',c);
+  c=(t.traCN?ctS('Trả nợ cá nhân',t.traCN):'')+(t.divay?ctS('Đi vay',-t.divay):'');
+  x+=ctX('ct5',5,'Trả nợ',t.vayRong,'trả nợ − đi vay',c);
   return x;
 }
 /* ---------- khoi dau cua Tong ket thang da dong so ----------
@@ -1082,20 +1094,19 @@ function paceWhy2(pa){
   x+='<div class="daygroup dg-neu">TỔNG QUAN THÁNG NÀY</div>'+bangSoDu(t,thang);
   x+=ctT('Số dư hiện tại',CT_SODU+(Math.round(t.cuoi)===Math.round(t.tien)?' · khớp sao kê':' · CHƯA khớp sao kê'),
     '<b class="'+(t.cuoi<0?'am':'duong')+'">'+money(t.cuoi)+'</b>');
+  /* KẾT QUẢ dừng ở "Còn được dùng để chi" (Vy 28/09) — phần cần để dành đã nằm trên thẻ.
+     Dòng bằng 0 của Lương chưa về thì ẩn; ký hiệu đánh số theo đúng những dòng đang hiện. */
   x+='<div class="daygroup dg-kq">KẾT QUẢ</div>';
-  x+=ctR(6,'Lương chưa về',q.luongChuaVe);
-  x+=ctR(7,'Nợ, cố định chưa trả',q.noConPhai+q.cdLeft);
-  x+=ctR(8,'Thu nợ đã hẹn',q.henTong,q.henNgay?'gần nhất '+dm(q.henNgay):'');
+  var so=6, cong=[], tru=[], hen='';
+  if(q.luongChuaVe){x+=ctR(so,'Lương chưa về',q.luongChuaVe);cong.push('('+so+')');so++;}
+  x+=ctR(so,'Nợ, cố định chưa trả',q.noConPhai+q.cdLeft);tru.push('('+so+')');so++;
+  if(q.henTong){x+=ctR(so,'Thu nợ đã hẹn',q.henTong,q.henNgay?'gần nhất '+dm(q.henNgay):'');hen='('+so+')';}
+  var f='số dư'+cong.map(function(s){return ' + '+s;}).join('')+tru.map(function(s){return ' − '+s;}).join('')
+    +(hen?' · sau khi thu + '+hen:'');
   /* hiện tại và sau khi thu đặt CẠNH NHAU, hai màu khác nhau (Vy 28/09) */
-  x+=ctT('Còn được dùng để chi','',q.henTong
+  x+=ctT('Còn được dùng để chi',f,q.henTong
     ?'<span class="ct-hai"><b class="'+(q.A0<0?'am':'duong')+'">'+money(q.A0)+'</b> <i>→</i> <b class="sau">'+money(q.A1)+'</b></span>'
     :'<b class="'+(q.A1<0?'am':'duong')+'">'+money(q.A1)+'</b>');
-  x+='<div class="ct-r ghi"><span class="ct-f">'+(q.henTong
-    ?'hiện tại = số dư + (6) − (7) · sau khi thu = + (8)':'= số dư + (6) − (7) + (8)')+'</span></div>';
-  x+=ctR(9,'Cần để dành',q.B);
-  var so=q.henTong?'số sau khi thu':'còn được dùng để chi';
-  x+=ctT(q.lan?'Thiếu':'Dư',q.lan?'(9) − '+so:so+' − (9)',
-    '<b class="'+(q.lan?'am':'duong')+'">'+money(q.lan||q.tuDo)+'</b>');
   return x+'</div>';
 }
 /* Hạn mức linh hoạt — MỘT chỗ duy nhất, trong thẻ Tổng ngân sách khả dụng.
@@ -2581,6 +2592,11 @@ function khoiMucTieu(){
         <span class="fc-so"><b>${money(x.co)}</b> <span>/ ${money(x.can)}</span></span>
         <span class="mt-pc ${pc>=100?'du':'thieu'}">${pc}%</span></button>`;}).join('')+`</div>`;
 }
+/* nút "Xem chi tiết" chữ xanh (cùng màu "Mở tab Nhập") — thay chữ "Cách tính" (Vy 28/09) */
+function nutXem(k,id){
+  return `<button class="fold xct"${id?` id="${id}"`:''} style="margin-top:8px" onclick="toggle('${k}')">
+    <span><span class="xomui" data-mui="${k}" data-a="▾" data-b="▸">${open[k]?'▾':'▸'}</span> Xem chi tiết</span></button>`;
+}
 function vHome(){
   const list=monthTx(cursor), chi=sumChi(list);
   const thuNhap=sum(list.filter(t=>t.t==='thu'&&['luong','thuong','tkhac'].includes(groupOf(t.c).id)));
@@ -2590,7 +2606,7 @@ function vHome(){
   const bal=balances(), chk=bidvCheck();
   const tongDu=SRC.reduce((s2,x)=>s2+(bal[x.id]||0),0);
   h+=`<button class="strip" id="sec-bal" onclick="toggle('bal')">
-      <span>${SRC.map(x=>esc(x.n.replace('Ví điện tử','Ví'))+' <b>'+money(bal[x.id]||0)+'</b>').join(' · ')}</span>
+      <span>${SRC.map(x=>'<span class="nw">'+esc(x.n.replace('Ví điện tử','Ví'))+' <b>'+money(bal[x.id]||0)+'</b></span>').join(' · ')}</span>
       <span class="strip-r">${money(tongDu)} <span class="xomui" data-mui="bal" data-a="▲" data-b="▼">${open.bal?'▲':'▼'}</span></span></button>`;
   if(1){ h+='<div class="xow" data-xo="'+("bal")+'" data-open="'+((open.bal)?1:0)+'">';
     h+=`<div class="sp"></div><div class="panel">`;
@@ -2668,8 +2684,7 @@ function vHome(){
           <div class="kd-tile"><span>THỰC TẾ ĐƯỢC TIÊU</span><b>${money(tuNay)}</b><small class="${qk.lan||lech<0?'am':'duong'}">${
             qk.lan?'đang lấn tiết kiệm':lech<0?'thấp hơn kế hoạch':'cao hơn kế hoạch'}</small></div>
         </div></div>`;
-      h+=`<button class="fold" style="margin-top:8px" onclick="toggle('pw')">
-        <span style="font-size:13.5px"><span class="xomui" data-mui="pw" data-a="▾" data-b="▸">${open.pw?'▾':'▸'}</span> Cách tính</span></button>`;
+      h+=nutXem('pw');
       h+='<div class="xow" data-xo="pw" data-open="'+(open.pw?1:0)+'">'+paceWhy2(pa)+'</div>';
 
       /* nhóm nào sắp hết hoặc đã hết hạn mức — để quyết định nhanh có chi tiếp hay không */
@@ -2680,8 +2695,10 @@ function vHome(){
           white-space:nowrap;background:var(--${bg});color:var(--${tx})">${n} ${t}</span>`:'';
         h+=`<h2 class="hl"><i style="background:${gcA('#E0801A')}"></i><b>Hạn mức cần chú ý</b>
           <span style="display:flex;gap:5px">${hu(nHet,'đã hết','errbg','errtx')}${hu(nSap,'sắp hết','warnbg','warntx')}</span></h2>`;
+        /* thu gọn mặc định — Tổng quan quá dài (Vy 28/09); số nhóm đã hết / sắp hết vẫn ở tiêu đề */
+        h+=nutXem('hmcy');
         {
-          h+=`<div class="panel" style="padding:2px 14px 12px">`;
+          h+=`<div class="xow" data-xo="hmcy" data-open="${open.hmcy?1:0}"><div class="panel xct-bd" style="padding:2px 14px 12px">`;
           hm.forEach((x,i)=>{
             const bg=x.xau?'errbg':'warnbg', tx=x.xau?'errtx':'warntx';
             h+=`<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 0${i?';border-top:1px solid var(--line-2)':''}">
@@ -2702,7 +2719,7 @@ function vHome(){
           h+=`<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;
             margin-top:4px;padding-top:11px;border-top:1px solid var(--line-2)">
             <button class="chk-btn" onclick="buTuNhom()">Bù từ nhóm khác</button>
-            <button class="chk-btn" style="color:var(--ink-3)" onclick="jump('over')">Xem chi tiết ở Ngân sách →</button></div></div>`;
+            <button class="chk-btn" style="color:var(--ink-3)" onclick="jump('over')">Xem ở tab Ngân sách →</button></div></div></div>`;
         }
       }
     }
@@ -2748,8 +2765,7 @@ function vHome(){
         ${f.B?`<div class="fc-k ${k<0?'thieu':'du'}">${k<0?'thiếu '+money(-k):k?'dư '+money(k):'vừa đủ'}</div>`:''}</div></div>`;};
     h+=`<h2 class="hl"><i style="background:${gcA('#47897A')}"></i><b>Dự báo cuối tháng</b></h2>
       <div class="panel">${HANG('Tiêu đủ hạn mức',f.du1)}${HANG('Theo đà hiện tại',f.du2,!f.duocUoc)}</div>`;
-    h+=`<button class="fold" id="sec-fc" style="margin-top:8px" onclick="toggle('fc')">
-      <span style="font-size:13.5px"><span class="xomui" data-mui="fc" data-a="▾" data-b="▸">${open.fc?'▾':'▸'}</span> Cách tính</span></button>`;
+    h+=nutXem('fc','sec-fc');
     h+='<div class="xow" data-xo="fc" data-open="'+(open.fc?1:0)+'">'+cachTinhFc(f)+'</div>';
   }
 

@@ -9,6 +9,14 @@ globalThis.__f={chotCan,khoiChot,vHome,khongTieu,chotKhop,chotSo,chotDieuChinh,h
 globalThis.__tab=t=>{tab=t;};
 globalThis.__cc=d=>coCau(d);
 globalThis.__no=d=>noThang(d);
+globalThis.__nv=(g,d)=>noVuot(g,d);
+globalThis.__tv=(g,d)=>truVuot(g,d);
+globalThis.__ci=(g,d)=>carryIn(g,d);
+globalThis.__lf=()=>listFiltered();
+globalThis.__list=()=>vList();
+globalThis.__loc=()=>loc;
+globalThis.__move=n=>move(n);
+Object.assign(globalThis.__f,{locNhom,locNguon,locNgay,locXoa});
 globalThis.__mct=d=>muonChuaThu(d);
 globalThis.__moV=(k,v)=>{open[k]=v;};
 globalThis.__picker=v=>{if(v)openPicker('manual',0,'chi');else closePicker();};
@@ -419,6 +427,69 @@ console.log('\nK · Chọn nhóm xong không nhảy về đầu trang (lỗi Vy 
   ctx.scrollY=900; ctx.__render();
   eq(cuon[cuon.length-1],900,'bấm trong trang (tick chọn) vẫn giữ nguyên chỗ');
   ctx.scrollTo=()=>{}; ctx.scrollY=0;
+}
+
+console.log('\nL · Vượt hạn mức chưa bù thì trừ vào hạn mức tháng sau (Vy duyệt 11/10/2026)');
+{
+  HOM='2026-10-08'; const db=so(); db.batDau='2026-09-01';
+  db.budgets={an:200000,cho:100000,di:100000};
+  /* Chợ vượt 50.000 nhưng đã bù từ Di chuyển → KHÔNG bị trừ */
+  db.txns.push({id:nid++,d:'2026-09-05',t:'chi',a:150000,c:'cho_vat',s:'bidv',n:'Chợ'});
+  db.offsets=[{m:'2026-09',from:'di',to:'cho',a:50000}];
+  db.bm={'2026-10':{an:30000}};
+  ctx.__set(db,T10);
+  eq(ctx.__nv('an',T10),70000,'Ăn uống tháng 9: chi 270.000 − hạn mức 200.000 = vượt 70.000 phải trừ');
+  eq(ctx.__tv('an',T10),30000,'tháng 10 hạn mức Ăn uống chỉ 30.000 → trừ được 30.000');
+  eq(ctx.__nv('an',new Date(2026,10,1)),40000,'phần chưa trừ hết 40.000 dồn sang tháng 11');
+  eq(ctx.__nv('cho',T10),0,'Chợ vượt nhưng đã bù đủ từ Di chuyển → KHÔNG trừ');
+  eq(ctx.__nv('di',T10),0,'Di chuyển không vượt → không trừ');
+  eq(ctx.__pace(T10).duTru,0+100000+100000,'hạn mức linh hoạt tháng 10 = Ăn uống 30.000 − 30.000 + Chợ 100.000 + Di chuyển 100.000');
+  eq(ctx.__nv('an',T9),0,'tháng 9 là tháng bắt đầu theo dõi: không có gì từ tháng 8 trừ sang');
+  db.roll={an:1}; ctx.__set(db,T10);
+  ok(ctx.__ci('an',new Date(2026,10,1))>=0,'nhóm bật cộng dồn: phần vượt KHÔNG bị trừ lần hai qua hạn mức tồn');
+  ctx.__set(db,T9); const h=F.vHome();
+  ok(h.includes('Trừ vào hạn mức tháng 10')&&h.includes('Trừ vào tháng 10 tổng cộng')&&h.includes('−'+M(70000)),'Tổng kết tháng 9: dòng "Trừ vào hạn mức tháng 10" và tổng −70.000');
+  ok(!/Chưa bù/.test(h)&&!/bị trừ tổng cộng/.test(h),'KHÔNG còn chữ "Chưa bù", KHÔNG còn "Tháng 10 bị trừ tổng cộng"');
+  ctx.__set(db,T10); const h10=F.vHome();
+  ok(!h10.includes('tr-bao')&&!/bị trừ vì tháng 9 vượt/.test(h10),'Tổng quan tháng 10 KHÔNG có khối báo trừ ở đầu trang');
+}
+
+console.log('\nM · Bộ lọc tab Giao dịch: nhóm, nguồn tiền, ngày (Vy duyệt 11/10/2026)');
+{
+  HOM='2026-10-08'; const db=so(); db.batDau='2026-09-01';
+  db.txns.push({id:nid++,d:'2026-10-02',t:'chi',a:40000,c:'an_ngoai',s:'bidv',n:'Cơm'},
+    {id:nid++,d:'2026-10-03',t:'chi',a:60000,c:'an_cafe',s:'tm',n:'Cà phê'},
+    {id:nid++,d:'2026-10-05',t:'chi',a:90000,c:'cho_vat',s:'tm',n:'Chợ'},
+    {id:nid++,d:'2026-10-06',t:'mv',a:100000,s:'bidv',s2:'vi',n:'Nạp ví'},
+    {id:nid++,d:'2026-10-07',t:'thu',a:5000000,c:'luong',s:'bidv',n:'Lương'});
+  ctx.__set(db,T10); ctx.__tab('list'); F.locXoa();
+  const ten=()=>ctx.__lf().map(t=>t.n).sort().join(',');
+  F.locNhom('an'); eq(ten(),'Cà phê,Cơm','lọc nhóm Ăn uống: Cơm + Cà phê (cả hai mục con)');
+  F.locNhom('cho'); eq(ten(),'Chợ,Cà phê,Cơm','chọn thêm Chợ: được nhiều nhóm cùng lúc');
+  F.locNguon('tm'); eq(ten(),'Chợ,Cà phê','thêm nguồn Tiền mặt: chỉ còn khoản trả tiền mặt');
+  F.locXoa(); F.locNguon('vi'); eq(ten(),'Nạp ví','nguồn Ví: có cả khoản chuyển BIDV → Ví');
+  F.locXoa(); F.locNgay('2026-10-03','2026-10-05'); eq(ten(),'Chợ,Cà phê','khoảng ngày 03/10 → 05/10');
+  ctx.__moV('loc',1); const h=ctx.__list();
+  ok(h.includes('Ăn uống <small>2</small>')&&h.includes('Lương <small>1</small>'),'bảng lọc liệt kê nhóm có giao dịch, kèm số giao dịch');
+  ok(!h.includes('Di chuyển <small>'),'KHÔNG hiện nhóm không có giao dịch trong tháng');
+  ok(h.includes('Lọc · 1')&&h.includes('03/10 → 05/10 ✕')&&h.includes('Xóa hết bộ lọc'),'nút "Lọc · 1" và nhãn bộ lọc đang bật có ✕');
+  F.locNhom('an'); ctx.__move(-1);
+  ok(ctx.__loc().tu===''&&ctx.__loc().nhom.join()==='an','sang tháng khác: bỏ khoảng ngày, giữ nhóm đang lọc');
+  ctx.__tab('home'); F.locXoa();
+}
+
+console.log('\nN · Tổng kết: khối Nợ giống Tổng quan (Vy duyệt 11/10/2026)');
+{
+  HOM='2026-10-08'; const db=so(); db.batDau='2026-09-01';
+  db.debts=[{id:'dA',name:'Lan',kind:'cho',mode:'canhan',principal:500000,start:'2026-09-10'},
+            {id:'dN',name:'Trả góp máy',kind:'no',mode:'gop',per:100000,periods:10,principal:1000000,start:'2026-09-25'}];
+  db.txns.push({id:nid++,d:'2026-09-10',t:'chi',a:500000,c:'muon',s:'bidv',n:'Lan'},
+    {id:nid++,d:'2026-09-25',t:'chi',a:100000,c:'trano_gop',s:'bidv',n:'Trả góp máy',debt:'dN'});
+  ctx.__set(db,T9); const h=F.vHome();
+  ok(h.includes('<b>Nợ</b><em>tính tới hết 30/09</em>'),'tiêu đề "Nợ · tính tới hết 30/09"');
+  ok(h.includes('↑ KHOẢN PHẢI TRẢ</div>\n          <div class="noso">'+M(900000))&&h.includes('↓ KHOẢN CHỜ THU</div>\n          <div class="noso">'+M(500000)),'hai ô: phải trả 900.000 · chờ thu 500.000');
+  ok(h.includes('Xem từng khoản'),'có nút "Xem từng khoản"');
+  ok(!h.includes('Tổng đã cho vay')&&!h.includes('<b>Đã cho vay</b>')&&!h.includes('<b>Khoản nợ</b>'),'KHÔNG còn hai khối cũ "Khoản nợ" / "Đã cho vay"');
 }
 
 console.log(loi?'\n✗ '+loi+' lỗi':'\n✓ đạt hết');

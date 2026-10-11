@@ -578,3 +578,29 @@ input.dt{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius
   color:var(--jade);font-weight:600;font-size:13px}
 .chot-ghi{display:block;width:100%;min-height:44px;margin-top:8px;border-radius:12px;border:1px solid var(--warnbd);
   background:var(--card);color:var(--warntx);font-weight:600;font-size:13px}
+/* ---- vượt hạn mức trừ sang tháng sau (v=19) — tiền tố tr- ---- */
+.tr-dong{margin-top:7px;padding:7px 10px;border-radius:10px;background:var(--errbg);color:var(--errtx);font-size:12px}
+.tr-tong{display:flex;justify-content:space-between;gap:10px;padding:11px 14px;background:var(--rowb);font-size:13px;font-weight:600}
+.tr-tong b{color:var(--brick);font-weight:700;white-space:nowrap}
+/* ---- bộ lọc tab Giao dịch (v=19) — tiền tố lo- ---- */
+.lo-bt{margin-left:auto;display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:6px 12px;border-radius:999px;border:0;
+  background:var(--greybg);font-size:12px;font-weight:600;color:var(--ink)}
+.lo-bt.on{background:var(--jade);color:var(--onacc)}
+.lo-hop{margin:0 0 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--card);padding:4px 12px 12px}
+.lo-ten{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);margin:12px 0 6px}
+.lo-day{display:flex;gap:6px;flex-wrap:wrap}
+.lo-c{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:6px 11px;border-radius:999px;border:1px solid var(--line);
+  background:var(--field);font-size:12.5px;color:var(--ink)}
+.lo-c i{width:8px;height:8px;border-radius:50%;display:block;flex:none}
+.lo-c small{font-size:11px;color:var(--ink-3)}
+.lo-c.on{background:var(--tintb);border-color:var(--tintbd);color:var(--tinttx);font-weight:600}
+.lo-c.on small{color:var(--tinttx)}
+.lo-rong{font-size:12.5px;color:var(--ink-3)}
+.lo-ngay{display:flex;align-items:center;gap:8px}
+.lo-ngay input{flex:1;min-width:0;min-height:44px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--field);
+  font-size:16px;text-align:center}
+.lo-ngay span{font-size:12.5px;color:var(--ink-3)}
+.lo-dang{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.lo-x{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:4px 10px;border-radius:999px;background:var(--tintb);
+  color:var(--tinttx);font-size:12px;font-weight:600;border:0}
+.lo-xoa{background:none;border:0;color:var(--jade);font-size:12px;font-weight:600;min-height:32px;padding:4px 6px}

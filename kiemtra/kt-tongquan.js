@@ -218,7 +218,9 @@ ok(h.indexOf('Thấp hơn')<0,'KHÔNG báo khi tiêu ít hơn tháng trước');
     const TEN=['Tổng ngân sách khả dụng','Hạn mức cần chú ý','Cơ cấu chi tiêu',
                'Dự báo cuối tháng','Nợ','Mục tiêu'];
     const ma=[...js2.matchAll(/gcA\('(#[0-9A-Fa-f]{6})'\)}"><\/i><b>([^<]+)<\/b>/g)]
-      .map(m=>({m:m[1],t:m[2]})).filter(x=>TEN.includes(x.t));
+      .map(m=>({m:m[1],t:m[2]})).filter(x=>TEN.includes(x.t))
+      /* khối Nợ của Tổng kết tháng cũ (v=19) cùng tên, cùng màu với khối Nợ tháng này — một khối, hai màn */
+      .filter((x,i,a)=>a.findIndex(y=>y.t===x.t&&y.m===x.m)===i);
     /* So bằng HSL chứ không bằng khoảng cách RGB thô: hai màu cùng sắc nhưng khác
        hẳn độ bão hoà (xanh đậm vs xám lam) thì mắt vẫn phân biệt được. */
     const hsl=hex=>{
@@ -295,7 +297,8 @@ ok(h2.indexOf('Tổng kết')>=0,'vẫn có Tổng kết tháng');
 ok(h2.indexOf('CẦN XỬ LÝ')<0,'KHÔNG còn cảnh báo vượt hạn mức');
 ok(h2.indexOf('Hạn mức cần chú ý')<0,'KHÔNG còn Hạn mức cần chú ý');
 ok(h2.indexOf('Dự báo cuối tháng')<0,'tháng cũ KHÔNG hiện Dự báo cuối tháng');
-ok(h2.indexOf('<b>Nợ</b>')<0,'KHÔNG còn khối Nợ');
+/* từ v=19 tháng cũ CÓ khối Nợ (Vy 11/10/2026), nhưng là số tính tới hết tháng đó, không phải nợ hôm nay */
+ok(h2.indexOf('<b>Nợ</b><em>tính tới hết')>=0&&h2.indexOf('sắp hạn')<0,'khối Nợ của tháng cũ tính tới hết tháng đó, KHÔNG báo "sắp hạn" theo hôm nay');
 ok(h2.indexOf('Mục tiêu đang thực hiện')<0,'KHÔNG còn Mục tiêu');
 ok(h2.trimEnd().endsWith('</div>'),'trang kết thúc gọn sau Cơ cấu chi tiêu');
 ok(h2.indexOf('₫')<0,'tháng cũ cũng không còn ký hiệu đ');

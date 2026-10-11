@@ -1167,7 +1167,8 @@ function hmLinhHoat(pa){
     var d2=vLh-bLh;
     rows+='<div class="kd-g"><span>'+esc(g.n)+'<small class="'+(d2>0?'am':d2<0?'duong':'')+'">'
       +(d2>0?'vượt '+money(d2):d2<0?'còn '+money(-d2):'đã hết')
-      +(g.o?' · bù '+(g.o>0?'sang +':'đi ')+money(Math.abs(g.o)):'')+'</small></span>'
+      +(g.o?' · bù '+(g.o>0?'sang +':'đi ')+money(Math.abs(g.o)):'')
+      +(g.tru?' · trừ vượt tháng '+(new Date(cursor.getFullYear(),cursor.getMonth()-1,1).getMonth()+1)+' '+money(g.tru):'')+'</small></span>'
       +'<span class="fc-so"><b>'+money(vLh)+'</b> <span>/ '+money(bLh)+'</span></span></div>';
   });
   var vuot=sV-sB;
@@ -1187,8 +1188,8 @@ function pace(d){
   const NGOAI={tk:1,trano:1,muon:1};
   let duTru=0; const gr=[];
   FLEX().forEach(g=>{ if(NGOAI[g.id])return;
-    const b=bud(g.id,d), o=offsetNet(g.id,d), dr=drawn(g.id,d), tot=b+o+dr;
-    duTru+=tot; if(b||tot)gr.push({id:g.id,n:g.n,b,o,dr,tot});
+    const b=bud(g.id,d), o=offsetNet(g.id,d), dr=drawn(g.id,d), tru=truVuot(g.id,d), tot=b+o+dr-tru;
+    duTru+=tot; if(b||tot)gr.push({id:g.id,n:g.n,b,o,dr,tru,tot});
   });
   const skip=fixedTxIds(d);
   /* tách chi của tháng làm ba rổ, để bảng giải thích nói được số nào trừ số nào */
@@ -1468,7 +1469,9 @@ function carryIn(gid,d){
   for(let i=1;i<=6;i++){
     const m=new Date(d.getFullYear(),d.getMonth()-i,1);
     if(!trackedMonth(gid,m))continue;            // tháng chưa theo dõi đủ thì bỏ qua
-    tot+=budgetOf(gid,m)+offsetNet(gid,m)-spentOf(gid,m);
+    /* chỉ phần DƯ dồn thành hạn mức tồn; phần vượt đã đi đường riêng (noVuot → trừ tháng sau),
+       để nguyên ở đây thì nhóm bật cộng dồn bị trừ hai lần */
+    tot+=Math.max(0,avail(gid,m)-spentOf(gid,m))-drawn(gid,m);
   }
   const tran=budgetOf(gid,d)*6;
   return _memo[mk]=tot>tran?tran:tot;
@@ -1482,7 +1485,27 @@ function drawn(gid,d){
 /* dự trữ tích lũy còn lại chưa rút */
 function carryLeft(gid,d){ return Math.max(0,carryIn(gid,d)-drawn(gid,d)); }
 /* hạn mức dùng được: KHÔNG tự cộng tích lũy, chỉ cộng phần đã rút */
-function avail(gid,d){ return budgetOf(gid,d)+offsetNet(gid,d)+drawn(gid,d); }
+function avail(gid,d){ return budgetOf(gid,d)+offsetNet(gid,d)+drawn(gid,d)-truVuot(gid,d); }
+/* ---- Vượt hạn mức chưa bù thì trừ vào hạn mức tháng sau (Vy duyệt 11/10/2026) ----
+   Mọi nhóm linh hoạt (không kể Tiết kiệm, Trả nợ, Cho mượn). Vượt = đã chi − hạn mức dùng được của
+   tháng trước, sau khi đã tính các khoản bù. Chỉ trừ vào PHẦN LINH HOẠT của tháng này (hạn mức +
+   bù + hạn mức tồn đã rút), không đụng phần cố định; trừ không hết thì phần còn lại dồn sang tháng
+   kế. Nhóm không có hạn mức lẫn khoản cố định thì không "vượt" được. Bắt đầu từ tháng bắt đầu theo
+   dõi. Trước đây app ghi "khoản vượt tự trừ vào hạn mức tháng sau" nhưng không hề trừ.
+   Sổ thật 09→10: Ăn uống 322.500 · Chợ 218.250 · Quần áo 125.320 · Hóa đơn 41.444 = 707.514. */
+function noVuot(gid,d){
+  if(gid==='tk'||!FLEX().some(g=>g.id===gid))return 0;
+  const mk='nv'+gid+'|'+ym(d); if(mk in _memo)return _memo[mk];
+  const dau=ngayBatDau(), tr=new Date(d.getFullYear(),d.getMonth()-1,1);
+  if(!dau||ym(tr)<dau.slice(0,7))return _memo[mk]=0;
+  const coHM=bud(gid,tr)||fixedInGroup(gid);
+  const vuot=coHM?Math.max(0,spentOf(gid,tr)-avail(gid,tr)):0;
+  return _memo[mk]=vuot+noVuot(gid,tr)-truVuot(gid,tr);
+}
+function truVuot(gid,d){
+  const n=noVuot(gid,d); if(!n)return 0;
+  return Math.min(n,Math.max(0,bud(gid,d)+offsetNet(gid,d)+drawn(gid,d)));
+}
 /* bỏ phần bù và phần rút của nhóm này trong tháng đang xem */
 /* Bản tổng kết tháng đã đóng, vẽ ở Tổng quan thay cho khối nhịp chi. */
 function vTongKet(){
@@ -1552,43 +1575,45 @@ function vTongKet(){
   h+=`</div>`;
   if(tongCan>s.gopKH&&s.gopKH)h+=`<div class="sp"></div><div class="warn">${gs.length} mục tiêu cần tổng <b>${money(tongCan)}</b> mỗi tháng mới kịp hạn, đang góp ${money(s.gopKH)} — thiếu <b>${money(tongCan-s.gopKH)}</b>. Cần giãn hạn, hạ mục tiêu, hoặc tăng mức góp.</div>`;
 
-  /* --- khoản nợ --- */
+  /* --- nợ: CÙNG giao diện khối Nợ ở Tổng quan (Vy 11/10/2026), nhưng số tính tới hết tháng đang
+     xem (noThang) — khoản phát sinh tháng sau không có ở đây --- */
   if(no.no.length||no.cho.length){
-    const DR=(x,mau)=>{const pc=x.total?Math.min(100,x.paid/x.total*100):0;
-      return `<div style="padding:12px 14px;border-bottom:1px solid var(--line-2)">
-        <div class="cat-meta"><span style="color:var(--ink);font-size:13.5px;font-weight:500">${esc(x.dt.name)}</span>
-          <span style="font-size:13.5px;font-weight:600;color:${x.done?'var(--pos)':'var(--ink)'}">${
-            x.done?'đã xong':'còn '+money(x.left)}</span></div>
-        <div class="track" style="height:6px;margin-top:8px"><i style="width:${pc}%;background:${mau}"></i></div>
-        <div class="cat-meta" style="margin-top:6px"><span>${money(x.paid)} / ${money(x.total)}${
-          x.dt.periods?' · kỳ '+x.kyDone+'/'+x.dt.periods:''}</span><span>${Math.round(pc)}%</span></div></div>`;};
-    if(no.no.length){
-      h+=`<h2 class="hl"><i style="background:${gcA('#8A7D6C')}"></i><b>Khoản nợ</b></h2>
-        <div class="panel">
-        ${R('Đã trả trong tháng','<div class="src-m">tổng chi nhóm Trả nợ</div>',money(no.traTrongThang))}
-        ${R('Còn phải trả','<div class="src-m">'+no.no.filter(x=>!x.done).length+' khoản chưa xong</div>',money(no.tong.no),'var(--brick)')}
-        </div><div class="sp"></div><div class="panel">`;
-      no.no.forEach(x=>h+=DR(x,'var(--jade)'));
-      h+=`</div>`;
-    }
-    if(no.cho.length){
-      h+=`<h2 class="hl"><i style="background:${gcA('#56937F')}"></i><b>Đã cho vay</b><em>${no.cho.length} khoản</em></h2>
-        <div class="panel">
-        ${R('Tổng đã cho vay','',money(no.cvTong))}
-        <div class="src" style="padding:11px 14px"><div><div class="src-n" style="font-size:13.5px">Đã thu về</div>
-          <div class="src-m">còn phải thu ${money(no.cvTong-no.cvThu)}</div></div>
-          <div style="text-align:right"><div class="src-a" style="font-size:14px;color:${no.cvThu?'var(--pos)':'var(--ink-3)'}">${money(no.cvThu)}</div>
-            <div class="src-m">${Math.round(no.cvPc)}%</div></div></div>
-        </div><div class="sp"></div><div class="panel">`;
-      no.cho.forEach(x=>h+=DR(x,'var(--pos)'));
-      h+=`</div>`;
-    }
+    const conNo=no.no.filter(x=>x.left>0), conCho=no.cho.filter(x=>x.left>0);
+    const xong=no.no.length+no.cho.length-conNo.length-conCho.length;
+    const cuoiTh=iso(new Date(cursor.getFullYear(),cursor.getMonth()+1,0));
+    const DR=x=>`<div class="src"><div style="min-width:0"><div class="src-n">${esc(x.dt.name)}</div>
+      <div class="src-m">${x.dt.mode==='gop'&&x.dt.periods?'đã trả '+x.kyDone+' / '+x.dt.periods+' kỳ'
+        :(x.dt.kind==='cho'?'cho mượn ':'vay ')+(x.dt.start?ddmm(x.dt.start):'')}${x.paid?' · đã '+(x.dt.kind==='cho'?'thu ':'trả ')+money(x.paid):''}</div></div>
+      <div class="src-a ${x.dt.kind==='cho'?'':'neg'}">${money(x.left)}</div></div>`;
+    h+=`<h2 class="hl"><i style="background:${gcA('#CF4640')}"></i><b>Nợ</b><em>tính tới hết ${ddmm(cuoiTh)}</em></h2>
+      <div class="nohai">
+        <div class="nomot ra"><div class="nonhan">↑ KHOẢN PHẢI TRẢ</div>
+          <div class="noso">${money(no.tong.no)}</div>
+          <div class="noph">${conNo.length} khoản · tiền sẽ ra</div></div>
+        <div class="nomot vao"><div class="nonhan">↓ KHOẢN CHỜ THU</div>
+          <div class="noso">${money(no.tong.cho)}</div>
+          <div class="noph">${conCho.length} khoản · tiền sẽ vào</div></div>
+      </div>
+      <button class="fold" style="margin-top:0" onclick="toggle('nonoTK')">
+        <span style="font-size:13.5px"><span class="xomui" data-mui="nonoTK" data-a="▾" data-b="▸">${open.nonoTK?'▾':'▸'}</span> Xem từng khoản</span></button>
+      <div class="xow" data-xo="nonoTK" data-open="${open.nonoTK?1:0}">
+        <div class="panel" style="border-radius:0 0 var(--r) var(--r);border-top:0">`;
+    if(conNo.length){h+=`<div class="nohd ra"><i></i><span>↑ KHOẢN PHẢI TRẢ</span><span style="margin-left:auto;font-weight:700">${money(no.tong.no)}</span></div>`;
+      conNo.forEach(x=>h+=DR(x));}
+    if(conCho.length){h+=`<div class="nohd vao"><i></i><span>↓ KHOẢN CHỜ THU</span><span style="margin-left:auto;font-weight:700">${money(no.tong.cho)}</span></div>`;
+      conCho.forEach(x=>h+=DR(x));}
+    if(!conNo.length&&!conCho.length)h+=`<div class="src" style="padding:13px 14px"><div class="src-m">Hết tháng này không còn khoản nợ nào chưa xong.</div></div>`;
+    if(xong)h+=`<div class="src" style="padding:10px 14px"><div class="src-m">${xong} khoản đã tất toán tính tới hết ${ddmm(cuoiTh)}.</div></div>`;
+    h+=`</div></div>`;
   }
 
   /* --- nhóm vượt hạn mức --- */
   if(s.vuot.length){
     h+=`<h2 class="hl"><i style="background:${gcA('#C0766B')}"></i><b>Nhóm vượt hạn mức</b><em>${s.vuot.length} nhóm</em></h2>
       <div class="panel">`;
+    /* vượt mà chưa bù thì trừ vào hạn mức tháng sau (Vy 11/10): mỗi nhóm một dòng, không ghi lại số */
+    const sau=new Date(cursor.getFullYear(),cursor.getMonth()+1,1), thSau=sau.getMonth()+1;
+    const truSau=FLEX().reduce((t,g)=>t+noVuot(g.id,sau),0);
     s.vuot.forEach(x=>{const qpc=Math.round(x.pc*100), trong=100/x.pc;
       h+=`<div style="padding:12px 14px;border-bottom:1px solid var(--line-2)">
         <div class="cat-meta"><span style="color:var(--ink);font-size:13.5px;font-weight:500">${esc(x.g.sn||x.g.n)}</span>
@@ -1599,7 +1624,9 @@ function vTongKet(){
           <i style="width:${100-trong}%;background:var(--brick)"></i></div>
         <div class="cat-meta" style="margin-top:6px"><span>${money(x.v)} / ${money(x.b)}</span>
           <span style="color:var(--brick);font-weight:600">quá ${money(x.chenh)}</span></div>
-        ${co(x.v,x.v5,false,1)}</div>`;});
+        ${co(x.v,x.v5,false,1)}
+        ${noVuot(x.g.id,sau)?`<div class="tr-dong">Trừ vào hạn mức tháng ${thSau}</div>`:''}</div>`;});
+    if(truSau)h+=`<div class="tr-tong"><span>Trừ vào tháng ${thSau} tổng cộng</span><b>−${money(truSau)}</b></div>`;
     h+=`</div>`;
   }
   return h;
@@ -2087,7 +2114,7 @@ function vBudRun(inc){
 
   /* khối Hạn mức */
   const rows=FLEX().map(g=>{const fo=fixedOfGroup(g.id,cursor);
-    return {g,b:avail(g.id,cursor),v:spentOf(g.id,cursor),ci:carryLeft(g.id,cursor),
+    return {g,b:avail(g.id,cursor),v:spentOf(g.id,cursor),ci:carryLeft(g.id,cursor)-truVuot(g.id,cursor),
       off:offsetNet(g.id,cursor),drw:drawn(g.id,cursor),fxl:fo.left,fxp:fo.plan,
       fxc:Math.min(fo.chi,fo.plan)};})   /* trả dôi hơn kế hoạch thì phần dôi tính vào linh hoạt */
     .filter(x=>x.b>0||x.v>0);
@@ -3157,6 +3184,53 @@ function mNhapNgay(el){const r=dtRead(el.value,el.dataset.huong);if(r!==null)mNh
 let listF='all', listQ='', rowOpen='', selMode=false, selIds={};
 function setListF(v){listF=v;render();}
 function setListQ(v){listQ=v;render();}
+/* Bộ lọc tab Giao dịch (Vy duyệt phác thảo 11/10/2026): theo nhóm (chọn được nhiều, chỉ hiện nhóm
+   có giao dịch trong tháng), theo nguồn tiền, theo khoảng ngày. Đổi tháng thì bỏ khoảng ngày. */
+let loc={nhom:[],nguon:[],tu:'',den:''};
+const locSoBat=()=>loc.nhom.length+loc.nguon.length+(loc.tu||loc.den?1:0);
+function locBat(ds,id){const i=ds.indexOf(id); if(i<0)ds.push(id); else ds.splice(i,1); render();}
+function locNhom(id){locBat(loc.nhom,id);}
+function locNguon(id){locBat(loc.nguon,id);}
+function locNgay(tu,den){loc.tu=tu;loc.den=den;render();}
+function locGo(el,k){
+  const v=dtRead(el.value,'qua');
+  if(v===null){flash('Ngày chưa đúng — gõ dạng dd/mm/yy.','err');return;}
+  loc[k]=v; render();
+}
+function locXoa(){loc={nhom:[],nguon:[],tu:'',den:''};render();}
+function khoiLoc(){
+  const all=monthTx(cursor), dem={}, demN={};
+  all.forEach(t=>{ if(t.c&&t.t!=='mv'&&t.t!=='dc'){const g=groupOf(t.c).id;dem[g]=(dem[g]||0)+1;}
+    demN[t.s||'bidv']=(demN[t.s||'bidv']||0)+1; if(t.t==='mv'&&t.s2&&t.s2!==t.s)demN[t.s2]=(demN[t.s2]||0)+1; });
+  const nhom=Object.keys(dem).sort((a,b)=>dem[b]-dem[a]);
+  const c=(on,fn,noi)=>`<button class="lo-c${on?' on':''}" onclick="${fn}">${noi}</button>`;
+  const now=new Date(), hn=iso(now), dang=ym(cursor)===ym(now);
+  const dau=iso(new Date(cursor.getFullYear(),cursor.getMonth(),1));
+  const bay=iso(new Date(now.getFullYear(),now.getMonth(),now.getDate()-6));
+  let x=`<div class="lo-hop"><div class="lo-ten">Nhóm · chỉ nhóm có giao dịch trong tháng</div><div class="lo-day">`;
+  x+=nhom.length?nhom.map(id=>{const g=groupOf(id);
+    return c(loc.nhom.includes(id),`locNhom('${id}')`,`<i style="background:${gcA(g.c)}"></i>${esc(g.sn||g.n)} <small>${dem[id]}</small>`);}).join('')
+    :'<span class="lo-rong">Tháng này chưa có giao dịch nào có nhóm.</span>';
+  x+=`</div><div class="lo-ten">Nguồn tiền</div><div class="lo-day">`
+    +SRC.map(s=>c(loc.nguon.includes(s.id),`locNguon('${s.id}')`,`${esc(s.n)} <small>${demN[s.id]||0}</small>`)).join('');
+  x+=`</div><div class="lo-ten">Ngày</div>
+    <div class="lo-ngay"><span>từ</span><input inputmode="numeric" placeholder="dd/mm/yy" value="${loc.tu?dtFmt(loc.tu):''}" onchange="locGo(this,'tu')" aria-label="Từ ngày">
+      <span>đến</span><input inputmode="numeric" placeholder="dd/mm/yy" value="${loc.den?dtFmt(loc.den):''}" onchange="locGo(this,'den')" aria-label="Đến ngày"></div>
+    <div class="lo-day" style="margin-top:8px">`
+    +(dang?c(loc.tu===hn&&loc.den===hn,`locNgay('${hn}','${hn}')`,'Hôm nay')
+      +c(loc.tu===(bay<dau?dau:bay)&&loc.den===hn,`locNgay('${bay<dau?dau:bay}','${hn}')`,'7 ngày qua'):'')
+    +c(!loc.tu&&!loc.den,`locNgay('','')`,'Cả tháng')+`</div></div>`;
+  return x;
+}
+function khoiLocDang(){
+  if(!locSoBat())return '';
+  const x=(noi,fn)=>`<button class="lo-x" onclick="${fn}">${noi} ✕</button>`;
+  return `<div class="lo-dang">`
+    +loc.nhom.map(id=>x(esc(groupOf(id).sn||groupOf(id).n),`locNhom('${id}')`)).join('')
+    +loc.nguon.map(id=>x(esc(srcOf(id).n),`locNguon('${id}')`)).join('')
+    +(loc.tu||loc.den?x((loc.tu?ddmm(loc.tu):'đầu tháng')+' → '+(loc.den?ddmm(loc.den):'cuối tháng'),`locNgay('','')`):'')
+    +`<button class="lo-xoa" onclick="locXoa()">Xóa hết bộ lọc</button></div>`;
+}
 function toggleRow(id){rowOpen=rowOpen===id?'':id;render();}
 /* chọn nhiều dòng để xóa */
 const selCount=()=>Object.keys(selIds).length;
@@ -3182,6 +3256,10 @@ function listFiltered(){
     list=list.filter(t=>isSub?t.c===filterCode:groupOf(t.c).id===filterCode);
   }
   if(listF!=='all')list=list.filter(t=>listF==='mv'?(t.t==='mv'||t.t==='dc'):t.t===listF);
+  if(loc.nhom.length)list=list.filter(t=>t.c&&t.t!=='mv'&&t.t!=='dc'&&loc.nhom.includes(groupOf(t.c).id));
+  if(loc.nguon.length)list=list.filter(t=>loc.nguon.includes(t.s||'bidv')||(t.t==='mv'&&loc.nguon.includes(t.s2)));
+  if(loc.tu)list=list.filter(t=>t.d>=loc.tu);
+  if(loc.den)list=list.filter(t=>t.d<=loc.den);
   const q=noAccent(listQ.trim());
   if(q)list=list.filter(t=>noAccent(t.n).indexOf(q)>=0||noAccent(labelOf(t.c)).indexOf(q)>=0);
   return list;
@@ -3196,11 +3274,12 @@ function vList(){
       ${esc(g.n)}${isSub?' › '+esc(labelOf(filterCode)):''} · ${money(sumChi(list))} <b>✕</b></button>`;
   }
 
-  let h=chip+`<div style="display:flex;gap:6px;margin:14px 0 9px">`
+  let h=chip+`<div style="display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 9px">`
     +[['all','Tất cả'],['chi','Chi'],['thu','Thu'],['mv','Chuyển']].map(([k,n])=>
       `<button class="chip" style="margin-top:0;padding:6px 12px;font-size:12px;${listF===k?'background:var(--jade);color:var(--onacc);border-color:var(--jade)':''}" onclick="setListF('${k}')">${n}</button>`).join('')
-    +`<button class="chip" style="margin-top:0;margin-left:auto;padding:6px 12px;font-size:12px;${selMode?'background:var(--jade);color:var(--onacc);border-color:var(--jade)':''}" onclick="${selMode?'selStop()':'selStart()'}">${selMode?'Xong':'Chọn nhiều'}</button>`
-    +`</div><input class="rename" style="margin:0 0 12px" value="${esc(listQ)}" placeholder="Tìm theo nội dung" oninput="setListQ(this.value)">`;
+    +`<button class="lo-bt${locSoBat()||open.loc?' on':''}" onclick="toggle('loc')" aria-expanded="${open.loc?'true':'false'}">Lọc${locSoBat()?' · '+locSoBat():''} ${open.loc?'▴':'▾'}</button>`
+    +`<button class="chip" style="margin-top:0;padding:6px 12px;font-size:12px;${selMode?'background:var(--jade);color:var(--onacc);border-color:var(--jade)':''}" onclick="${selMode?'selStop()':'selStart()'}">${selMode?'Xong':'Chọn nhiều'}</button>`
+    +`</div>${open.loc?khoiLoc():''}${khoiLocDang()}<input class="rename" style="margin:0 0 12px" value="${esc(listQ)}" placeholder="Tìm theo nội dung" oninput="setListQ(this.value)">`;
   if(selMode){
     const n=selCount();
     h+=`<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;
@@ -3465,7 +3544,8 @@ function vInfo(){
    ['Trả nợ','trả nợ cá nhân trong tháng trừ tiền đi vay. Dương là nợ giảm được, trừ vào số dư. Tháng nào vay nhiều hơn trả thì dòng này mang dấu âm, nghĩa là tiền vay về nhiều hơn tiền trả đi. Trả góp không nằm ở đây mà ở Thực chi.'],
    ['Chi linh hoạt','tổng mọi giao dịch chi trong tháng sau khi bỏ ra bốn thứ: các khoản đã khớp chi phí cố định, nhóm Tiết kiệm & Đầu tư, nhóm Trả nợ, nhóm Cho mượn. Đây là phần Vy tự quyết định tiêu, và là con số mà Hạn mức linh hoạt dùng để kiểm soát.'],
    ['Số dư cuối tháng','cộng lại từ số dư đầu sổ, chỉ lấy giao dịch tới hết tháng đang xem. Không lấy số dư hôm nay, vì xem lại tháng cũ mà lấy số dư hôm nay là sai ngay khi tháng sau đã có giao dịch.'],
-   ['Hạn mức linh hoạt','tổng hạn mức các nhóm linh hoạt, trừ Tiết kiệm, trừ Trả nợ, trừ Cho mượn, cộng khoản bù qua lại giữa các nhóm và phần hạn mức tồn đã chủ động rút trong tháng. Tên cũ là "Được tiêu cả tháng".'],
+   ['Hạn mức linh hoạt','tổng hạn mức các nhóm linh hoạt, trừ Tiết kiệm, trừ Trả nợ, trừ Cho mượn, cộng khoản bù qua lại giữa các nhóm và phần hạn mức tồn đã chủ động rút trong tháng, trừ phần vượt tháng trước chưa bù. Tên cũ là "Được tiêu cả tháng".'],
+   ['Vượt hạn mức trừ sang tháng sau','nhóm nào tháng trước chi quá hạn mức mà chưa được bù từ nhóm khác thì phần vượt trừ thẳng vào hạn mức linh hoạt của nhóm đó tháng này. Chỉ trừ vào phần linh hoạt, không đụng khoản cố định; trừ không hết thì phần còn lại trừ tiếp sang tháng sau nữa. Ví dụ: Ăn uống tháng 9 vượt 322.500 → hạn mức linh hoạt tháng 10 còn 500.000 − 322.500 = 177.500. Phần dư thì khác: chỉ nhóm bật "cộng dồn" mới giữ lại thành hạn mức tồn.'],
 
    ['Số tiền còn lại được dùng để chi','khởi từ TIỀN THẬT, không khởi từ hạn mức. Lấy số dư hiện tại, cộng lương kế hoạch chưa về, trừ nợ CÒN PHẢI trả trong tháng, trừ chi phí cố định CHƯA trả. Nếu có khoản cho vay đã hẹn ngày thu trong tháng thì cộng thêm, và app hiện hai số cạnh nhau: bây giờ và sau khi thu về. Khoản cho vay chưa hẹn ngày KHÔNG được cộng — app chỉ ghi nhận là còn khoản chưa thu.'],
    ['Cần để dành','tiền Tiết kiệm & Đầu tư còn phải chuyển trong tháng, cộng mức góp Quỹ dự phòng. Đem so với Số tiền còn lại được dùng để chi: dư ra thì tiêu tự do phần dư mà vẫn để dành đủ; thiếu thì app ghi đang vượt quá số cần để dành bao nhiêu. Luôn chỉ một trong hai dòng có số, dòng kia bằng 0.'],
@@ -3928,7 +4008,7 @@ function doRestore(){try{applyBackup(JSON.parse(document.getElementById('restore
   catch(e){flash('Bản sao lưu không đọc được.','err');}}
 function wipe(){if(confirm('Xóa hết giao dịch, hạn mức và quy tắc? Không khôi phục được.')){
   DB={txns:[],debts:[],budgets:{},bm:{},goals:[],fixedItems:DB.fixedItems,roll:DB.roll,offsets:[],draws:[],income:DB.income,rules:{},opens:DB.opens,checks:{},opts:DB.opts,efGop:0,chot:{},chotLS:[],batDau:DB.batDau||'',lastBackup:0,v:13};save();msg='';go('home');}}
-function move(n){cursor=new Date(cursor.getFullYear(),cursor.getMonth()+n,1);selIds={};toTop=true;render()}
+function move(n){cursor=new Date(cursor.getFullYear(),cursor.getMonth()+n,1);selIds={};loc.tu='';loc.den='';toTop=true;render()}
 
 /* ==================== vẽ ==================== */
 const TABS=[['home','Tổng quan','◉'],['add','Nhập','＋'],['list','Giao dịch','☰'],['debt','Nợ','◈'],['budget','Ngân sách','◐'],['trend','Xu hướng','◪']];
@@ -3964,7 +4044,7 @@ function render(){
 let cuonNen=null;
 /* đổi tab hay đổi tháng mới cuộn lên đầu; bấm trong trang thì giữ nguyên chỗ đang xem */
 function go(t){msg='';tab=t;toTop=true;render();}
-function goTab(t){if(t!=='list'){filterCode='';selMode=false;selIds={};}go(t);}
+function goTab(t){if(t!=='list'){filterCode='';selMode=false;selIds={};loc={nhom:[],nguon:[],tu:'',den:''};}go(t);}
 try{
   const mf={name:'Sổ chi tiêu',short_name:'Sổ chi',display:'standalone',start_url:'.',
     background_color:'#F3F6FB',theme_color:'#F3F6FB',

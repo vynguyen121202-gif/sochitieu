@@ -8,6 +8,10 @@ globalThis.__f={chotCan,khoiChot,vHome,khongTieu,chotKhop,chotSo,chotDieuChinh,h
   bangTien,khoiTongKet,chotHoiOK,chotHoiHuy,khoiChotHoi,chotVe,chotLan,balSrcAt,chotGhiLech,vBudget};
 globalThis.__tab=t=>{tab=t;};
 globalThis.__cc=d=>coCau(d);
+globalThis.__no=d=>noThang(d);
+globalThis.__mct=d=>muonChuaThu(d);
+globalThis.__moV=(k,v)=>{open[k]=v;};
+globalThis.__picker=v=>{if(v)openPicker('manual',0,'chi');else closePicker();};
 globalThis.__trend=()=>vTrend();
 globalThis.__hoi=()=>chotHoi;
 globalThis.__mo=k=>{open[k]=1;};
@@ -371,6 +375,50 @@ console.log('\nI · Cơ cấu chi tiêu và Xu hướng = Thực chi + cho mư�
   ok(h.includes('trung bình '+M(380000)+' mỗi tháng · tính trên 2 tháng có ghi chép'),'trung bình 380.000 = 760.000 ÷ 2 tháng có ghi chép');
   ok(!h.includes('trung bình '+M(Math.round(760000/6))+' mỗi tháng'),'KHÔNG còn chia cứng cho 6 (126.667)');
   ok(h.includes('Đường đứt là mức trung bình 2 tháng có ghi chép'),'chú thích đường đứt ghi đúng 2 tháng');
+}
+
+console.log('\nJ · Nợ và cho vay: tháng nào tính tháng đó; ô Cho mượn chỉ liệt kê khoản chưa thu (Vy 11/10/2026)');
+{
+  HOM='2026-10-08'; const db=so(); db.batDau='2026-09-01';
+  db.debts=[{id:'dA',name:'Lan',kind:'cho',mode:'canhan',principal:500000,start:'2026-09-10'},
+            {id:'dB',name:'Minh',kind:'cho',mode:'canhan',principal:70000,start:'2026-09-15'},
+            {id:'dC',name:'Hoa thang muoi',kind:'cho',mode:'canhan',principal:50000,start:'2026-10-03'}];
+  db.txns.push(
+    {id:nid++,d:'2026-09-10',t:'chi',a:500000,c:'muon',s:'bidv',n:'Lan'},
+    {id:nid++,d:'2026-09-15',t:'chi',a:70000,c:'muon',s:'bidv',n:'Minh'},
+    {id:nid++,d:'2026-09-18',t:'thu',a:70000,c:'thuno',s:'bidv',n:'Minh tra',debt:'dB'},
+    {id:nid++,d:'2026-09-20',t:'thu',a:200000,c:'thuno',s:'bidv',n:'Lan tra bot',debt:'dA'},
+    {id:nid++,d:'2026-10-03',t:'chi',a:50000,c:'muon',s:'bidv',n:'Hoa thang muoi'},
+    {id:nid++,d:'2026-10-05',t:'thu',a:100000,c:'thuno',s:'bidv',n:'Lan tra tiep',debt:'dA'});
+  ctx.__set(db,T9);
+  const n9=ctx.__no(T9);
+  eq(n9.cho.length,2,'Tổng kết tháng 9: chỉ 2 khoản cho vay của tháng 9, KHÔNG có khoản tháng 10');
+  ok(n9.cvTong===570000&&n9.cvThu===270000&&n9.tong.cho===300000,'đã cho vay 570.000 · đã thu tới hết tháng 9: 270.000 · còn phải thu 300.000');
+  ok(n9.cho.find(x=>x.dt.id==='dA').paid===200000,'khoản Lan: tiền thu ngày 05/10 KHÔNG tính vào tháng 9 (200.000, không phải 300.000)');
+  eq(n9.tong.cho,F.bangTien(T9).choRong,'còn phải thu cuối tháng 9 = dòng (4) của tháng 9');
+  ok(!F.vHome().includes('Hoa thang muoi'),'trang tháng 9 KHÔNG nhắc tới khoản cho vay của tháng 10');
+  const n10=ctx.__no(T10);
+  ok(n10.cho.length===3&&n10.tong.cho===250000,'Tổng kết tính tới hết tháng 10: 3 khoản, còn phải thu 250.000');
+  const m=ctx.__mct(T9);
+  ok(m.rows.length===1&&m.rows[0].a===500000&&m.le===200000,'ô Cho mượn tháng 9: khoản Minh đã thu đủ nên KHÔNG liệt kê; còn khoản Lan 500.000 và dòng "đã thu về một phần" 200.000');
+  eq(m.rows.reduce((s,t)=>s+t.a,0)-m.le,ctx.__cc(T9).muon,'tổng các dòng − phần thu lẻ = con số trên ô Cho mượn');
+  ctx.__mo('txCode'); ctx.__moV('txCode','muon'); const h=F.vHome();
+  ok(h.includes('1 khoản chưa thu về · '+M(300000))&&h.includes('Đã thu về một phần'),'chạm ô Cho mượn: tiêu đề "1 khoản chưa thu về · 300.000"');
+  ok(!h.includes('<div class="tx-n">Minh</div>'),'KHÔNG liệt kê khoản đã thu về');
+}
+
+console.log('\nK · Chọn nhóm xong không nhảy về đầu trang (lỗi Vy báo 11/10/2026)');
+{
+  const db=so(); db.batDau='2026-09-01'; ctx.__set(db,T9);
+  const cuon=[]; ctx.scrollTo=(x,y)=>{cuon.push(y);ctx.scrollY=y;};
+  ctx.__render(); ctx.scrollY=900;
+  ctx.__picker(1);
+  eq(cuon[cuon.length-1],0,'mở bảng chọn nhóm: bảng hiện từ đầu');
+  ctx.scrollY=40; ctx.__picker(0);
+  eq(cuon[cuon.length-1],900,'chọn xong: trang trở về đúng chỗ đang xem (900), KHÔNG về đầu trang');
+  ctx.scrollY=900; ctx.__render();
+  eq(cuon[cuon.length-1],900,'bấm trong trang (tick chọn) vẫn giữ nguyên chỗ');
+  ctx.scrollTo=()=>{}; ctx.scrollY=0;
 }
 
 console.log(loi?'\n✗ '+loi+' lỗi':'\n✓ đạt hết');

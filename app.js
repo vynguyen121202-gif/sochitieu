@@ -728,6 +728,23 @@ function coCau(d){
   nhom.sort((a,b)=>b[1]-a[1]);
   return _memo[mk]={list,muon,nhom,tong:nhom.reduce((s,x)=>s+x[1],0)};
 }
+/* Các khoản cho mượn của tháng CHƯA thu về — đúng những khoản đang cộng vào ô Cho mượn (Vy 11/10/2026).
+   Mỗi lần thu nợ trong tháng gạch đi MỘT khoản cho mượn cùng số tiền; nếu lần thu đó đã gắn với một
+   khoản trong sổ nợ thì ưu tiên khoản cho mượn cùng tên. Lần thu không khớp trọn khoản nào (thu một
+   phần) thì gom vào `le` và hiện thành một dòng trừ riêng — KHÔNG đoán nó thuộc khoản nào.
+   Tổng các dòng − le = cho mượn − thu nợ của tháng = dòng (4). */
+function muonChuaThu(d){
+  const l=monthTx(d), lk=debtLinks();
+  const con=l.filter(t=>t.t==='chi'&&groupOf(t.c).id==='muon').sort((a,b)=>a.d<b.d?-1:1);
+  let le=0;
+  l.filter(t=>t.t==='thu'&&groupOf(t.c).id==='thuno').forEach(c=>{
+    const dt=DB.debts.find(x=>x.id===lk[String(c.id)]);
+    let i=dt?con.findIndex(t=>t.a===c.a&&cleanName(t.n)===dt.name):-1;
+    if(i<0)i=con.findIndex(t=>t.a===c.a);
+    if(i>=0)con.splice(i,1); else le+=c.a;
+  });
+  return {rows:con,le};
+}
 function bySub(list,gid){
   const m={}; list.filter(t=>t.t==='chi'&&groupOf(t.c).id===gid).forEach(t=>{m[t.c]=(m[t.c]||0)+t.a;});
   return Object.entries(m).sort((a,b)=>b[1]-a[1]);
@@ -1649,11 +1666,17 @@ function noThang(d){
   d=d||cursor;
   const mk='noth'+ym(d); if(mk in _memo)return _memo[mk];
   const traTrongThang=sum(monthTx(d).filter(t=>t.t==='chi'&&groupOf(t.c).id==='trano'));
-  const ds=(DB.debts||[]).map(dt=>Object.assign({dt},debtInfo(dt)));
+  /* Tháng nào tính tháng đó (Vy 11/10/2026): chỉ khoản đã có tính tới hết tháng đang xem, và chỉ
+     đếm tiền đã trả / đã thu tới hết tháng đó. Trước đây lấy số HÔM NAY nên khoản cho vay tháng 10
+     hiện cả trong Tổng kết tháng 9, và tháng đã chốt cứ đổi số theo tháng sau. */
+  const cuoi=iso(new Date(d.getFullYear(),d.getMonth()+1,0));
+  const ds=(DB.debts||[]).filter(dt=>!dt.start||dt.start<=cuoi).map(dt=>{
+    const total=debtInfo(dt).total, paid=debtTxns(dt.id).filter(t=>t.d<=cuoi).reduce((s2,t)=>s2+t.a,0), left=Math.max(0,total-paid);
+    return {dt,total,paid,left,done:left<=0,kyDone:dt.mode==='gop'&&dt.per?Math.min(dt.periods||0,Math.floor(paid/dt.per)):0};});
   const no=ds.filter(x=>x.dt.kind!=='cho'), cho=ds.filter(x=>x.dt.kind==='cho');
   const cvTong=cho.reduce((s,x)=>s+x.total,0), cvThu=cho.reduce((s,x)=>s+x.paid,0);
   return _memo[mk]={traTrongThang,no,cho,cvTong,cvThu,
-    tong:debtTotals(),cvPc:cvTong?cvThu/cvTong*100:0};
+    tong:{no:no.reduce((s,x)=>s+x.left,0),cho:cho.reduce((s,x)=>s+x.left,0)},cvPc:cvTong?cvThu/cvTong*100:0};
 }
 /* ---- Hạn mức cần chú ý, cho Tổng quan ----
    Chỉ xét PHẦN LINH HOẠT của mỗi nhóm: bỏ khoản cố định khỏi cả tử lẫn mẫu, vì cố định
@@ -2937,18 +2960,22 @@ function vHome(){
       if(open.txCode){
         const gg=groupOf(open.txCode), isSub=open.txCode!==gg.id;
         /* Cho mượn: ô ghi phần CHƯA thu về, nên liệt kê cả khoản cho mượn lẫn khoản đã thu */
-        const laMuon=gg.id==='muon', bt=bangTien(cursor);
-        const rows=(laMuon?list.filter(t=>t.t==='chi'&&groupOf(t.c).id==='muon'):cc.list.filter(t=>isSub?t.c===open.txCode:groupOf(t.c).id===open.txCode))
+        const laMuon=gg.id==='muon', mc=laMuon?muonChuaThu(cursor):null;
+        const rows=(laMuon?mc.rows:cc.list.filter(t=>isSub?t.c===open.txCode:groupOf(t.c).id===open.txCode))
           .sort((a,b)=>(b.d+' '+(b.tm||'')).localeCompare(a.d+' '+(a.tm||'')));
         h+=`<div class="sp"></div><div class="stack-note" style="margin-bottom:8px"><span>
           <span class="spine" style="background:${gcA(gg.c)};height:12px;display:inline-block;margin-right:6px"></span>
-          ${esc(labelOf(open.txCode))} · ${rows.length} giao dịch · ${laMuon?'cho mượn '+money(bt.muon)+' − thu nợ đã về '+money(bt.thuno)+' = '+money(cc.muon):money(sum(rows))}
+          ${esc(labelOf(open.txCode))} · ${laMuon?rows.length+' khoản chưa thu về · '+money(cc.muon):rows.length+' giao dịch · '+money(sum(rows))}
           <button style="background:none;border:0;padding:0 0 0 8px;color:var(--jade);font-weight:600;font-size:12.5px" onclick="pickTx('')">đóng</button></span></div>
           <div class="panel">`;
         rows.forEach(t=>{h+=`<div class="tx"><span class="spine" style="background:${gg.c}"></span>
           <div class="tx-body"><div class="tx-n">${esc(t.n)}</div>
             <div class="tx-m">${t.d.slice(8,10)}/${t.d.slice(5,7)}${t.tm?' '+t.tm:''} · ${esc(srcOf(t.s).n)}</div></div>
           <div class="tx-a">−${money(t.a)}</div></div>`;});
+        if(laMuon&&mc.le)h+=`<div class="tx"><span class="spine" style="background:${gg.c}"></span>
+          <div class="tx-body"><div class="tx-n">Đã thu về một phần</div>
+            <div class="tx-m">chưa gắn vào khoản cho mượn nào</div></div>
+          <div class="tx-a" style="color:var(--pos)">+${money(mc.le)}</div></div>`;
         if(!rows.length)h+=`<div class="empty">Không có giao dịch</div>`;
         h+=`</div>`;
       }
@@ -3925,9 +3952,16 @@ function render(){
   document.getElementById('app').innerHTML=h;
   document.getElementById('nav').innerHTML=TABS.map(([k,n,i])=>
     `<button class="${tab===k?'on':''}" onclick="goTab('${k}')"><b>${i}</b>${n}</button>`).join('');
-  window.scrollTo(0, toTop?0:y);
+  /* Bảng chọn nhóm và màn chia mục phủ kín trang. Trước đây chọn xong là trang nền nhảy về đầu,
+     vì vị trí cuộn đọc được lúc đó là của bảng chọn. Giờ nhớ chỗ đang xem lúc mở, đóng thì trả lại. */
+  const phu=!!(picker||splitting);
+  let dich=toTop?0:y;
+  if(phu&&cuonNen===null){cuonNen=y; dich=0;}
+  else if(!phu&&cuonNen!==null){if(!toTop)dich=cuonNen; cuonNen=null;}
+  window.scrollTo(0, dich);
   toTop=false;
 }
+let cuonNen=null;
 /* đổi tab hay đổi tháng mới cuộn lên đầu; bấm trong trang thì giữ nguyên chỗ đang xem */
 function go(t){msg='';tab=t;toTop=true;render();}
 function goTab(t){if(t!=='list'){filterCode='';selMode=false;selIds={};}go(t);}

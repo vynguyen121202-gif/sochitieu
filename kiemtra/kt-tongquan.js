@@ -50,7 +50,9 @@ c.__set(db,thangNay,{pw:true,fc:true,fcd:true,nono:true});
 
 console.log('\nA · Mục 7 — số còn lại được tiêu đã trừ cho mượn');
 const pa=c.__pace();
-ok(pa.choMuon===2000000,'cho mượn tháng này = 2.000.000','ra '+M(pa.choMuon));
+/* sổ mẫu ghi khoản cho mượn vào ngày 12 của tháng đang chạy — trước ngày 12 thì chưa có khoản nào */
+const muonMau=nay.getDate()>=12?2000000:0;
+ok(pa.choMuon===muonMau,'cho mượn tháng này = '+M(muonMau),'ra '+M(pa.choMuon));
 /* từ v=11 (Vy duyệt 28/09): Thực tế được tiêu tính từ TIỀN THẬT, không từ hạn mức */
 {
   const q=c.__thanhKhoan(), tu=pa.ngayCon?q.tuDo/pa.ngayCon:0, h=c.__vHome();

@@ -492,5 +492,29 @@ console.log('\nN · Tổng kết: khối Nợ giống Tổng quan (Vy duyệt 11
   ok(!h.includes('Tổng đã cho vay')&&!h.includes('<b>Đã cho vay</b>')&&!h.includes('<b>Khoản nợ</b>'),'KHÔNG còn hai khối cũ "Khoản nợ" / "Đã cho vay"');
 }
 
+console.log('\nO · Cộng dồn với hạn mức chung từ bản cũ; Tổng kết liệt kê đủ khoản nợ (Vy 11/10/2026)');
+{
+  HOM='2026-10-08'; const db=so(); db.batDau='2026-09-01';
+  db.budgets={sk:200000}; db.bm={}; db.roll={sk:1};
+  db.txns.push({id:nid++,d:'2026-09-12',t:'chi',a:132000,c:'sk_thuoc',s:'bidv',n:'Thuốc'});
+  ctx.__set(db,T10);
+  eq(ctx.__ci('sk',T10),68000,'Sức khỏe hạn mức chung 200.000 (chưa từng gõ theo tháng), chi 132.000 → tháng 10 hạn mức tồn 68.000');
+  db.roll={}; ctx.__set(db,T10);
+  eq(ctx.__ci('sk',T10),0,'tắt cộng dồn → KHÔNG có hạn mức tồn');
+  db.batDau='2026-10-01'; db.roll={sk:1}; ctx.__set(db,T10);
+  eq(ctx.__ci('sk',T10),0,'tháng 9 trước ngày bắt đầu theo dõi → KHÔNG dồn');
+
+  const d2=so(); d2.batDau='2026-09-01';
+  d2.debts=[{id:'dX',name:'Hà',kind:'cho',mode:'canhan',principal:70000,start:'2026-09-15'},
+            {id:'dY',name:'Lan',kind:'cho',mode:'canhan',principal:500000,start:'2026-09-10'}];
+  d2.txns.push({id:nid++,d:'2026-09-15',t:'chi',a:70000,c:'muon',s:'bidv',n:'Hà'},
+    {id:nid++,d:'2026-09-18',t:'thu',a:70000,c:'thuno',s:'bidv',n:'Hà trả',debt:'dX'},
+    {id:nid++,d:'2026-09-10',t:'chi',a:500000,c:'muon',s:'bidv',n:'Lan'});
+  ctx.__set(d2,T9); const h=F.vHome();
+  ok(h.includes('<div class="src-n">Hà</div>')&&h.includes('>đã xong</div>'),'Tổng kết: khoản Hà đã thu đủ VẪN được liệt kê, ghi "đã xong"');
+  ok(h.indexOf('<div class="src-n">Lan</div>')<h.indexOf('<div class="src-n">Hà</div>'),'khoản còn dở (Lan) đứng trước khoản đã xong');
+  ok(h.includes('1 khoản · tiền sẽ vào'),'ô Khoản chờ thu vẫn chỉ đếm khoản còn dở');
+}
+
 console.log(loi?'\n✗ '+loi+' lỗi':'\n✓ đạt hết');
 process.exit(loi?1:0);

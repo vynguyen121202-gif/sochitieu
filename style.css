@@ -604,3 +604,4 @@ input.dt{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius
 .lo-x{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:4px 10px;border-radius:999px;background:var(--tintb);
   color:var(--tinttx);font-size:12px;font-weight:600;border:0}
 .lo-xoa{background:none;border:0;color:var(--jade);font-size:12px;font-weight:600;min-height:32px;padding:4px 6px}
+.src-a.pos{color:var(--pos)}

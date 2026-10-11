@@ -1454,13 +1454,16 @@ function budSetBy(gid,m){
 }
 /* tháng có đủ dữ liệu để mang số dư sang tháng sau: ghi chép trọn tháng
    (tháng đầu dùng app mà bắt đầu từ giữa tháng thì không tính) và đã đặt hạn mức */
+/* Mốc là NGÀY BẮT ĐẦU THEO DÕI (Vy duyệt 11/10/2026). Trước đây phải "đã gõ hạn mức theo tháng"
+   (budSetBy) — nhóm dùng hạn mức chung từ bản app cũ thì không bao giờ dồn được phần dư, dù bật
+   cộng dồn (sổ thật: Sức khỏe tháng 9 dư 23.711 mà tháng 10 hạn mức tồn = 0). */
 function trackedMonth(gid,m){
   if(!monthTx(m).length)return false;
-  const f=firstTxDate(); if(!f)return false;
+  const f=ngayBatDau(); if(!f)return false;
   const k=ym(m), fk=f.slice(0,7);
   if(k<fk)return false;
   if(k===fk&&+f.slice(8,10)>3)return false;
-  return budSetBy(gid,m);
+  return true;
 }
 function carryIn(gid,d){
   if(!canRoll(gid))return 0;
@@ -1584,7 +1587,10 @@ function vTongKet(){
     const DR=x=>`<div class="src"><div style="min-width:0"><div class="src-n">${esc(x.dt.name)}</div>
       <div class="src-m">${x.dt.mode==='gop'&&x.dt.periods?'đã trả '+x.kyDone+' / '+x.dt.periods+' kỳ'
         :(x.dt.kind==='cho'?'cho mượn ':'vay ')+(x.dt.start?ddmm(x.dt.start):'')}${x.paid?' · đã '+(x.dt.kind==='cho'?'thu ':'trả ')+money(x.paid):''}</div></div>
-      <div class="src-a ${x.dt.kind==='cho'?'':'neg'}">${money(x.left)}</div></div>`;
+      <div class="src-a ${x.left<=0?'pos':x.dt.kind==='cho'?'':'neg'}">${x.left<=0?'đã xong':money(x.left)}</div></div>`;
+    /* Tổng kết liệt kê ĐỦ mọi khoản trả nợ / cho vay của tới hết tháng, kể cả khoản đã xong (Vy
+       11/10/2026) — chỉ ô Cho mượn ở Cơ cấu chi tiêu mới lọc riêng khoản chưa thu. Khoản còn dở lên trước. */
+    const DS=a=>a.slice().sort((p,q)=>(p.left<=0)-(q.left<=0));
     h+=`<h2 class="hl"><i style="background:${gcA('#CF4640')}"></i><b>Nợ</b><em>tính tới hết ${ddmm(cuoiTh)}</em></h2>
       <div class="nohai">
         <div class="nomot ra"><div class="nonhan">↑ KHOẢN PHẢI TRẢ</div>
@@ -1598,12 +1604,11 @@ function vTongKet(){
         <span style="font-size:13.5px"><span class="xomui" data-mui="nonoTK" data-a="▾" data-b="▸">${open.nonoTK?'▾':'▸'}</span> Xem từng khoản</span></button>
       <div class="xow" data-xo="nonoTK" data-open="${open.nonoTK?1:0}">
         <div class="panel" style="border-radius:0 0 var(--r) var(--r);border-top:0">`;
-    if(conNo.length){h+=`<div class="nohd ra"><i></i><span>↑ KHOẢN PHẢI TRẢ</span><span style="margin-left:auto;font-weight:700">${money(no.tong.no)}</span></div>`;
-      conNo.forEach(x=>h+=DR(x));}
-    if(conCho.length){h+=`<div class="nohd vao"><i></i><span>↓ KHOẢN CHỜ THU</span><span style="margin-left:auto;font-weight:700">${money(no.tong.cho)}</span></div>`;
-      conCho.forEach(x=>h+=DR(x));}
-    if(!conNo.length&&!conCho.length)h+=`<div class="src" style="padding:13px 14px"><div class="src-m">Hết tháng này không còn khoản nợ nào chưa xong.</div></div>`;
-    if(xong)h+=`<div class="src" style="padding:10px 14px"><div class="src-m">${xong} khoản đã tất toán tính tới hết ${ddmm(cuoiTh)}.</div></div>`;
+    if(no.no.length){h+=`<div class="nohd ra"><i></i><span>↑ KHOẢN PHẢI TRẢ</span><span style="margin-left:auto;font-weight:700">${money(no.tong.no)}</span></div>`;
+      DS(no.no).forEach(x=>h+=DR(x));}
+    if(no.cho.length){h+=`<div class="nohd vao"><i></i><span>↓ KHOẢN CHỜ THU</span><span style="margin-left:auto;font-weight:700">${money(no.tong.cho)}</span></div>`;
+      DS(no.cho).forEach(x=>h+=DR(x));}
+    if(xong)h+=`<div class="src" style="padding:10px 14px"><div class="src-m">${xong} khoản đã xong tính tới hết ${ddmm(cuoiTh)}, vẫn liệt kê ở trên.</div></div>`;
     h+=`</div></div>`;
   }
 

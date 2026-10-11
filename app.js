@@ -1965,15 +1965,15 @@ function vBudPlan(p,dd,inc){
     <div class="cat-meta"><span>Tổng thu nhập</span><span style="color:var(--ink);font-weight:500">${money(inc)}</span></div>
     <div class="cat-meta" style="margin-top:5px"><span>− Chi phí cố định (${fixedItems().length})</span><span>${money(p.cd)}</span></div>
     <div class="cat-meta" style="margin-top:5px"><span>− Nghĩa vụ nợ trong kỳ (${dd.rows.length})</span><span>${money(p.no)}</span></div>
+    ${dd.rows.map(r=>`<div class="cat-meta" style="margin-top:3px;padding-left:10px"><span style="color:var(--ink-3)">${esc(r.name)}${
+      r.daTra?(r.conPhai?' · đã trả '+money(r.daTra)+', còn '+money(r.conPhai):' · đã trả'):''}</span>
+      <span style="color:var(--ink-3)">${money(r.a)}</span></div>`).join('')}
     <div class="cat-meta" style="margin-top:5px"><span>− Góp mục tiêu tháng này
       <button style="background:none;border:0;padding:0 0 0 6px;color:var(--jade);font-weight:600;font-size:11.5px" onclick="editGoalPlan()">sửa</button></span>
       <span>${money(p.gop)}</span></div>
     ${goalProgress().filter(x=>x.thieu>0).slice(0,4).map(x=>`<div class="cat-meta" style="margin-top:3px;padding-left:10px">
       <span style="color:var(--ink-3)">${esc(x.g.name)}${x.g.due?' · hạn '+x.g.due.slice(5)+'/'+x.g.due.slice(0,4):' · chưa đặt hạn'}</span>
       <span style="color:var(--ink-3)">${x.canMonth?money(x.canMonth)+'/th':'—'}</span></div>`).join('')}
-    ${dd.rows.map(r=>`<div class="cat-meta" style="margin-top:3px;padding-left:10px"><span style="color:var(--ink-3)">${esc(r.name)}${
-      r.daTra?(r.conPhai?' · đã trả '+money(r.daTra)+', còn '+money(r.conPhai):' · đã trả'):''}</span>
-      <span style="color:var(--ink-3)">${money(r.a)}</span></div>`).join('')}
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:9px;padding-top:9px;border-top:1px solid var(--line-2)">
       <span style="font-size:11.5px;font-weight:600;color:var(--ink-2)">NGUỒN KHẢ DỤNG</span>
       <span style="font-size:18px;font-weight:600${p.conLai<0?';color:var(--brick)':''}">${money(p.conLai)}</span></div>

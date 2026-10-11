@@ -605,3 +605,53 @@ input.dt{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius
   color:var(--tinttx);font-size:12px;font-weight:600;border:0}
 .lo-xoa{background:none;border:0;color:var(--jade);font-size:12px;font-weight:600;min-height:32px;padding:4px 6px}
 .src-a.pos{color:var(--pos)}
+/* ---- v=21: tab Nợ + màn Lịch sử nợ (ls2-), lọc mục con (lo2-), sang tháng mới / lập ngân sách (lns-, ns-mo) ---- */
+.ls2-bt{display:flex;width:100%;justify-content:space-between;align-items:center;gap:10px;min-height:48px;margin-top:12px;padding:10px 14px;
+  border:1px solid var(--line);border-radius:var(--r);background:var(--card);font-size:13.5px;font-weight:600;color:var(--ink)}
+.ls2-bt span:last-child{color:var(--jade)}
+.ls2-dau{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0 10px}
+.ls2-dau h3{margin:0;font-size:17px}
+.ls2-dau button{width:40px;height:40px;flex:none;border-radius:50%;border:0;background:var(--card);box-shadow:var(--shadow);font-size:16px;color:var(--ink-2)}
+.ls2-hd{margin-top:14px;border-radius:12px 12px 0 0;border:1px solid var(--line);border-bottom:0}
+.ls2-ds{border-radius:0 0 12px 12px}
+.ls2-r{display:flex;width:100%;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;border:0;border-bottom:1px solid var(--line-2);
+  background:none;text-align:left;color:var(--ink)}
+.ls2-n{font-size:14px;font-weight:500}
+.ls2-m{font-size:12px;color:var(--ink-3);margin-top:2px}
+.ls2-a{text-align:right;font-size:14px;font-weight:600;white-space:nowrap}
+.ls2-a small{display:block;font-size:11px;font-weight:600;color:var(--pos);margin-top:2px}
+.ls2-ct{padding:4px 14px 10px 24px;background:var(--rowb);border-bottom:1px solid var(--line-2)}
+.ls2-ct div{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--ink-2);padding:4px 0}
+.ls2-ct b{font-weight:600;color:var(--ink);white-space:nowrap}
+.lo2-con{width:100%;margin:2px 0 4px;padding:8px 10px 10px;border-radius:14px;background:var(--rowb);border:1px dashed var(--tintbd)}
+.lo2-t{font-size:11.5px;color:var(--ink-3);margin-bottom:6px}
+.lo2-con .lo-c{min-height:34px;font-size:12px}
+.lns-buoc{display:flex;gap:8px;padding:12px 14px 0}
+.lns-b{flex:1;min-width:0;display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:14px;background:var(--card);border:1px solid var(--line);font-size:12.5px}
+.lns-b small{display:block;font-size:11px;color:var(--ink-3)}
+.lns-b i{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:12px;font-weight:700;flex:none}
+.lns-b.xong i{background:var(--okbg);color:var(--pos)}
+.lns-b.dang{border-color:var(--jade)}
+.lns-b.dang i{background:var(--jade);color:var(--onacc)}
+.ns-mo{opacity:.45;pointer-events:none;filter:saturate(.6)}
+.lns-tong{border-radius:var(--r);background:var(--card);border:1px solid var(--line);overflow:hidden}
+.lns-tr{display:flex;justify-content:space-between;gap:10px;padding:8px 14px;font-size:13px;border-top:1px solid var(--line-2)}
+.lns-tr:first-child{border-top:0}
+.lns-tr.dam{background:var(--rowb);font-weight:700}
+.lns-tr b{white-space:nowrap}
+.lns-g{padding:12px 14px;border-top:1px solid var(--line-2)}
+.lns-g:first-child{border-top:0}
+.lns-ten{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600}
+.lns-ten small{font-weight:500;color:var(--ink-3)}
+.lns-truoc{margin-top:6px;padding:8px 10px;border-radius:10px;background:var(--rowb);font-size:12px;color:var(--ink-2);line-height:1.5}
+.lns-truoc b{color:var(--ink);font-weight:600}
+.lns-kq{font-weight:700}
+.lns-kq.am{color:var(--brick)}.lns-kq.duong{color:var(--pos)}.lns-kq.hoa{color:var(--ink-3)}
+.lns-nay{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12.5px;color:var(--ink-2);flex-wrap:wrap}
+.lns-nay input{width:112px;min-height:40px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--field);text-align:right;font-size:16px}
+.lns-nay .tru{color:var(--brick);white-space:nowrap}
+.lns-nay .ton{color:var(--pos);white-space:nowrap}
+.lns-nay .con{margin-left:auto;white-space:nowrap}
+.lns-nay .con b{color:var(--ink);font-weight:700}
+.lns-xong{display:flex;gap:10px;align-items:center;padding:11px 14px;margin-top:12px;border-radius:14px;background:var(--okbg);font-size:13px}
+.lns-xong span:first-child{color:var(--pos);font-weight:700}

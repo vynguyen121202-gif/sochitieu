@@ -3,9 +3,12 @@ const fs=require('fs'), path=require('path'), vm=require('vm');
 const SRC_APP=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
 let code=SRC_APP.slice(0,SRC_APP.indexOf("try{\n  const mf="));
 code+=`
-globalThis.__set=(db,cur)=>{DB=db;cursor=cur||new Date();tab='home';open={};msg='';chotXN={};chotThat={};memoClear();};
+globalThis.__set=(db,cur)=>{DB=db;cursor=cur||new Date();tab='home';open={};msg='';chotXN={};chotThat={};chotHoi=null;memoClear();};
 globalThis.__f={chotCan,khoiChot,vHome,khongTieu,chotKhop,chotSo,chotDieuChinh,hoiChot,del,setDate,balAt,migrate,
-  bangTien,khoiTongKet};
+  bangTien,khoiTongKet,chotHoiOK,chotHoiHuy,khoiChotHoi,chotVe,chotLan,balSrcAt};
+globalThis.__hoi=()=>chotHoi;
+globalThis.__mo=k=>{open[k]=1;};
+globalThis.__db=()=>DB;
 globalThis.__that=(s,v)=>{chotThat[s]=v;};
 globalThis.__cur=d=>{cursor=d;memoClear();};
 globalThis.__fp=(it,d)=>fixedPaid(it,d);
@@ -120,37 +123,120 @@ console.log('\nC · Xác nhận số dư rồi chốt');
   ok(!F.vHome().includes('chot-hd'),'…và khối chốt KHÔNG quay lại');
 }
 
-console.log('\nD · Chốt rồi: con số đứng yên, sửa phải hỏi lại');
+console.log('\nD · Sửa sau khi chốt: hộp xác nhận, bản chốt đi theo số mới (v=15, Vy duyệt 11/10/2026)');
+const K9='2026-09', dem=(s,x)=>s.split(x).length-1;
 {
-  HOM='2026-10-05'; const db=so(); db.ngayOK={'2026-09-14':1,'2026-09-21':1,'2026-09-30':1};
-  db.chot={'2026-09':{luc:new Date('2026-10-01T09:12:00').getTime(),bidv:6000000,vi:0,tm:-70000+0,tong:5930000}};
+  HOM='2026-10-05'; let db=so(); db.ngayOK={'2026-09-14':1,'2026-09-21':1,'2026-09-30':1};
+  /* sổ v12 đã chốt, chưa có `goc` — đi qua migrate như sổ thật trên điện thoại */
+  db.chot={[K9]:{luc:new Date('2026-10-01T09:12:00').getTime(),bidv:6000000,vi:0,tm:-70000,tong:5930000}};
+  db.v=12; db=F.migrate(db);
+  eq(JSON.stringify(db.chot[K9].goc),JSON.stringify({luc:db.chot[K9].luc,bidv:6000000,vi:0,tm:-70000,tong:5930000}),'migrate v12 → v13: lần 1 = đúng bản chốt đang có');
+  ok(db.v===13&&Array.isArray(db.chotLS)&&!db.chotLS.length,'…sổ lên v13, nhật ký chốt rỗng');
   ctx.__set(db,T9);
   let h=F.vHome();
   ok(h.includes('đã chốt 01/10'),'Tổng kết tháng 9 ghi "đã chốt 01/10"');
   ok(!h.includes('sau đó sửa'),'chưa sửa gì → KHÔNG có dòng "sau đó sửa"');
-  const id=String(db.txns[0].id);
-  hoi=[]; traLoi=false; F.del(id);
-  ok(hoi.length===1&&/tháng 9\/2026 đã chốt sổ/i.test(hoi[0]),'xóa giao dịch tháng đã chốt → hỏi lại',hoi[0]);
-  ok(db.txns.some(t=>String(t.id)===id),'bấm "Thôi" → KHÔNG xóa');
-  hoi=[]; traLoi=false; F.setDate(String(db.txns[1].id),'05/10/26');
-  ok(hoi.length===1&&db.txns[1].d==='2026-09-02','dời ngày giao dịch ra khỏi tháng đã chốt → hỏi; bấm Thôi thì giữ nguyên');
-  hoi=[]; traLoi=true; F.del(id); ctx.__set(db,T9);
-  ok(!db.txns.some(t=>String(t.id)===id),'bấm "Vẫn làm" → xóa');
-  h=F.vHome();
-  ok(h.includes('Đã chốt '+M(5930000)+' · sau đó sửa, nay '+M(5940000)+' · lệch +'+M(10000)),'Tổng kết ghi cả số đã chốt lẫn số hiện tại, lệch +10.000');
-  eq(db.chot['2026-09'].tong,5930000,'số đã chốt ĐỨNG YÊN, không tự đổi theo giao dịch');
-  hoi=[]; F.setDate(String(db.txns[2].id),'03/10/26');
-  hoi=[]; const t10={id:nid++,d:'2026-10-02',t:'chi',a:1,c:'an_ngoai',s:'tm',n:'x'}; db.txns.push(t10);
-  hoi=[]; traLoi=true; F.del(String(t10.id));
-  eq(hoi.length,0,'xóa giao dịch tháng CHƯA chốt → KHÔNG hỏi');
-  ok(F.hoiChot(['2026-10-02'])===true&&hoi.length===0,'hoiChot với tháng chưa chốt → cho làm luôn, không hỏi');
+  ok(h.includes('Lịch sử chốt')&&h.includes('1 lần'),'có nút "Lịch sử chốt · 1 lần"');
+
+  const goc0=JSON.stringify(db.txns[0]), id=String(db.txns[0].id);
+  hoi=[]; F.del(id);
+  ok(ctx.__hoi()&&db.txns.some(t=>String(t.id)===id),'xóa giao dịch tháng đã chốt → hộp xác nhận mở, CHƯA xóa gì');
+  let x=F.khoiChotHoi();
+  ok(x.includes('Tháng 9 đã chốt sổ')&&x.includes('Ghi nhận lần chốt 2'),'hộp ghi "Tháng 9 đã chốt sổ", nút "Ghi nhận lần chốt 2"');
+  ok(x.includes('<small>Xóa giao dịch</small>')&&x.includes('<b>Ăn · 01/09 · Tiền mặt · 10.000</b>'),'nhãn "Xóa giao dịch" + đúng khoản sắp xóa');
+  ok(!/Vy sắp làm/i.test(x),'KHÔNG còn nhãn "Vy sắp làm"');
+  ok(x.includes('<s>'+M(-70000)+'</s> → <b>'+M(-60000)+'</b>'),'Tiền mặt −70.000 → −60.000');
+  ok(x.includes(M(6000000)+' · không đổi'),'BIDV 6.000.000 · không đổi');
+  ok(x.includes('<s>'+M(5930000)+'</s> → <b>'+M(5940000)+'</b>')&&x.includes('tăng '+M(10000)),'Tổng 5.930.000 → 5.940.000, tăng 10.000');
+  ok(x.includes('Lần 1 Vy đã bấm Khớp Tiền mặt '+M(-70000)+' theo app ngân hàng. Số mới '+M(-60000)+' chưa được đối chiếu lại.'),'nhắc số mới chưa đối chiếu lại');
+  ok(!x.includes('Tháng sau thay đổi'),'chỉ tháng 9 đã chốt → KHÔNG có khối "Tháng sau thay đổi"');
+  F.chotHoiHuy();
+  ok(!ctx.__hoi()&&db.txns.some(t=>String(t.id)===id)&&ctx.__db().chot[K9].tong===5930000&&!ctx.__db().chotLS.length,
+    'bấm Hủy → không xóa, bản chốt và nhật ký nguyên vẹn');
+
+  F.setDate(String(db.txns[1].id),'05/10/26');
+  x=F.khoiChotHoi();
+  ok(x.includes('<small>Sửa giao dịch</small>')&&x.includes('Ăn · 02/09 → 05/10 · Tiền mặt · 10.000'),'dời ngày ra khỏi tháng đã chốt → hộp ghi "Sửa giao dịch · 02/09 → 05/10"');
+  F.chotHoiHuy();
+  eq(db.txns[1].d,'2026-09-02','Hủy → ngày giữ nguyên');
+  F.setDate(String(db.txns[2].id),'04/09/26');
+  ok(!ctx.__hoi()&&db.txns[2].d==='2026-09-04','dời ngày TRONG cùng tháng: số dư cuối tháng không đổi → KHÔNG hỏi');
+
+  F.del(id); F.chotHoiOK(); db=ctx.__db();
+  ok(!db.txns.some(t=>String(t.id)===id),'bấm "Ghi nhận lần chốt 2" → xóa');
+  ok(db.chot[K9].tong===5940000&&db.chot[K9].tm===-60000,'bản chốt ĐI THEO số mới: 5.940.000, tiền mặt −60.000');
+  eq(db.chot[K9].goc.tong,5930000,'lần 1 (đã đối chiếu ngân hàng) vẫn giữ 5.930.000');
+  eq(db.chotLS.length,1,'nhật ký có đúng 1 dòng');
+  ctx.__cur(T9); h=F.vHome();
+  ok(!h.includes('sau đó sửa'),'KHÔNG còn dòng vàng "sau đó sửa · lệch"');
+  ok(h.includes('chốt lần 2 · 05/10'),'tiêu đề Tổng kết ghi "chốt lần 2 · 05/10"');
+  ok(h.includes('chốt lần 2 · sửa sau khi chốt, chưa đối chiếu lại'),'dòng Số dư cuối ghi rõ chưa đối chiếu lại');
+  ok(h.includes('Đã ghi nhận lần chốt 2 · số dư cuối tháng 9: '+M(5940000)),'báo "Đã ghi nhận lần chốt 2 · số dư cuối tháng 9: 5.940.000"');
+  ok(h.includes('2 lần')&&!h.includes('ls-lan'),'lịch sử thu gọn mặc định');
+  eq(hoi.length,0,'suốt phần D KHÔNG bật hộp confirm() nào của trình duyệt');
+}
+
+console.log('\nD2 · Lịch sử chốt và quay về');
+{
+  let db=ctx.__db(); ctx.__mo('lsChot'); let h=F.khoiTongKet();
+  ok(h.includes('Lần 2')&&h.includes('Sửa sau khi chốt')&&h.includes('Xóa <b>Ăn · 01/09 · Tiền mặt · 10.000</b>'),'lần 2: nhãn "Sửa sau khi chốt" + việc đã làm');
+  eq(dem(h,'Đã đối chiếu ngân hàng'),1,'chỉ lần 1 mang nhãn "Đã đối chiếu ngân hàng"');
+  eq(dem(h,'>Đang dùng<'),1,'đúng một lần mang nhãn "Đang dùng"');
+  ok(h.includes("chotVe('2026-09',1)")&&!h.includes("chotVe('2026-09',2)"),'nút "Quay về lần 1" có; lần đang dùng KHÔNG có nút');
+  const truocVe=db.txns.length;
+  F.chotVe(K9,1);
+  let x=F.khoiChotHoi();
+  ok(x.includes('Quay về lần chốt 1?')&&x.includes('<small>App sẽ đưa lại vào sổ</small>')&&x.includes('Ăn · 01/09 · Tiền mặt · 10.000'),'hộp quay về nói rõ khoản được đưa lại vào sổ');
+  ok(x.includes('<s>'+M(5940000)+'</s> → <b>'+M(5930000)+'</b>')&&x.includes('giảm '+M(10000)),'Tổng 5.940.000 → 5.930.000');
+  ok(!x.includes('xc-ghi'),'về đúng số đã đối chiếu → KHÔNG nhắc "chưa đối chiếu lại"');
+  eq(db.txns.length,truocVe,'chưa bấm xác nhận → sổ chưa đổi');
+  F.chotHoiOK(); db=ctx.__db();
+  const lai=db.txns.find(t=>t.d==='2026-09-01'&&t.s==='tm');
+  ok(lai&&lai.a===10000&&lai.n==='Ăn'&&lai.c==='an_ngoai','quay về lần 1 → giao dịch 01/09 trở lại sổ, đủ số tiền, nhóm, nội dung');
+  ok(db.chot[K9].tong===5930000&&F.balAt(T9)===5930000,'bản chốt và sổ cùng về 5.930.000');
+  eq(F.chotLan(K9).length,3,'quay về được ghi thành LẦN 3, lần 2 không bị xóa');
+  ctx.__cur(T9); ctx.__mo('lsChot'); h=F.khoiTongKet();
+  ok(h.includes('chốt lần 3 · quay về lần 1 · khớp BIDV, Ví, Tiền mặt'),'dòng Số dư cuối: "chốt lần 3 · quay về lần 1 · khớp…"');
+  ok(h.includes('Quay về lần 1</span>')&&h.includes('Đưa lại <b>Ăn · 01/09'),'lần 3: nhãn "Quay về lần 1" + "Đưa lại …"');
+  eq(dem(h,'Đã đối chiếu ngân hàng'),2,'lần 1 và lần 3 cùng mang nhãn "Đã đối chiếu ngân hàng"');
+  ok(h.includes("chotVe('2026-09',2)")&&!h.includes("chotVe('2026-09',1)"),'giờ có nút "Quay về lần 2"; lần 1 trùng với lần đang dùng nên KHÔNG có nút');
+  F.chotVe(K9,2); F.chotHoiOK(); db=ctx.__db();
+  ok(!db.txns.some(t=>t.d==='2026-09-01'&&t.s==='tm')&&db.chot[K9].tong===5940000,'quay về lần 2 → khoản 01/09 lại được gỡ, số dư 5.940.000');
+  eq(F.chotLan(K9).length,4,'thành lần 4 — nhật ký chỉ nối thêm');
+  F.chotVe(K9,4);
+  ok(!ctx.__hoi(),'quay về chính trạng thái đang có → không mở hộp');
+}
+
+console.log('\nD3 · Sửa tháng cũ kéo theo tháng đã chốt phía sau');
+{
+  HOM='2026-11-05'; let db=ctx.__db();
+  db.txns.push({id:nid++,d:'2026-10-10',t:'chi',a:50000,c:'an_ngoai',s:'bidv',n:'Ăn tháng 10'});
+  ctx.__set(db,T10);
+  const b10=F.balSrcAt(T10), t10=b10.bidv+b10.vi+b10.tm;
+  db.chot['2026-10']={luc:new Date('2026-11-01T08:00:00').getTime(),bidv:b10.bidv,vi:b10.vi,tm:b10.tm,tong:t10,
+    goc:{luc:1,bidv:b10.bidv,vi:b10.vi,tm:b10.tm,tong:t10}};
+  ctx.__set(db,T9);
+  const t=db.txns.find(q=>q.d==='2026-09-05');
+  F.del(String(t.id));
+  let x=F.khoiChotHoi();
+  ok(x.includes('Tháng sau thay đổi')&&x.includes('<span>Tháng 10</span>'),'hộp có khối "Tháng sau thay đổi" với dòng "Tháng 10"');
+  ok(x.includes('<s>'+M(t10)+'</s> → <b>'+M(t10+10000)+'</b>'),'tháng 10: '+M(t10)+' → '+M(t10+10000));
+  ok(!/Tháng 10[^<]*đã chốt/.test(x)&&!x.includes('Tháng sau cũng đổi theo'),'KHÔNG ghi "đã chốt" cạnh tháng 10, KHÔNG còn chữ "cũng đổi theo"');
+  F.chotHoiOK(); db=ctx.__db();
+  ok(db.chot['2026-10'].tong===t10+10000&&F.chotLan('2026-10').length===2,'tháng 10 cũng thành lần chốt 2, số mới '+M(t10+10000));
+  eq(F.chotLan(K9).length,5,'tháng 9 thành lần 5');
+  ok(Object.keys(db.chot).every(k=>db.chot[k].tong===F.balAt(new Date(+k.slice(0,4),+k.slice(5)-1,1))),'mọi tháng đã chốt: số chốt = số sổ tính ra, không lệch đồng nào');
+  const t11={id:nid++,d:'2026-11-02',t:'chi',a:1,c:'an_ngoai',s:'tm',n:'x'}; db.txns.push(t11);
+  F.del(String(t11.id));
+  ok(!ctx.__hoi()&&!ctx.__db().txns.some(q=>q.id===t11.id),'xóa giao dịch tháng CHƯA chốt → KHÔNG hỏi, xóa luôn');
+  eq(hoi.length,0,'không hộp confirm() nào của trình duyệt');
 }
 
 console.log('\nE · Sổ cũ');
 {
   const cu=F.migrate({txns:[],v:10,goals:[],opens:{}});
-  ok(cu.v===12&&cu.chot&&!Object.keys(cu.chot).length&&cu.batDau==='','sổ v10 qua migrate → v12, chot rỗng, batDau trống (sẽ hỏi)');
-  ok((SRC_APP.match(/if\(\(d\.v\|\|1\)<12\)d=migrate\(d\);/g)||[]).length===2,'load VÀ khôi phục sao lưu đều chạy migrate khi sổ dưới v12');
+  ok(cu.v===13&&cu.chot&&!Object.keys(cu.chot).length&&cu.batDau===''&&Array.isArray(cu.chotLS),'sổ v10 qua migrate → v13, chot rỗng, batDau trống (sẽ hỏi), nhật ký chốt rỗng');
+  ok((SRC_APP.match(/if\(\(d\.v\|\|1\)<13\)d=migrate\(d\);/g)||[]).length===2,'load VÀ khôi phục sao lưu đều chạy migrate khi sổ dưới v13');
 }
 
 console.log('\nF · Khoản cố định chỉ khớp giao dịch CÙNG NHÓM (lỗi 26/09/2026)');

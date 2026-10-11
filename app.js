@@ -191,17 +191,22 @@ function migrate(d){
   if(v<10){ (d.goals||[]).forEach(g=>{ if(g.gop===undefined)g.gop=0; }); d.efGop=d.efGop||0; }
   if(v<11){ d.chot=d.chot||{}; }            /* v11: tháng đã chốt sổ — sổ cũ chưa chốt tháng nào */
   if(v<12){ d.batDau=d.batDau||''; }        /* v12: bắt đầu theo dõi từ — trống thì hộp thoại hỏi */
-  d.v=12; return d;
+  /* v13: lịch sử chốt. Mỗi tháng đã chốt giữ thêm `goc` = bản chốt lần 1 (số Vy đã đối chiếu
+     với ngân hàng); chotLS là nhật ký các lần sửa sau chốt. Sổ cũ: lần 1 = đúng bản đang có. */
+  if(v<13){ d.chot=d.chot||{}; Object.keys(d.chot).forEach(k=>{const c=d.chot[k];
+      if(c&&!c.goc)c.goc={luc:c.luc,bidv:c.bidv||0,vi:c.vi||0,tm:c.tm||0,tong:c.tong||0};});
+    d.chotLS=Array.isArray(d.chotLS)?d.chotLS:[]; }
+  d.v=13; return d;
 }
 async function load(){try{const raw=await store.get();if(raw){let d=JSON.parse(raw);
-  if((d.v||1)<12)d=migrate(d);
+  if((d.v||1)<13)d=migrate(d);
   DB=Object.assign({},d,{txns:Array.isArray(d.txns)?d.txns:[],debts:Array.isArray(d.debts)?d.debts:[],
     budgets:d.budgets||{},bm:d.bm||{},goals:Array.isArray(d.goals)?d.goals:[],fixedItems:Array.isArray(d.fixedItems)?d.fixedItems:[],roll:d.roll||{},offsets:Array.isArray(d.offsets)?d.offsets:[],draws:Array.isArray(d.draws)?d.draws:[],income:d.income||0,rules:d.rules||{},
     opens:Object.assign({bidv:0,vi:0,tm:0},d.opens||{}),checks:d.checks||{},
     opts:Object.assign({ab:'off'},d.opts||{}),chainOK:d.chainOK||{},ngayOK:d.ngayOK||{},
     efTarget:d.efTarget||0,efGop:d.efGop||0,goalPlan:Object.assign({mode:'auto',a:0},d.goalPlan||{}),
     payDays:Object.assign({k1:[5,10],k2:[15,25]},d.payDays||{}),
-    chot:d.chot||{},batDau:d.batDau||'',lastBackup:d.lastBackup||0,v:12});}}catch(e){}}
+    chot:d.chot||{},chotLS:Array.isArray(d.chotLS)?d.chotLS:[],batDau:d.batDau||'',lastBackup:d.lastBackup||0,v:13});}}catch(e){}}
 /* ==================== nhớ tạm trong một lượt vẽ ====================
    render() dựng lại cả trang, nên cùng một phép tính bị gọi lại hàng chục lần:
    pace() hai lượt, balances() hai lượt, fixedPaid() ba lượt cho mỗi khoản cố định.
@@ -687,14 +692,15 @@ function commit(){
     if(t.w)o.w=t.w; if(t.q)o.q=1; if(t.sg)o.sg=t.sg; if(t.n0&&t.n0!==t.n)o.n0=t.n0;
     return o;});
   const drop=new Set(pending.filter(t=>t.keep&&t.rep&&t.repDo===1).map(t=>t.rep.id));
-  if(!hoiChot(add.map(t=>t.d).concat(DB.txns.filter(x=>drop.has(String(x.id))).map(x=>x.d))))return;
-  if(drop.size)DB.txns=DB.txns.filter(x=>!drop.has(String(x.id)));
-  DB.txns=DB.txns.concat(add);
-  add.forEach(t=>noTuGD(t,t._han)); add.forEach(t=>delete t._han);
-  save();
-  const nDrop=drop.size;
-  pending=null; msg=''; cursor=new Date(); go('home'); autoBackup();
-  if(nDrop)flash('Đã thay '+nDrop+' khoản cũ bằng khoản mới.','ok');
+  hoiChot({bo:DB.txns.filter(x=>drop.has(String(x.id))),them:add},()=>{
+    if(drop.size)DB.txns=DB.txns.filter(x=>!drop.has(String(x.id)));
+    DB.txns=DB.txns.concat(add);
+    add.forEach(t=>noTuGD(t,t._han)); add.forEach(t=>delete t._han);
+    save();
+    const nDrop=drop.size;
+    pending=null; msg=''; cursor=new Date(); go('home'); autoBackup();
+    if(nDrop)flash('Đã thay '+nDrop+' khoản cũ bằng khoản mới.','ok');
+  });
 }
 
 /* ==================== tính toán ==================== */
@@ -1074,8 +1080,11 @@ function khoiTongKet(){
   /* Số dư cuối tháng = chính là phần giữ lại được của tháng đã đóng (Vy chốt 28/09/2026).
      Xổ ra từng nguồn; cộng các nguồn phải ra đúng số đầu dòng. */
   var bs=balSrcAt(cursor), ch=(DB.chot||{})[ym(cursor)];
+  var lan=ch?chotLan(ym(cursor)):[], cl=lan[lan.length-1];
   x+='<div class="xo-cuoi">'+xoBox("tkcuoi","Số dư cuối "+thang,
-    (ch?'đã chốt · khớp BIDV, Ví, Tiền mặt':CT_SODU),
+    (ch?(lan.length>1?'chốt lần '+cl.n+(cl.e.veK===ym(cursor)?' · quay về lần '+cl.e.ve:'')
+        +(cl.dc?' · khớp BIDV, Ví, Tiền mặt':' · sửa sau khi chốt, chưa đối chiếu lại')
+      :'đã chốt · khớp BIDV, Ví, Tiền mặt'):CT_SODU),
     money(t.cuoi),t.cuoi<0?"neg":"pos",null,
     SRC.map(function(s){return xoSub(s.n,"",money(bs[s.id]||0),(bs[s.id]||0)<0?"neg":"");}).join("")
     +xoTt("Cộng ba nguồn",money(t.cuoi)))+'</div>';
@@ -1083,6 +1092,7 @@ function khoiTongKet(){
   if(ch&&Math.round(ch.tong)!==Math.round(t.cuoi))
     x+='<div class="chot-sua">Đã chốt '+money(ch.tong)+' · sau đó sửa, nay '+money(t.cuoi)
       +' · lệch '+(t.cuoi<ch.tong?'−':'+')+money(Math.abs(t.cuoi-ch.tong))+'</div>';
+  if(ch)x+=khoiLichSuChot(ym(cursor));
   return x+'</div>';
 }
 /* ---------- bảng "Cách tính" dưới thẻ Tổng ngân sách khả dụng ----------
@@ -1470,7 +1480,8 @@ function vTongKet(){
     <span style="font-size:13px;font-weight:600;white-space:nowrap">${v}</span></div>`;
 
   let h=`<h2 class="hl"><i style="background:${gcA('#47897A')}"></i><b>Tổng kết ${MONTH(cursor.getMonth()).toLowerCase()}</b><em>${
-    (DB.chot||{})[ym(cursor)]?'đã chốt '+vnd(iso(new Date(DB.chot[ym(cursor)].luc))).slice(0,5):'chưa chốt sổ'}</em></h2>`
+    (l=>l.length>1?'chốt lần '+l.length+' · '+vnd(iso(new Date(l[l.length-1].luc))).slice(0,5)
+      :l.length?'đã chốt '+vnd(iso(new Date(l[0].luc))).slice(0,5):'chưa chốt sổ')(chotLan(ym(cursor)))}</em></h2>`
     +khoiTongKet();
   h+=bao('Góp mục tiêu tài chính',s.gop,s.gopKH);
   h+=bao('Tiết kiệm và đầu tư',s.tkCon,s.budTK);
@@ -2303,8 +2314,9 @@ function ngayKhongTieu(){
    ngày 30 rơi ra ngoài. Chỉ nhắc tháng LIỀN TRƯỚC. Không có nút "để sau".
    Ba điều app tự kiểm: (1) ngày nào cũng có giao dịch hoặc đã xác nhận không tiêu,
    (2) giao dịch nào cũng có nhóm, (3) chuỗi số dư BIDV không còn chỗ đứt chưa xử lý.
-   Đạt đủ mới tới bước Vy xác nhận ba số dư cuối ngày cuối tháng. Chốt rồi thì con số
-   đứng yên trong DB.chot[tháng]; thêm/sửa/xóa giao dịch tháng đó phải hỏi lại (hoiChot). */
+   Đạt đủ mới tới bước Vy xác nhận ba số dư cuối ngày cuối tháng. Chốt rồi mà thêm/sửa/xóa
+   giao dịch tháng đó thì hoiChot() hỏi lại; Vy xác nhận thì DB.chot[tháng] đi theo số mới và
+   việc đó thành một lần chốt mới — xem "Sửa sau khi chốt + lịch sử chốt" bên dưới. */
 function chotCan(){
   const now=new Date(), tr=new Date(now.getFullYear(),now.getMonth()-1,1), k=ym(tr);
   const mk='chot'+k; if(mk in _memo)return _memo[mk];
@@ -2351,18 +2363,157 @@ function chotSo(){
   const c=chotCan(); if(!c||!c.du)return;
   if(SRC.some(x=>chotXN[x.id]!=='y'))return;
   DB.chot=Object.assign({},DB.chot||{});
-  DB.chot[c.k]={luc:Date.now(),bidv:c.bs.bidv||0,vi:c.bs.vi||0,tm:c.bs.tm||0,tong:c.tong};
+  const b={luc:Date.now(),bidv:c.bs.bidv||0,vi:c.bs.vi||0,tm:c.bs.tm||0,tong:c.tong};
+  DB.chot[c.k]=Object.assign({},b,{goc:Object.assign({},b)});
   chotXN={}; chotThat={}; save(); flash('Đã chốt sổ '+MONTH(c.thang.getMonth()).toLowerCase()+'.','ok');
 }
-/* hỏi lại trước khi thêm / sửa ngày / sửa tiền / xóa giao dịch thuộc tháng đã chốt.
-   ds: danh sách ngày ISO bị đụng tới. Trả về true nếu được làm tiếp. */
-function hoiChot(ds){
-  const ks=[...new Set(ds.filter(Boolean).map(d=>d.slice(0,7)))].filter(k=>(DB.chot||{})[k]).sort();
-  if(!ks.length)return true;
-  const ten=ks.map(k=>'tháng '+(+k.slice(5))+'/'+k.slice(0,4)).join(', ');
-  const so=ks.map(k=>money(DB.chot[k].tong)).join(', ');
-  return confirm((ks.length>1?'Các '+ten:ten.charAt(0).toUpperCase()+ten.slice(1))+' đã chốt sổ.\n'
-    +'Làm việc này sẽ làm số dư cuối tháng khác số đã chốt ('+so+'). Vẫn làm?');
+/* ---- Sửa sau khi chốt + lịch sử chốt (v=15, Vy duyệt 11/10/2026) ----
+   Thêm / xóa / dời ngày giao dịch làm số dư cuối một tháng ĐÃ CHỐT đổi → hộp xác nhận ghi rõ
+   từng nguồn đổi từ bao nhiêu sang bao nhiêu, kể cả các tháng đã chốt phía sau. Vy xác nhận thì:
+     · bản chốt đi theo số mới (DB.chot[tháng] được ghi lại),
+     · việc đó thành MỘT LẦN CHỐT MỚI trong nhật ký DB.chotLS, giữ giao dịch trước và sau khi sửa.
+   Lần 1 = DB.chot[tháng].goc, là số Vy đã bấm Khớp với ngân hàng. Một lần chốt được coi là
+   "đã đối chiếu ngân hàng" khi số dư ba nguồn của nó đúng bằng lần 1.
+   Quay về một lần cũ = gỡ ngược các lần sau nó, và CHÍNH VIỆC QUAY VỀ cũng là một lần chốt mới —
+   nhật ký chỉ nối thêm, không lần nào bị xóa.
+   Đổi nhóm, đổi nội dung, tách mục không qua đây: chúng không làm số dư đổi. */
+let chotHoi=null;
+const chotSao=o=>JSON.parse(JSON.stringify(o));
+const chotThang=k=>new Date(+k.slice(0,4),+k.slice(5)-1,1);
+const chotBa=b=>{const r={bidv:Math.round(b.bidv||0),vi:Math.round(b.vi||0),tm:Math.round(b.tm||0)};r.tong=r.bidv+r.vi+r.tm;return r;};
+const chotBang=(a,b)=>SRC.every(s=>Math.round(a[s.id]||0)===Math.round(b[s.id]||0));
+const chotTenNguon=s=>((SRC.find(x=>x.id===s)||SRC[0]).n).replace('Ví điện tử','Ví');
+const chotTenThang=(k,goc)=>'Tháng '+(+k.slice(5))+(goc&&goc.slice(0,4)!==k.slice(0,4)?'/'+k.slice(0,4):'');
+/* số dư cuối của mọi tháng đã chốt, tính lại từ sổ đang có */
+function chotSoDu(){
+  memoClear(); const r={};
+  Object.keys(DB.chot||{}).forEach(k=>{r[k]=chotBa(balSrcAt(chotThang(k)));});
+  return r;
+}
+/* tính thử: bỏ các giao dịch `bo`, thêm các giao dịch `them` thì tháng đã chốt nào đổi số dư.
+   Sổ được trả lại nguyên vẹn sau khi tính. */
+function chotThu(bo,them){
+  const cu=DB.txns, s=new Set(bo.map(t=>String(t.id))), truoc=chotSoDu();
+  DB.txns=cu.filter(x=>!s.has(String(x.id))).concat(them);
+  const sau=chotSoDu(); DB.txns=cu; memoClear();
+  return Object.keys(truoc).sort().filter(k=>!chotBang(truoc[k],sau[k])).map(k=>({k,truoc:truoc[k],sau:sau[k]}));
+}
+const chotMoTa=t=>(t.n||'Giao dịch')+' · '+ddmm(t.d)+' · '+chotTenNguon(t.s||'bidv')
+  +(t.t==='mv'?' → '+chotTenNguon(t.s2||'tm'):'')+' · '+money(t.a);
+/* danh sách việc, mỗi việc {dg:'them'|'xoa'|'sua', tx} — dùng cho hộp xác nhận và cho lịch sử */
+function chotViec(bo,them){
+  const mb=new Map(bo.map(t=>[String(t.id),t])), mt=new Map(them.map(t=>[String(t.id),t])), r=[];
+  mt.forEach((t,id)=>{const c=mb.get(id);
+    if(!c)r.push({dg:'them',tx:chotMoTa(t)});
+    else r.push({dg:'sua',tx:c.d!==t.d?(t.n||'Giao dịch')+' · '+ddmm(c.d)+' → '+ddmm(t.d)+' · '+chotTenNguon(t.s||'bidv')+' · '+money(t.a)
+      :chotMoTa(c)+' → '+money(t.a)});});
+  mb.forEach((t,id)=>{if(!mt.has(id))r.push({dg:'xoa',tx:chotMoTa(t)});});
+  return r;
+}
+const CHOT_DG={them:'Thêm',xoa:'Xóa',sua:'Sửa'}, CHOT_DG_VE={them:'Đưa lại',xoa:'Gỡ',sua:'Sửa lại'};
+/* các lần chốt của một tháng, cũ → mới. Lần 1 là bản gốc, các lần sau lấy từ nhật ký. */
+function chotLan(k){
+  const c=(DB.chot||{})[k]; if(!c)return [];
+  const g=c.goc||c, ds=[{n:1,luc:g.luc,so:chotBa(g),dc:true}];
+  (DB.chotLS||[]).forEach(e=>{if(e.th&&e.th[k])ds.push({n:ds.length+1,luc:e.luc,so:chotBa(e.th[k]),e,dc:chotBang(e.th[k],g)});});
+  return ds;
+}
+/* v: {bo:[giao dịch sẽ mất hoặc bản TRƯỚC khi sửa], them:[giao dịch sẽ có hoặc bản SAU khi sửa]}.
+   tiep() làm việc đó thật; huy() chạy khi Vy bấm Hủy. Không đụng tháng đã chốt nào thì làm luôn. */
+function hoiChot(v,tiep,huy){
+  const bo=v.bo||[], them=v.them||[], doi=chotThu(bo,them);
+  if(!doi.length){tiep();return;}
+  chotHoi={bo:bo.map(chotSao),ids:them.map(t=>String(t.id)),viec:v.viec||chotViec(bo,them),ve:v.ve||null,doi,tiep,huy};
+  hopVe();
+}
+/* hộp xác nhận vẽ vào #hop, KHÔNG gọi render(): vẽ lại cả trang thì mất chữ Vy đang gõ trong form */
+function hopVe(){
+  let e=document.getElementById('hop');
+  if(!e){e=document.createElement('div'); e.id='hop'; document.body.appendChild(e);}
+  e.innerHTML=chotHoi?khoiChotHoi():'';
+}
+function chotHoiHuy(){const h=chotHoi; chotHoi=null; hopVe(); if(h&&h.huy)h.huy();}
+function chotHoiOK(){
+  const h=chotHoi; if(!h)return; chotHoi=null; hopVe();
+  h.tiep();
+  const sau=DB.txns.filter(t=>h.ids.includes(String(t.id))).map(chotSao), nay=chotSoDu(), th={};
+  DB.chot=Object.assign({},DB.chot);
+  Object.keys(nay).forEach(k=>{const c=DB.chot[k];
+    if(!chotBang(c,nay[k])){th[k]=nay[k];
+      /* bản gốc phải có trước khi ghi đè, nếu không lần 1 sẽ trôi theo số mới */
+      DB.chot[k]=Object.assign({},c,nay[k],{goc:c.goc||{luc:c.luc,bidv:c.bidv||0,vi:c.vi||0,tm:c.tm||0,tong:c.tong||0}});}});
+  const ks=Object.keys(th).sort(); if(!ks.length){save();return;}
+  const e={id:Date.now()+Math.random(),luc:Date.now(),viec:h.viec,truoc:h.bo,sau,th};
+  if(h.ve){e.veK=h.ve.k; e.ve=h.ve.n;}
+  DB.chotLS=(DB.chotLS||[]).concat([e]);
+  const k=h.ve?h.ve.k:ks[0];
+  save(); flash(h.ve?'Đã quay về lần chốt '+h.ve.n+' · số dư cuối '+chotTenThang(k).toLowerCase()+': '+money(DB.chot[k].tong)
+    :'Đã ghi nhận lần chốt '+chotLan(k).length+' · số dư cuối '+chotTenThang(k).toLowerCase()+': '+money(DB.chot[k].tong),'ok');
+}
+/* quay về lần chốt n của tháng k: gỡ ngược từng lần sau nó, mới nhất trước */
+function chotVe(k,n){
+  const ds=chotLan(k), cur=new Map(DB.txns.map(t=>[String(t.id),t])), dich=new Map(cur), cham=new Set();
+  ds.filter(x=>x.n>n).reverse().forEach(x=>{
+    (x.e.sau||[]).forEach(t=>{dich.delete(String(t.id));cham.add(String(t.id));});
+    (x.e.truoc||[]).forEach(t=>{dich.set(String(t.id),chotSao(t));cham.add(String(t.id));});});
+  const bo=[], them=[];
+  cham.forEach(id=>{const a=cur.get(id), b=dich.get(id);
+    if(a&&b){if(JSON.stringify(a)!==JSON.stringify(b)){bo.push(a);them.push(b);}}
+    else if(a)bo.push(a); else if(b)them.push(b);});
+  if(!bo.length&&!them.length){flash('Sổ hiện đã giống lần chốt '+n+', không có gì để đổi.','ok');return;}
+  const s=new Set(bo.map(t=>String(t.id)));
+  hoiChot({bo,them,ve:{k,n}},()=>{DB.txns=DB.txns.filter(x=>!s.has(String(x.id))).concat(them); save(); render();});
+}
+function khoiChotHoi(){
+  const h=chotHoi, ve=h.ve, chinh=(ve&&h.doi.find(x=>x.k===ve.k))||h.doi[0], k=chinh.k;
+  const khac=h.doi.filter(x=>x!==chinh), th=chotTenThang(k), ds=chotLan(k), moi=ds.length+1;
+  const goc=chotBa(DB.chot[k].goc||DB.chot[k]);
+  const loai=[...new Set(h.viec.map(x=>x.dg))], DG=ve?CHOT_DG_VE:CHOT_DG;
+  const nhan=loai.length>1?(ve?'App sẽ làm':'Thay đổi giao dịch')
+    :ve?{them:'App sẽ đưa lại vào sổ',xoa:'App sẽ gỡ khỏi sổ',sua:'App sẽ sửa lại'}[loai[0]]
+    :CHOT_DG[loai[0]]+(h.viec.length>1?' '+h.viec.length:'')+' giao dịch';
+  const dong=h.viec.slice(0,4).map(x=>'<div>'+(loai.length>1?DG[x.dg]+' ':'')+'<b>'+esc(x.tx)+'</b></div>').join('')
+    +(h.viec.length>4?'<div>… và '+(h.viec.length-4)+' khoản khác</div>':'');
+  const R=(ten,a,b,tong)=>a===b?`<div class="xc-r"><span>${ten}</span><span class="xc-so">${money(a)} · không đổi</span></div>`
+    :`<div class="xc-r doi${tong?' tong':''}"><span>${ten}</span><span class="xc-so"><s>${money(a)}</s> → <b>${money(b)}</b>${
+      tong?`<span class="xc-lech ${b<a?'am':'duong'}">${b<a?'giảm':'tăng'} ${money(Math.abs(b-a))}</span>`:''}</span></div>`;
+  const lechGoc=SRC.filter(s=>chinh.sau[s.id]!==goc[s.id]);
+  return `<div class="bd-veil"><div class="bd-hop" role="dialog" aria-modal="true" aria-labelledby="xc-t">
+    <h3 id="xc-t">${ve?'Quay về lần chốt '+ve.n+'?':th+' đã chốt sổ'}</h3>
+    <p class="xc-p">${ve?th+' trở lại đúng như lần chốt '+ve.n+' ('+vnd(iso(new Date(ds[ve.n-1].luc))).slice(0,5)
+        +'). Các lần sau vẫn được giữ, muốn dùng lại lúc nào cũng được.'
+      :'Việc này làm số dư cuối tháng đổi. Vy xác nhận thì app ghi thành <b>lần chốt '+moi+'</b>; các lần trước vẫn được giữ.'}</p>
+    <div class="xc-viec"><small>${nhan}</small>${dong}</div>
+    <div class="xc-bang"><div class="xc-hd">Số dư cuối ${th.toLowerCase()}</div>
+      ${SRC.map(s=>R(s.n,chinh.truoc[s.id],chinh.sau[s.id])).join('')}${R('Tổng',chinh.truoc.tong,chinh.sau.tong,1)}</div>
+    ${khac.length?`<div class="xc-bang"><div class="xc-hd">${khac.every(x=>x.k>k)?'Tháng sau thay đổi':'Tháng khác thay đổi'}</div>
+      ${khac.map(x=>R(chotTenThang(x.k,k),x.truoc.tong,x.sau.tong)).join('')}</div>`:''}
+    ${lechGoc.length?`<div class="xc-ghi">Lần 1 Vy đã bấm Khớp ${lechGoc.map(s=>chotTenNguon(s.id)+' '+money(goc[s.id])).join(', ')} theo app ngân hàng. Số mới ${
+      lechGoc.map(s=>money(chinh.sau[s.id])).join(', ')} chưa được đối chiếu lại.</div>`:''}
+    <div class="xc-nut"><button class="btn ghost" onclick="chotHoiHuy()">Hủy</button>
+      <button class="btn" onclick="chotHoiOK()">${ve?'Quay về lần '+ve.n:'Ghi nhận lần chốt '+moi}</button></div>
+  </div></div>`;
+}
+/* danh sách các lần chốt, nằm ngay dưới dòng Số dư cuối tháng trong Tổng kết */
+function khoiLichSuChot(k){
+  const ds=chotLan(k); if(!ds.length)return '';
+  const cur=ds[ds.length-1], gio=l=>{const d=new Date(l);
+    return vnd(iso(d)).slice(0,5)+' · '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');};
+  let x=`<button class="ls-bt" onclick="toggle('lsChot')" aria-expanded="${open.lsChot?'true':'false'}"><span>Lịch sử chốt</span><span>${ds.length} lần ${open.lsChot?'⌄':'›'}</span></button>`;
+  if(!open.lsChot)return x;
+  x+='<div class="ls-ds">';
+  ds.slice().reverse().forEach(v=>{
+    const e=v.e, laVe=e&&e.veK===k, dung=v===cur, DG=e&&e.veK?CHOT_DG_VE:CHOT_DG;
+    const nut=!dung&&!(cur.e&&cur.e.veK===k&&cur.e.ve===v.n);
+    x+=`<div class="ls-lan${dung?' dung':''}"><div class="ls-dau"><span class="ls-ten">Lần ${v.n}<small>${gio(v.luc)}</small></span><span class="ls-so">${money(v.so.tong)}</span></div>
+      ${laVe?`<span class="ls-nhan ve">Quay về lần ${e.ve}</span>`:e?'<span class="ls-nhan sua">Sửa sau khi chốt</span>':''}${
+        v.dc?'<span class="ls-nhan doichieu">Đã đối chiếu ngân hàng</span>':''}${dung?'<span class="ls-nhan dang">Đang dùng</span>':''}
+      ${e?`<div class="ls-ct">${(e.viec||[]).slice(0,4).map(w=>'<div>'+DG[w.dg]+' <b>'+esc(w.tx)+'</b></div>').join('')}${
+        (e.viec||[]).length>4?'<div>… và '+(e.viec.length-4)+' khoản khác</div>':''}</div>`:''}
+      <div class="ls-nguon">${SRC.map(s=>chotTenNguon(s.id)+' '+money(v.so[s.id])).join(' · ')}</div>
+      ${nut?`<button class="ls-ve" onclick="chotVe('${k}',${v.n})">Quay về lần ${v.n}</button>`:''}</div>`;
+  });
+  return x+'</div>';
 }
 /* ---- Bắt đầu theo dõi từ (v=12, Vy 28/09/2026) ----
    Trước ngày này app KHÔNG nhắc ghi sổ, KHÔNG yêu cầu chốt sổ. Trước đây app lấy ngày giao dịch
@@ -2947,9 +3098,10 @@ function delSel(){
   if(!ids.length){flash('Chưa chọn dòng nào.','err');return;}
   if(!confirm('Xóa '+ids.length+' giao dịch đã chọn? Không khôi phục được.'))return;
   const s=new Set(ids);
-  if(!hoiChot(DB.txns.filter(x=>s.has(String(x.id))).map(x=>x.d)))return;
-  DB.txns=DB.txns.filter(x=>!s.has(String(x.id)));
-  selIds={}; selMode=false; save(); flash('Đã xóa '+ids.length+' giao dịch.','ok');
+  hoiChot({bo:DB.txns.filter(x=>s.has(String(x.id))),them:[]},()=>{
+    DB.txns=DB.txns.filter(x=>!s.has(String(x.id)));
+    selIds={}; selMode=false; save(); flash('Đã xóa '+ids.length+' giao dịch.','ok');
+  });
 }
 function listFiltered(){
   let list=monthTx(cursor).slice().sort((a,b)=>(b.d+' '+(b.tm||'')).localeCompare(a.d+' '+(a.tm||'')));
@@ -3260,7 +3412,9 @@ function vInfo(){
    ['Thu nhập trong dự trù','tách giao dịch nhóm Lương thành hai kỳ theo ngày, lấy ngày đầu của kỳ 2 làm ranh giới. Kỳ đã về thì lấy đúng số thật; kỳ chưa về thì ước bằng trung bình kỳ đó của tối đa 3 tháng có ghi chép, chưa có lịch sử mới lấy phần còn thiếu so với kế hoạch. Thưởng và thu khác cộng thêm, không giữ chỗ. Cả hai kỳ đã về thì thu nhập tháng chốt bằng số thực nhận, dù cao hay thấp hơn kế hoạch.'],
    ['Tổng kết tháng đã đóng','mở lại một tháng đã qua thì khối nhịp tiêu biến mất, thay bằng bản tổng kết: (1) số dư đầu tháng + (2) Thực thu − (3) Thực chi − (4) Tiền đang cho vay − (5) Trả nợ = Số dư cuối tháng. Số dư cuối tháng chính là phần Vy giữ lại được của tháng đó. Bấm vào nó để xem tiền nằm ở BIDV, Ví và Tiền mặt bao nhiêu; ba nguồn cộng lại phải đúng bằng số đầu dòng. Số này cộng lại từ đầu sổ tới hết tháng, không lấy số dư hôm nay, nên xem lại tháng cũ vẫn đúng.'],
    ['Tiết kiệm & Đầu tư (tháng đã đóng)','tiền Vy chuyển vào nhóm Tiết kiệm & Đầu tư trong tháng — tức phần còn dư cuối cùng. Chia theo thứ tự: một là góp mục tiêu tài chính, trích trước, tối đa bằng mức góp kế hoạch; hai là tiết kiệm riêng như vàng, gửi tiết kiệm, nhận phần còn lại, chia theo đúng tỷ lệ số đã chuyển vào từng mục. Tiền này đã rời ba nguồn nên KHÔNG nằm trong Số dư cuối tháng, hai số không cộng với nhau.'],
-   ['Chốt sổ tháng','từ ngày 1 tháng sau, đầu Tổng quan hiện khối chốt sổ tháng vừa qua và nằm đó tới khi Vy chốt. App tự kiểm ba điều: ngày nào trong tháng cũng có giao dịch hoặc Vy đã bấm Không tiêu; giao dịch nào cũng có nhóm; chuỗi số dư BIDV không còn chỗ đứt chưa xử lý. Đủ ba điều thì Vy so ba số dư cuối ngày cuối tháng với app ngân hàng, ví và tiền mặt. Lệch thì ghi khoản còn thiếu, hoặc ghi một dòng điều chỉnh có tên rõ ràng — không giấu chỗ lệch. Chốt xong số dư cuối tháng đứng yên; thêm, sửa ngày hay xóa giao dịch của tháng đó app sẽ hỏi lại, và nếu có sửa thì Tổng kết ghi cả số đã chốt lẫn số hiện tại. Chỉ nhắc tháng liền trước.'],
+   ['Chốt sổ tháng','từ ngày 1 tháng sau, đầu Tổng quan hiện khối chốt sổ tháng vừa qua và nằm đó tới khi Vy chốt. App tự kiểm ba điều: ngày nào trong tháng cũng có giao dịch hoặc Vy đã bấm Không tiêu; giao dịch nào cũng có nhóm; chuỗi số dư BIDV không còn chỗ đứt chưa xử lý. Đủ ba điều thì Vy so ba số dư cuối ngày cuối tháng với app ngân hàng, ví và tiền mặt. Lệch thì ghi khoản còn thiếu, hoặc ghi một dòng điều chỉnh có tên rõ ràng — không giấu chỗ lệch. Chỉ nhắc tháng liền trước.'],
+   ['Sửa sau khi chốt','thêm, dời ngày hay xóa giao dịch làm số dư cuối một tháng đã chốt thay đổi thì app hiện hộp xác nhận: từng nguồn đổi từ bao nhiêu sang bao nhiêu, và tháng đã chốt nào phía sau cũng đổi theo. Vy xác nhận thì bản chốt đi theo số mới và việc đó được ghi thành một lần chốt mới. Đổi nhóm, đổi nội dung, tách mục không hỏi vì không làm số dư đổi.'],
+   ['Lịch sử chốt','nằm dưới dòng Số dư cuối tháng trong Tổng kết. Lần 1 là lúc Vy bấm Khớp với ngân hàng; mỗi lần sửa sau đó là một lần mới. Lần nào có số dư ba nguồn đúng bằng lần 1 thì mang nhãn "Đã đối chiếu ngân hàng". Bấm "Quay về lần N" thì app đưa giao dịch của tháng trở lại như lần đó — gỡ khoản đã thêm, đưa lại khoản đã xóa — và chính việc quay về cũng được ghi thành một lần mới, nên không lần nào bị mất.'],
    ['Ngày gõ tay','mọi ô ngày gõ theo kiểu dd/mm/yy, chỉ cần gõ số, app tự thêm dấu /. Bỏ năm thì: ngày hẹn thu/trả lấy lần gần nhất chưa tới, ngày giao dịch lấy lần gần nhất đã qua. Dưới ô luôn hiện app đã hiểu thành thứ mấy, ngày nào, để Vy kiểm tra trước khi lưu.'],
    ['Mục tiêu chạy song song','mỗi mục tiêu có mức cần mỗi tháng riêng: mục tiêu ghi hạn thì lấy phần còn thiếu chia số tháng còn lại, mục tiêu không ghi hạn thì lấy mốc 12 tháng. Tiền góp mỗi tháng chia cho các mục tiêu theo tỷ lệ mức cần, nên mục tiêu nào cũng nhích chứ không phải đợi mục tiêu trước đầy. Góp đến là tháng đạt đủ nếu giữ mức góp đang có; góp đến muộn hơn hạn mong muốn thì báo màu vàng.'],
    ['Khoản trả góp','tổng phải trả = số kỳ nhân tiền mỗi kỳ. Phí thu hộ = tổng phải trả − gốc. Kỳ kế tiếp = ngày kỳ đầu cộng số kỳ đã thanh toán.'],
@@ -3554,12 +3708,10 @@ function payDebt(){
   const s=(document.getElementById('nf-src')||{dataset:{}}).dataset.v||'bidv';
   const ngay=dtRead(nfv('nf-d'),'qua');
   if(!ngay){nfLoi('Ngày chưa đúng — gõ dạng dd/mm/yy.');return;}
-  if(!hoiChot([ngay]))return;
-  nF=null;
-  DB.txns.push({id:Date.now()+Math.random(),d:ngay,a,
+  const o={id:Date.now()+Math.random(),d:ngay,a,
     t:d.kind==='cho'?'thu':'chi', c:d.kind==='cho'?'thuno':(d.mode==='gop'?'trano_gop':'trano_cn'),
-    s, n:(d.kind==='cho'?'Thu về từ ':'Trả nợ ')+d.name, debt:d.id});
-  save();flash('Đã ghi '+money(a)+'.','ok');
+    s, n:(d.kind==='cho'?'Thu về từ ':'Trả nợ ')+d.name, debt:d.id};
+  hoiChot({them:[o]},()=>{nF=null; DB.txns.push(o); save(); flash('Đã ghi '+money(a)+'.','ok');});
 }
 function tog(i){pending[i].keep=!pending[i].keep;render()}
 /* ngày hẹn cho dòng Cho mượn / Đi vay trong màn xem lại — lưu vào dòng chờ, KHÔNG vẽ lại */
@@ -3577,13 +3729,13 @@ function learn(t,code){
 }
 function setCat(i,v){const t=pending[i];t.c=v;learn(t,v);save();render()}
 function reCat(id,v){const t=DB.txns.find(x=>String(x.id)===id);if(!t)return;t.c=v;learn(t,v);save();render()}
-function del(id){const t=DB.txns.find(x=>String(x.id)===id);if(t&&!hoiChot([t.d]))return;
-  DB.txns=DB.txns.filter(x=>String(x.id)!==id);save();render()}
+function del(id){const t=DB.txns.find(x=>String(x.id)===id);
+  hoiChot({bo:t?[t]:[],them:[]},()=>{DB.txns=DB.txns.filter(x=>String(x.id)!==id);save();render();});}
 function setDate(id,v){
   v=dtRead(v,'qua'); if(v===null||v===''){if(v===null)flash('Ngày chưa đúng — gõ dạng dd/mm/yy.','err');return;}
   const t=DB.txns.find(x=>String(x.id)===id); if(!t||t.d===v)return;
-  if(!hoiChot([t.d,v])){render();return;}
-  t.d=v; save(); flash('Đã đổi ngày thành '+vnd(v)+'.','ok');
+  /* Hủy thì vẽ lại để ô ngày trở về ngày cũ */
+  hoiChot({bo:[t],them:[Object.assign({},t,{d:v})]},()=>{t.d=v; save(); flash('Đã đổi ngày thành '+vnd(v)+'.','ok');},render);
 }
 function setTime(id,v){
   const t=DB.txns.find(x=>String(x.id)===id); if(!t)return;
@@ -3679,17 +3831,18 @@ function addManual(){
     if(o.s2===o.s){flash('Hai nguồn phải khác nhau.','err');return;}}
   else{o.c=manualCode;
     if(!o.c){flash('Chưa chọn nhóm.','err');return;}}
-  if(!hoiChot([o.d]))return;
-  DB.txns.push(o); noTuGD(o,han);
-  manualCode=''; mNhap={a:'',n:'',s:'',d:'',han:''}; save();msg='';cursor=new Date();go('home');autoBackup();
+  hoiChot({them:[o]},()=>{
+    DB.txns.push(o); noTuGD(o,han);
+    manualCode=''; mNhap={a:'',n:'',s:'',d:'',han:''}; save();msg='';cursor=new Date();go('home');autoBackup();
+  });
 }
 function applyBackup(d){
   if(!d||!Array.isArray(d.txns))throw 0;
-  if((d.v||1)<12)d=migrate(d);
+  if((d.v||1)<13)d=migrate(d);
   DB=Object.assign({},d,{txns:d.txns,debts:Array.isArray(d.debts)?d.debts:[],budgets:d.budgets||{},
     fixedItems:Array.isArray(d.fixedItems)?d.fixedItems:[],roll:d.roll||{},offsets:Array.isArray(d.offsets)?d.offsets:[],draws:Array.isArray(d.draws)?d.draws:[],income:d.income||0,rules:d.rules||{},
     opens:Object.assign({bidv:0,vi:0,tm:0},d.opens||{}),checks:d.checks||{},
-    opts:Object.assign({ab:'off'},d.opts||{}),efGop:d.efGop||0,chot:d.chot||{},batDau:d.batDau||'',lastBackup:d.lastBackup||0,v:12});
+    opts:Object.assign({ab:'off'},d.opts||{}),efGop:d.efGop||0,chot:d.chot||{},chotLS:Array.isArray(d.chotLS)?d.chotLS:[],batDau:d.batDau||'',lastBackup:d.lastBackup||0,v:13});
   save();flash('Đã khôi phục '+d.txns.length+' giao dịch.','ok');
 }
 function restoreFile(el){const f=el.files&&el.files[0];if(!f)return;
@@ -3699,7 +3852,7 @@ function restoreFile(el){const f=el.files&&el.files[0];if(!f)return;
 function doRestore(){try{applyBackup(JSON.parse(document.getElementById('restore').value));}
   catch(e){flash('Bản sao lưu không đọc được.','err');}}
 function wipe(){if(confirm('Xóa hết giao dịch, hạn mức và quy tắc? Không khôi phục được.')){
-  DB={txns:[],debts:[],budgets:{},bm:{},goals:[],fixedItems:DB.fixedItems,roll:DB.roll,offsets:[],draws:[],income:DB.income,rules:{},opens:DB.opens,checks:{},opts:DB.opts,efGop:0,chot:{},batDau:DB.batDau||'',lastBackup:0,v:12};save();msg='';go('home');}}
+  DB={txns:[],debts:[],budgets:{},bm:{},goals:[],fixedItems:DB.fixedItems,roll:DB.roll,offsets:[],draws:[],income:DB.income,rules:{},opens:DB.opens,checks:{},opts:DB.opts,efGop:0,chot:{},chotLS:[],batDau:DB.batDau||'',lastBackup:0,v:13};save();msg='';go('home');}}
 function move(n){cursor=new Date(cursor.getFullYear(),cursor.getMonth()+n,1);selIds={};toTop=true;render()}
 
 /* ==================== vẽ ==================== */

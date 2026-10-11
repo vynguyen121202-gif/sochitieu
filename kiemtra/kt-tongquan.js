@@ -55,10 +55,12 @@ const muonMau=nay.getDate()>=12?2000000:0;
 ok(pa.choMuon===muonMau,'cho mượn tháng này = '+M(muonMau),'ra '+M(pa.choMuon));
 /* từ v=11 (Vy duyệt 28/09): Thực tế được tiêu tính từ TIỀN THẬT, không từ hạn mức */
 {
-  const q=c.__thanhKhoan(), tu=pa.ngayCon?q.tuDo/pa.ngayCon:0, h=c.__vHome();
+  /* từ v=23 (Vy duyệt 11/10/2026): chia Số tiền còn lại được dùng để chi = min(hạn mức linh hoạt còn lại, tiền thật − để dành) */
+  const q=c.__thanhKhoan(), tu=pa.ngayCon?Math.max(0,q.conDuoc)/pa.ngayCon:0, h=c.__vHome();
+  eq2(q.conDuoc,Math.min(pa.duTru-pa.daChi,q.A0-q.B),'Số tiền còn lại được dùng để chi = số nhỏ hơn giữa hạn mức còn lại và tiền thật trừ để dành');
   eq2(pa.ngayCon,pa.nd-pa.qua+1,'số ngày còn lại TÍNH CẢ HÔM NAY = '+pa.nd+' − '+pa.qua+' + 1');
   ok(!('conDuoc' in pa)&&!('moiNgay' in pa),'pace() KHÔNG còn conDuoc (công thức cũ từ hạn mức) và moiNgay (bỏ từ v=8)');
-  ok(h.includes('<span>THỰC TẾ ĐƯỢC TIÊU</span><b>'+M(tu)+'</b>'),'ô THỰC TẾ ĐƯỢC TIÊU = tiêu tự do '+M(q.tuDo)+' ÷ '+pa.ngayCon+' ngày = '+M(tu));
+  ok(h.includes('<span>THỰC TẾ ĐƯỢC TIÊU</span><b>'+M(tu)+'</b>'),'ô THỰC TẾ ĐƯỢC TIÊU = '+M(q.conDuoc)+' ÷ '+pa.ngayCon+' ngày = '+M(tu));
   ok(h.includes('<span>ĐỊNH MỨC NGÀY</span><b>'+M(pa.chuan)+'</b><small>kế hoạch</small>'),'ô ĐỊNH MỨC NGÀY giữ nguyên = hạn mức linh hoạt ÷ số ngày, ghi "kế hoạch"');
   ok(!/Hụt |Dôi ra/.test(h.slice(h.indexOf('THỰC TẾ ĐƯỢC TIÊU'),h.indexOf('THỰC TẾ ĐƯỢC TIÊU')+600)),'không còn chữ "Hụt / Dôi ra" kiểu cũ ở ô Thực tế');
 }
@@ -112,7 +114,7 @@ ok(h.indexOf('TỔNG QUAN THÁNG NÀY')>=0,'có khối thực thu − thực chi
 /* v=12: Hạn mức linh hoạt chỉ còn MỘT chỗ — trong thẻ, TRƯỚC nút Cách tính; bảng Cách tính không lặp lại */
 ok(h.indexOf('Hạn mức linh hoạt')<h.indexOf('TỔNG QUAN THÁNG NÀY'),'Hạn mức linh hoạt nằm trong thẻ, trên bảng Cách tính');
 ok(h.indexOf('HẠN MỨC LINH HOẠT')<0&&h.indexOf('dg-bud')<0,'bảng Cách tính KHÔNG còn lặp phần Hạn mức linh hoạt');
-ok((h.match(/Hạn mức linh hoạt/g)||[]).length===1,'chữ "Hạn mức linh hoạt" xuất hiện đúng MỘT lần');
+ok((h.match(/class="kd-hm"/g)||[]).length===1,'bảng xổ Hạn mức linh hoạt từng nhóm chỉ có MỘT chỗ');
 ok(h.indexOf('TIÊU ĐỦ HẠN MỨC')>=0&&h.indexOf('THEO NHỊP TIÊU')>=0&&h.indexOf('THEO ĐÀ')<0&&h.indexOf('Theo đà')<0,'bảng có hai phần: tiêu đủ hạn mức · theo nhịp tiêu (không còn chữ "theo đà")');
 ok(h.indexOf('KHÔNG KIỂM SOÁT ĐƯỢC')<0&&h.indexOf('fc-sw')<0,'khối Dự báo KHÔNG còn danh sách công tắc (đã sang tab Ngân sách)');
 ok(h.indexOf('Chọn khoản tính theo nhịp tiêu ở tab Ngân sách')>=0,'khối Dự báo có đường dẫn sang tab Ngân sách');
@@ -168,7 +170,9 @@ ok(h.indexOf('Thấp hơn')<0,'KHÔNG báo khi tiêu ít hơn tháng trước');
   /* v=12: KẾT QUẢ trải phẳng, có ký hiệu (6)…(9), "Còn được dùng để chi" MỘT dòng */
   ok(doan.indexOf('Số tiền còn lại được dùng để chi')>=0,'KẾT QUẢ có dòng Số tiền còn lại được dùng để chi');
   /* chỉnh 28/09: KẾT QUẢ dừng ở Còn được dùng để chi; Lương chưa về = 0 thì ẩn */
-  ok(doan.indexOf('Cần để dành')<0&&doan.indexOf('>Thiếu<')<0&&doan.indexOf('>Dư<')<0,'KẾT QUẢ KHÔNG còn Cần để dành / Thiếu / Dư');
+  /* từ v=23: KẾT QUẢ có Cần để dành → Tiền thật trừ để dành → Hạn mức linh hoạt còn lại → số nhỏ hơn */
+  ok(doan.indexOf('Cần để dành')>=0&&doan.indexOf('Tiền thật trừ để dành')>=0&&doan.indexOf('Hạn mức linh hoạt còn lại')>=0,'KẾT QUẢ có đủ (b) tiền thật trừ để dành và (a) hạn mức còn lại');
+  ok(doan.indexOf('>Thiếu<')<0&&doan.indexOf('>Dư<')<0,'KẾT QUẢ KHÔNG còn dòng Thiếu / Dư');
   { const q=c.__thanhKhoan();
     ok(q.luongChuaVe?doan.indexOf('Lương chưa về')>=0:doan.indexOf('Lương chưa về')<0,'Lương chưa về: có thì hiện, bằng 0 thì ẩn'); }
   ok(h.indexOf('(1) + (2) − (3) − (4) − (5)')>=0,'Số dư hiện tại ghi công thức bằng ký hiệu (1)…(5)');

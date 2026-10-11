@@ -10,6 +10,7 @@ globalThis.__tab=t=>{tab=t;};
 globalThis.__cc=d=>coCau(d);
 globalThis.__no=d=>noThang(d);
 globalThis.__nv=(g,d)=>noVuot(g,d);
+globalThis.__tk=d=>thanhKhoan(d);
 globalThis.__tv=(g,d)=>truVuot(g,d);
 globalThis.__ci=(g,d)=>carryIn(g,d);
 globalThis.__lf=()=>listFiltered();
@@ -592,6 +593,34 @@ console.log('\nR · Lọc giao dịch theo mục con (Vy duyệt 11/10/2026)');
   F.locNhom('an'); ok(!ctx.__loc().nhom.length,'chạm lại Ăn uống: bỏ chọn cả nhóm và mục con');
   F.locCon('an','an_ngoai'); F.locNhom('cho'); eq(ten(),'Chợ,Cơm','mục con của nhóm này + cả nhóm khác cùng lúc');
   ctx.__tab('home'); F.locXoa();
+}
+
+console.log('\nS · Số tiền còn lại được dùng để chi = min(hạn mức còn lại, tiền thật − để dành) (Vy duyệt 11/10/2026)');
+{
+  HOM='2026-10-11'; const db=so(); db.batDau='2026-09-01'; db.income=0;
+  db.budgets={an:600000,tk:500000};
+  db.txns.push({id:nid++,d:'2026-10-02',t:'chi',a:100000,c:'an_ngoai',s:'bidv',n:'Cơm'});
+  db.debts=[{id:'dM',name:'Mẹ',kind:'cho',mode:'canhan',principal:1000000,start:'2026-09-20',due:'2026-10-02'},
+            {id:'dL',name:'Lan',kind:'cho',mode:'canhan',principal:300000,start:'2026-09-21',due:'2026-10-20'}];
+  db.txns.push({id:nid++,d:'2026-09-20',t:'chi',a:1000000,c:'muon',s:'bidv',n:'Mẹ'},{id:nid++,d:'2026-09-21',t:'chi',a:300000,c:'muon',s:'bidv',n:'Lan'});
+  ctx.__set(db,T10);
+  const q=ctx.__tk(T10), p=ctx.__pace(T10);
+  eq(q.henTong,300000,'hẹn thu: chỉ khoản Lan (20/10, chưa tới); khoản Mẹ hẹn 02/10 đã qua → KHÔNG cộng');
+  ok(q.treo.some(x=>x.n==='Mẹ'),'khoản Mẹ quay về danh sách chưa tính');
+  eq(q.conHM,600000-100000,'(a) hạn mức linh hoạt còn lại = 600.000 − 100.000 = 500.000');
+  eq(q.conTien,q.A0-500000,'(b) tiền thật trừ để dành = A0 − 500.000');
+  eq(q.conDuoc,Math.min(500000,q.A0-500000),'kết quả = số nhỏ hơn');
+  ok(!q.theoTien&&q.conDuoc===500000,'tiền thật đủ → theo hạn mức: 500.000');
+  let h=F.vHome();
+  ok(h.includes('<b class="duong">'+M(500000)+'</b>')&&h.includes('theo hạn mức linh hoạt còn lại'),'thẻ hiện 500.000 · "theo hạn mức linh hoạt còn lại"');
+  ok(h.includes('<span>THỰC TẾ ĐƯỢC TIÊU</span><b>'+M(500000/p.ngayCon)+'</b>'),'THỰC TẾ ĐƯỢC TIÊU = 500.000 ÷ '+p.ngayCon+' ngày');
+  db.budgets={an:50000000,tk:500000}; ctx.__set(db,T10);
+  const q2=ctx.__tk(T10);
+  ok(q2.theoTien&&q2.conDuoc===q2.A0-500000,'hạn mức còn lại lớn hơn tiền thật → tính theo số dư thật');
+  h=F.vHome(); ok(h.includes('tính theo số dư thật'),'thẻ ghi rõ "tính theo số dư thật"');
+  ctx.__tab('debt'); ctx.__render(); const hn=appEl.innerHTML; ctx.__tab('home');
+  ok(hn.includes('Mẹ — đã qua ngày hẹn thu 02/10, còn chờ thu '+M(1000000)),'tab Nợ: "Mẹ — đã qua ngày hẹn thu 02/10, còn chờ thu 1.000.000"');
+  ok(!/Mẹ — quá hạn/.test(hn)&&!/Mẹ[^<]*phải trả/.test(hn),'KHÔNG còn "quá hạn", KHÔNG ghi "phải trả" cho khoản chờ thu');
 }
 
 console.log(loi?'\n✗ '+loi+' lỗi':'\n✓ đạt hết');

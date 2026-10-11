@@ -5,7 +5,8 @@ let code=SRC_APP.slice(0,SRC_APP.indexOf("try{\n  const mf="));
 code+=`
 globalThis.__set=(db,cur)=>{DB=db;cursor=cur||new Date();tab='home';open={};msg='';chotXN={};chotThat={};chotHoi=null;memoClear();};
 globalThis.__f={chotCan,khoiChot,vHome,khongTieu,chotKhop,chotSo,chotDieuChinh,hoiChot,del,setDate,balAt,migrate,
-  bangTien,khoiTongKet,chotHoiOK,chotHoiHuy,khoiChotHoi,chotVe,chotLan,balSrcAt};
+  bangTien,khoiTongKet,chotHoiOK,chotHoiHuy,khoiChotHoi,chotVe,chotLan,balSrcAt,chotGhiLech,vBudget};
+globalThis.__tab=t=>{tab=t;};
 globalThis.__hoi=()=>chotHoi;
 globalThis.__mo=k=>{open[k]=1;};
 globalThis.__db=()=>DB;
@@ -230,6 +231,49 @@ console.log('\nD3 · Sửa tháng cũ kéo theo tháng đã chốt phía sau');
   F.del(String(t11.id));
   ok(!ctx.__hoi()&&!ctx.__db().txns.some(q=>q.id===t11.id),'xóa giao dịch tháng CHƯA chốt → KHÔNG hỏi, xóa luôn');
   eq(hoi.length,0,'không hộp confirm() nào của trình duyệt');
+}
+
+console.log('\nD4 · Bản chốt lệch có sẵn từ trước bản v=15: nút ghi nhận (lỗi sổ thật 11/10/2026)');
+{
+  /* Chốt 20:28 ngày 01/10 với tiền mặt −70.000; vài phút sau ghi thêm 2 khoản tiền mặt của tháng 9
+     bằng bản app cũ → bản chốt đứng yên, sổ lệch 35.000. */
+  const LUC=new Date('2026-10-01T20:28:00').getTime();
+  const dung=()=>{HOM='2026-10-11'; const db=so(); db.ngayOK={'2026-09-14':1,'2026-09-21':1,'2026-09-30':1};
+    db.chot={[K9]:{luc:LUC,bidv:6000000,vi:0,tm:-70000,tong:5930000}}; db.v=12; return F.migrate(db);};
+  let db=dung();
+  db.txns.push({id:LUC+480000.5,d:'2026-09-29',t:'chi',a:20000,c:'di_xang',s:'tm',n:'Xăng xe'},
+               {id:LUC+540000.5,d:'2026-09-27',t:'chi',a:15000,c:'an_cafe',s:'tm',n:'Cà phê'});
+  ctx.__set(db,T9);
+  let h=F.vHome();
+  ok(h.includes('Đã chốt '+M(5930000)+' · sau đó sửa, nay '+M(5895000)+' · lệch −'+M(35000)),'dòng vàng báo lệch −35.000');
+  ok(h.includes('Ghi nhận số hiện tại thành lần chốt 2')&&h.includes('chotGhiLech()'),'có nút "Ghi nhận số hiện tại thành lần chốt 2"');
+  F.chotGhiLech(); db=ctx.__db();
+  ok(db.chot[K9].tong===5895000&&db.chot[K9].tm===-105000&&db.chot[K9].goc.tong===5930000,'bấm nút → bản chốt 5.895.000, lần 1 vẫn 5.930.000');
+  ok(db.chotLS.length===1&&!db.chotLS[0].lech&&db.chotLS[0].sau.length===2,'hai khoản ghi sau lúc chốt giải thích ĐÚNG phần lệch → ghi vào nhật ký như khoản thêm');
+  ctx.__cur(T9); ctx.__mo('lsChot'); h=F.vHome();
+  ok(!h.includes('sau đó sửa')&&!h.includes('chotGhiLech'),'dòng vàng và nút biến mất');
+  ok(h.includes('Thêm <b>Xăng xe · 29/09 · Tiền mặt · 20.000</b>')&&h.includes("chotVe('2026-09',1)"),'lịch sử ghi rõ hai khoản, vẫn quay về lần 1 được');
+  F.chotVe(K9,1); F.chotHoiOK(); db=ctx.__db();
+  ok(db.chot[K9].tong===5930000&&!db.txns.some(t=>t.n==='Xăng xe'),'quay về lần 1 → gỡ đúng hai khoản, số dư 5.930.000');
+
+  /* lệch KHÔNG giải thích được: một khoản cũ bị xóa (không để lại dấu) */
+  db=dung(); db.txns.splice(0,1); ctx.__set(db,T9);
+  F.chotGhiLech(); db=ctx.__db();
+  ok(db.chot[K9].tong===5940000&&db.chotLS.length===1&&db.chotLS[0].lech===1&&!db.chotLS[0].sau.length,'lệch do xóa khoản cũ → vẫn ghi nhận, đánh dấu lech, KHÔNG bịa ra khoản nào');
+  ctx.__cur(T9); ctx.__mo('lsChot'); h=F.khoiTongKet();
+  ok(h.includes('không rõ từng khoản')&&!h.includes('chotVe('),'lịch sử ghi "không rõ từng khoản" và KHÔNG có nút quay về lần 1');
+  eq(hoi.length,0,'không hộp confirm() nào');
+}
+
+console.log('\nD5 · Cho mượn không phải khoản hạn mức (Vy 11/10/2026)');
+{
+  HOM='2026-10-05'; const db=so(); db.batDau='2026-09-01'; db.income=15000000; db.budgets={an:1000000};
+  db.txns.push({id:nid++,d:'2026-10-02',t:'chi',a:500000,c:'muon',s:'bidv',n:'Cho bạn mượn'});
+  ctx.__set(db,T10); ctx.__tab('budget'); const h=F.vBudget(); ctx.__tab('home');
+  ok(h.includes('Hạn mức Ăn uống'),'tab Ngân sách vẫn có ô hạn mức Ăn uống');
+  ok(!h.includes('Hạn mức Cho mượn')&&!h.includes("setB('muon'")&&!h.includes("toggleRoll('muon')"),'KHÔNG có ô hạn mức, KHÔNG có chip cộng dồn cho Cho mượn');
+  ok(!h.includes('Hạn mức Trả nợ'),'Trả nợ cũng không có ô hạn mức');
+  ok(F.vHome().includes('Tiền đang cho vay'),'tiền cho mượn vẫn hiện ở dòng (4) Tiền đang cho vay');
 }
 
 console.log('\nE · Sổ cũ');

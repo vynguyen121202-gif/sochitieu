@@ -1089,9 +1089,12 @@ function khoiTongKet(){
     SRC.map(function(s){return xoSub(s.n,"",money(bs[s.id]||0),(bs[s.id]||0)<0?"neg":"");}).join("")
     +xoTt("Cộng ba nguồn",money(t.cuoi)))+'</div>';
   /* chốt rồi mà sau đó có sửa: luôn cho thấy số đã chốt và số hiện tại lệch nhau bao nhiêu */
-  if(ch&&Math.round(ch.tong)!==Math.round(t.cuoi))
+  /* Chỉ còn gặp khi sổ bị sửa mà không qua hộp xác nhận — ví dụ sửa trước bản v=15. Có nút ghi
+     nhận để bản chốt đi theo số sổ đang có, thành một lần chốt mới. */
+  if(ch&&!chotBang(ch,bs))
     x+='<div class="chot-sua">Đã chốt '+money(ch.tong)+' · sau đó sửa, nay '+money(t.cuoi)
-      +' · lệch '+(t.cuoi<ch.tong?'−':'+')+money(Math.abs(t.cuoi-ch.tong))+'</div>';
+      +' · lệch '+(t.cuoi<ch.tong?'−':'+')+money(Math.abs(t.cuoi-ch.tong))
+      +'<button class="chot-ghi" onclick="chotGhiLech()">Ghi nhận số hiện tại thành lần chốt '+(lan.length+1)+'</button></div>';
   if(ch)x+=khoiLichSuChot(ym(cursor));
   return x+'</div>';
 }
@@ -1391,7 +1394,9 @@ function debtDue(d){
   });
   return _memo[mk]={tong,rows};
 }
-const FLEX=()=>GROUPS.filter(g=>g.k==='chi'&&g.id!=='trano');
+/* Cho mượn KHÔNG phải khoản hạn mức (Vy 11/10/2026): tiền cho mượn theo dõi ở dòng (4) Tiền đang
+   cho vay và tab Nợ, không có ô hạn mức ở tab Ngân sách. Trả nợ cũng vậy từ trước. */
+const FLEX=()=>GROUPS.filter(g=>g.k==='chi'&&g.id!=='trano'&&g.id!=='muon');
 /* ---- hạn mức cuốn chiếu ----
    Dư của tháng trước cộng sang, vượt thì chuyển âm. Chỉ tính 6 tháng gần nhất
    và chỉ những tháng thực sự có ghi chép, trần bằng 6 lần hạn mức tháng. */
@@ -2436,19 +2441,40 @@ function chotHoiHuy(){const h=chotHoi; chotHoi=null; hopVe(); if(h&&h.huy)h.huy(
 function chotHoiOK(){
   const h=chotHoi; if(!h)return; chotHoi=null; hopVe();
   h.tiep();
-  const sau=DB.txns.filter(t=>h.ids.includes(String(t.id))).map(chotSao), nay=chotSoDu(), th={};
+  const sau=DB.txns.filter(t=>h.ids.includes(String(t.id))).map(chotSao);
+  const e={viec:h.viec,truoc:h.bo,sau}; if(h.ve){e.veK=h.ve.k; e.ve=h.ve.n;}
+  const ks=chotCapNhat(e); if(!ks.length){save();return;}
+  const k=h.ve?h.ve.k:ks[0];
+  save(); flash(h.ve?'Đã quay về lần chốt '+h.ve.n+' · số dư cuối '+chotTenThang(k).toLowerCase()+': '+money(DB.chot[k].tong)
+    :'Đã ghi nhận lần chốt '+chotLan(k).length+' · số dư cuối '+chotTenThang(k).toLowerCase()+': '+money(DB.chot[k].tong),'ok');
+}
+/* đưa mọi bản chốt về đúng số sổ đang có; tháng nào đổi thì nối MỘT dòng `e` vào nhật ký.
+   Trả về danh sách tháng đã đổi. */
+function chotCapNhat(e){
+  const nay=chotSoDu(), th={};
   DB.chot=Object.assign({},DB.chot);
   Object.keys(nay).forEach(k=>{const c=DB.chot[k];
     if(!chotBang(c,nay[k])){th[k]=nay[k];
       /* bản gốc phải có trước khi ghi đè, nếu không lần 1 sẽ trôi theo số mới */
       DB.chot[k]=Object.assign({},c,nay[k],{goc:c.goc||{luc:c.luc,bidv:c.bidv||0,vi:c.vi||0,tm:c.tm||0,tong:c.tong||0}});}});
-  const ks=Object.keys(th).sort(); if(!ks.length){save();return;}
-  const e={id:Date.now()+Math.random(),luc:Date.now(),viec:h.viec,truoc:h.bo,sau,th};
-  if(h.ve){e.veK=h.ve.k; e.ve=h.ve.n;}
-  DB.chotLS=(DB.chotLS||[]).concat([e]);
-  const k=h.ve?h.ve.k:ks[0];
-  save(); flash(h.ve?'Đã quay về lần chốt '+h.ve.n+' · số dư cuối '+chotTenThang(k).toLowerCase()+': '+money(DB.chot[k].tong)
-    :'Đã ghi nhận lần chốt '+chotLan(k).length+' · số dư cuối '+chotTenThang(k).toLowerCase()+': '+money(DB.chot[k].tong),'ok');
+  const ks=Object.keys(th).sort();
+  if(ks.length)DB.chotLS=(DB.chotLS||[]).concat([Object.assign({id:Date.now()+Math.random(),luc:Date.now(),th},e)]);
+  return ks;
+}
+/* Bản chốt lệch với sổ mà không qua hộp xác nhận (sửa trước bản v=15). Vy bấm nút thì ghi nhận.
+   Mã giao dịch là mốc thời gian lúc bấm Lưu, nên tìm được các khoản GHI SAU lúc chốt. Nếu bỏ
+   chúng ra mà sổ về ĐÚNG số đã chốt ở mọi tháng thì chính chúng là phần lệch: ghi vào nhật ký như
+   khoản thêm, quay về lần trước vẫn làm được. Không khớp từng đồng thì KHÔNG đoán — ghi lần chốt
+   với dấu `lech`, và các lần trước nó không còn nút quay về. */
+function chotGhiLech(){
+  const cu=DB.chot||{}, lucDau=Math.min(...Object.keys(cu).map(k=>cu[k].luc)), kCuoi=Object.keys(cu).sort().pop();
+  const them=DB.txns.filter(t=>typeof t.id==='number'&&t.id>lucDau&&t.id<4e12&&(t.d||'').slice(0,7)<=kCuoi);
+  const s=new Set(them.map(t=>String(t.id))), tat=DB.txns;
+  DB.txns=tat.filter(t=>!s.has(String(t.id))); const thu=chotSoDu(); DB.txns=tat; memoClear();
+  const khop=them.length&&Object.keys(cu).every(k=>chotBang(cu[k],thu[k]));
+  const ks=chotCapNhat(khop?{viec:chotViec([],them),truoc:[],sau:them.map(chotSao)}:{viec:[],truoc:[],sau:[],lech:1});
+  if(!ks.length)return;
+  save(); flash('Đã ghi nhận lần chốt '+chotLan(ks[0]).length+' · số dư cuối '+chotTenThang(ks[0]).toLowerCase()+': '+money(DB.chot[ks[0]].tong),'ok');
 }
 /* quay về lần chốt n của tháng k: gỡ ngược từng lần sau nó, mới nhất trước */
 function chotVe(k,n){
@@ -2504,12 +2530,14 @@ function khoiLichSuChot(k){
   x+='<div class="ls-ds">';
   ds.slice().reverse().forEach(v=>{
     const e=v.e, laVe=e&&e.veK===k, dung=v===cur, DG=e&&e.veK?CHOT_DG_VE:CHOT_DG;
-    const nut=!dung&&!(cur.e&&cur.e.veK===k&&cur.e.ve===v.n);
+    /* sau một lần ghi nhận không rõ từng khoản (lech) thì không gỡ ngược qua nó được */
+    const nut=!dung&&!(cur.e&&cur.e.veK===k&&cur.e.ve===v.n)&&!ds.some(q=>q.n>v.n&&q.e&&q.e.lech);
     x+=`<div class="ls-lan${dung?' dung':''}"><div class="ls-dau"><span class="ls-ten">Lần ${v.n}<small>${gio(v.luc)}</small></span><span class="ls-so">${money(v.so.tong)}</span></div>
       ${laVe?`<span class="ls-nhan ve">Quay về lần ${e.ve}</span>`:e?'<span class="ls-nhan sua">Sửa sau khi chốt</span>':''}${
         v.dc?'<span class="ls-nhan doichieu">Đã đối chiếu ngân hàng</span>':''}${dung?'<span class="ls-nhan dang">Đang dùng</span>':''}
       ${e?`<div class="ls-ct">${(e.viec||[]).slice(0,4).map(w=>'<div>'+DG[w.dg]+' <b>'+esc(w.tx)+'</b></div>').join('')}${
-        (e.viec||[]).length>4?'<div>… và '+(e.viec.length-4)+' khoản khác</div>':''}</div>`:''}
+        (e.viec||[]).length>4?'<div>… và '+(e.viec.length-4)+' khoản khác</div>':''}${
+        e.lech?'<div>Sửa trước khi app có lịch sử chốt, không rõ từng khoản.</div>':''}</div>`:''}
       <div class="ls-nguon">${SRC.map(s=>chotTenNguon(s.id)+' '+money(v.so[s.id])).join(' · ')}</div>
       ${nut?`<button class="ls-ve" onclick="chotVe('${k}',${v.n})">Quay về lần ${v.n}</button>`:''}</div>`;
   });

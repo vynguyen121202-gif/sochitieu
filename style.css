@@ -576,3 +576,5 @@ input.dt{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius
 .ls-nguon{margin-top:3px;font-size:11.5px;color:var(--ink-3)}
 .ls-ve{margin-top:9px;min-height:44px;width:100%;border-radius:12px;border:1px solid var(--dim);background:var(--card);
   color:var(--jade);font-weight:600;font-size:13px}
+.chot-ghi{display:block;width:100%;min-height:44px;margin-top:8px;border-radius:12px;border:1px solid var(--warnbd);
+  background:var(--card);color:var(--warntx);font-weight:600;font-size:13px}

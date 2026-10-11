@@ -714,6 +714,20 @@ function byGroup(list){
   const m={}; list.filter(t=>t.t==='chi').forEach(t=>{const g=groupOf(t.c).id;m[g]=(m[g]||0)+t.a;});
   return Object.entries(m).sort((a,b)=>b[1]-a[1]);
 }
+/* Cơ cấu chi tiêu (Vy duyệt 11/10/2026) = (3) Thực chi + phần cho mượn CHƯA thu về của tháng.
+   · bỏ trả nợ cá nhân (nó nằm ở dòng (5)); trả góp ở lại.
+   · nhóm Cho mượn = cho mượn − thu nợ đã về trong tháng = dòng (4); âm thì tính 0.
+   Tính theo THÁNG chứ không theo từng khoản: phần lớn khoản thu nợ trong sổ không gắn với khoản
+   cho vay nào, nên không biết lần thu nào trả cho khoản nào. Dùng chung cho Tổng quan và Xu hướng. */
+function coCau(d){
+  const mk='cc'+ym(d); if(mk in _memo)return _memo[mk];
+  const list=monthTx(d).filter(t=>{ if(t.t!=='chi')return false; const g=groupOf(t.c).id;
+    return g!=='muon'&&!(g==='trano'&&t.c!=='trano_gop'); });
+  const muon=Math.max(0,bangTien(d).choRong), nhom=byGroup(list);
+  if(muon)nhom.push(['muon',muon]);
+  nhom.sort((a,b)=>b[1]-a[1]);
+  return _memo[mk]={list,muon,nhom,tong:nhom.reduce((s,x)=>s+x[1],0)};
+}
 function bySub(list,gid){
   const m={}; list.filter(t=>t.t==='chi'&&groupOf(t.c).id===gid).forEach(t=>{m[t.c]=(m[t.c]||0)+t.a;});
   return Object.entries(m).sort((a,b)=>b[1]-a[1]);
@@ -775,11 +789,12 @@ function shade(hex,k){
   const r=Math.round(((n>>16)&255)*(1-k)+255*k), g=Math.round(((n>>8)&255)*(1-k)+255*k), b=Math.round((n&255)*(1-k)+255*k);
   return '#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
 }
-function treemap(list,chi){
+function treemap(cc){
+  const list=cc.list, chi=cc.tong;
   const W=350,H=178,G=3;
   let items,back='',crumb='';
   if(open.zoom==='__o'){
-    const gs=byGroup(list).filter(([id,v])=>v/chi<0.03);
+    const gs=cc.nhom.filter(([id,v])=>v/chi<0.03);
     const tot=gs.reduce((s,x)=>s+x[1],0);
     items=gs.map(([id,v])=>({id,name:groupOf(id).sn||groupOf(id).n,v,col:gcA(groupOf(id).c),
       pc:Math.max(1,Math.round(v/chi*100)),sub:false}));
@@ -790,7 +805,7 @@ function treemap(list,chi){
       v,col:gcA(shade(g.c,i*0.17)),sub:false}));
     crumb=g.n;
   }else{
-    const gs=byGroup(list); let big=[],nho=0;
+    const gs=cc.nhom; let big=[],nho=0;
     gs.forEach(([id,v])=>{ if(v/chi>=0.03)big.push({id,name:groupOf(id).sn||groupOf(id).n,v,
       col:gcA(groupOf(id).c),sub:groupOf(id).subs.length>0}); else nho+=v; });
     if(nho>0)big.push({id:'__o',name:'Khác',v:nho,col:gcA('#8794A0'),sub:true});
@@ -2787,7 +2802,7 @@ function nutXem(k,id){
     <span><span class="xomui" data-mui="${k}" data-a="▾" data-b="▸">${open[k]?'▾':'▸'}</span> Xem chi tiết</span></button>`;
 }
 function vHome(){
-  const list=monthTx(cursor), chi=sumChi(list);
+  const list=monthTx(cursor), cc=coCau(cursor);
   const thuNhap=sum(list.filter(t=>t.t==='thu'&&['luong','thuong','tkhac'].includes(groupOf(t.c).id)));
   const now=new Date(), cur=ym(cursor)===ym(now);
   const passed=cur?now.getDate():daysIn(cursor);
@@ -2912,20 +2927,22 @@ function vHome(){
         }
       }
     }
-    if(chi){
-      h+=`<h2 class="hl"><i style="background:${gcA('#6E7480')}"></i><b>Cơ cấu chi tiêu</b><em>${money(chi)}</em></h2>${treemap(list,chi)}
+    if(cc.tong){
+      h+=`<h2 class="hl"><i style="background:${gcA('#6E7480')}"></i><b>Cơ cấu chi tiêu</b><em>${money(cc.tong)}</em></h2>${treemap(cc)}
         <div class="sp"></div><div class="stack-note"><span>Chạm một ô để xem giao dịch của nhóm đó.</span>
-          ${!open.zoom&&byGroup(list).some(([id])=>groupOf(id).subs.length)?`<span>
+          ${!open.zoom&&cc.nhom.some(([id])=>groupOf(id).subs.length)?`<span>
             <button style="background:none;border:0;padding:0;color:var(--jade);font-weight:600;font-size:12.5px" onclick="askZoom()">chia nhỏ theo mục</button></span>`:''}</div>`;
 
   /* bấm ô cuối trong bản đồ khối thì hiện thẳng giao dịch tại đây */
       if(open.txCode){
         const gg=groupOf(open.txCode), isSub=open.txCode!==gg.id;
-        const rows=list.filter(t=>t.t==='chi'&&(isSub?t.c===open.txCode:groupOf(t.c).id===open.txCode))
+        /* Cho mượn: ô ghi phần CHƯA thu về, nên liệt kê cả khoản cho mượn lẫn khoản đã thu */
+        const laMuon=gg.id==='muon', bt=bangTien(cursor);
+        const rows=(laMuon?list.filter(t=>t.t==='chi'&&groupOf(t.c).id==='muon'):cc.list.filter(t=>isSub?t.c===open.txCode:groupOf(t.c).id===open.txCode))
           .sort((a,b)=>(b.d+' '+(b.tm||'')).localeCompare(a.d+' '+(a.tm||'')));
         h+=`<div class="sp"></div><div class="stack-note" style="margin-bottom:8px"><span>
           <span class="spine" style="background:${gcA(gg.c)};height:12px;display:inline-block;margin-right:6px"></span>
-          ${esc(labelOf(open.txCode))} · ${rows.length} giao dịch · ${money(sum(rows))}
+          ${esc(labelOf(open.txCode))} · ${rows.length} giao dịch · ${laMuon?'cho mượn '+money(bt.muon)+' − thu nợ đã về '+money(bt.thuno)+' = '+money(cc.muon):money(sum(rows))}
           <button style="background:none;border:0;padding:0 0 0 8px;color:var(--jade);font-weight:600;font-size:12.5px" onclick="pickTx('')">đóng</button></span></div>
           <div class="panel">`;
         rows.forEach(t=>{h+=`<div class="tx"><span class="spine" style="background:${gg.c}"></span>
@@ -3300,7 +3317,7 @@ function moveGoal(id,dir){
 function vTrend(){
   const months=[];
   for(let k=5;k>=0;k--){const d=new Date(cursor.getFullYear(),cursor.getMonth()-k,1);
-    const chi=sumChi(monthTx(d));
+    const chi=coCau(d).tong;
     const thu=sum(monthTx(d).filter(t=>t.t==='thu'&&['luong','thuong','tkhac'].includes(groupOf(t.c).id)));
     const tk=sum(monthTx(d).filter(t=>t.t==='chi'&&groupOf(t.c).id==='tk'));
     months.push({d,chi,thu,tk,ty:thu?tk/thu:0});
@@ -3308,18 +3325,20 @@ function vTrend(){
   const co=months.some(m=>m.chi||m.thu);
   if(!co)return `<div class="empty"><b>Chưa đủ dữ liệu</b>Sau vài tháng ghi chép, xu hướng sẽ hiện ở đây.</div>`;
 
-  const tong=months.reduce((s2,m)=>s2+m.chi,0), tb=tong/6, mx=Math.max(...months.map(m=>m.chi),1);
+  /* trung bình chia cho số tháng CÓ chi tiêu, không chia cứng cho 6 (Vy 11/10/2026): sổ mới có
+     2 tháng mà chia 6 thì con số thấp hơn thực tế ba lần */
+  const tong=months.reduce((s2,m)=>s2+m.chi,0), soTh=months.filter(m=>m.chi>0).length||1, tb=tong/soTh, mx=Math.max(...months.map(m=>m.chi),1);
   let h=`<div style="margin-bottom:14px">
     <div class="src-m">Chi tiêu sáu tháng gần nhất</div>
     <div style="font-size:27px;font-weight:600;letter-spacing:-.02em;margin:2px 0">${money(tong)}</div>
-    <div class="src-m">trung bình ${money(tb)} mỗi tháng</div></div>
+    <div class="src-m">trung bình ${money(tb)} mỗi tháng${soTh<6?' · tính trên '+soTh+' tháng có ghi chép':''}</div></div>
     <div style="position:relative;display:flex;align-items:flex-end;gap:9px;height:96px">
       <div style="position:absolute;left:0;right:0;bottom:${(tb/mx*100).toFixed(1)}%;border-top:1px dashed var(--line)"></div>`;
   months.forEach((m,k)=>{h+=`<div class="bcol"><em>${m.chi?short(m.chi):''}</em>
     <i class="${k===5?'cur':''}" style="height:${m.chi/mx*100}%"></i></div>`;});
   h+=`</div><div style="display:flex;gap:9px;margin-top:5px">`
     +months.map((m,k)=>`<span style="flex:1;text-align:center;font-size:10.5px;color:${k===5?'var(--ink)':'var(--ink-3)'}">${m.d.getMonth()+1}</span>`).join('')
-    +`</div><div class="stack-note" style="margin-top:7px"><span>Đường đứt là mức trung bình sáu tháng</span></div>`;
+    +`</div><div class="stack-note" style="margin-top:7px"><span>Đường đứt là mức trung bình ${soTh<6?soTh+' tháng có ghi chép':'sáu tháng'}</span></div>`;
 
   /* tỷ lệ tiết kiệm */
   const dat=months.filter(m=>m.thu&&m.ty>=0.25).length, coThu=months.filter(m=>m.thu).length;
@@ -3382,8 +3401,7 @@ function vTrend(){
       <span>Dành cho mục tiêu</span><span style="color:var(--ink);font-weight:600">${money(Math.max(0,quy-em))}</span></div></div>`;
 
   /* so nhóm với tháng trước */
-  const nowL=monthTx(months[5].d), prevL=monthTx(months[4].d);
-  const a=byGroup(nowL), bMap=Object.fromEntries(byGroup(prevL));
+  const a=coCau(months[5].d).nhom, bMap=Object.fromEntries(coCau(months[4].d).nhom);
   if(a.length){
     let mxCh=null;
     a.forEach(([id,v])=>{const pv=bMap[id]||0;if(pv){const d2=(v-pv)/pv*100;if(!mxCh||Math.abs(d2)>Math.abs(mxCh.d))mxCh={n:groupOf(id).sn||groupOf(id).n,d:d2};}});
@@ -3441,6 +3459,8 @@ function vInfo(){
    ['Tổng kết tháng đã đóng','mở lại một tháng đã qua thì khối nhịp tiêu biến mất, thay bằng bản tổng kết: (1) số dư đầu tháng + (2) Thực thu − (3) Thực chi − (4) Tiền đang cho vay − (5) Trả nợ = Số dư cuối tháng. Số dư cuối tháng chính là phần Vy giữ lại được của tháng đó. Bấm vào nó để xem tiền nằm ở BIDV, Ví và Tiền mặt bao nhiêu; ba nguồn cộng lại phải đúng bằng số đầu dòng. Số này cộng lại từ đầu sổ tới hết tháng, không lấy số dư hôm nay, nên xem lại tháng cũ vẫn đúng.'],
    ['Tiết kiệm & Đầu tư (tháng đã đóng)','tiền Vy chuyển vào nhóm Tiết kiệm & Đầu tư trong tháng — tức phần còn dư cuối cùng. Chia theo thứ tự: một là góp mục tiêu tài chính, trích trước, tối đa bằng mức góp kế hoạch; hai là tiết kiệm riêng như vàng, gửi tiết kiệm, nhận phần còn lại, chia theo đúng tỷ lệ số đã chuyển vào từng mục. Tiền này đã rời ba nguồn nên KHÔNG nằm trong Số dư cuối tháng, hai số không cộng với nhau.'],
    ['Chốt sổ tháng','từ ngày 1 tháng sau, đầu Tổng quan hiện khối chốt sổ tháng vừa qua và nằm đó tới khi Vy chốt. App tự kiểm ba điều: ngày nào trong tháng cũng có giao dịch hoặc Vy đã bấm Không tiêu; giao dịch nào cũng có nhóm; chuỗi số dư BIDV không còn chỗ đứt chưa xử lý. Đủ ba điều thì Vy so ba số dư cuối ngày cuối tháng với app ngân hàng, ví và tiền mặt. Lệch thì ghi khoản còn thiếu, hoặc ghi một dòng điều chỉnh có tên rõ ràng — không giấu chỗ lệch. Chỉ nhắc tháng liền trước.'],
+   ['Cơ cấu chi tiêu','bằng (3) Thực chi cộng phần cho mượn chưa thu về của tháng. Nhóm Trả nợ chỉ gồm trả góp; trả nợ cá nhân nằm ở dòng (5) nên không tính ở đây. Nhóm Cho mượn = cho mượn trong tháng trừ thu nợ đã về trong tháng, đúng bằng dòng (4); tháng nào thu về nhiều hơn cho mượn thì nhóm này không hiện. Ví dụ: Thực chi 11.671.803 + cho mượn chưa thu về 2.500.000 = 14.171.803.'],
+   ['Chi tiêu sáu tháng (Xu hướng)','mỗi cột là Cơ cấu chi tiêu của một tháng, tính cùng cách như trên. Trung bình = tổng chia cho số tháng có ghi chép chi tiêu, không chia cứng cho 6. Tháng đang chạy vẫn được đếm là một tháng dù chưa hết, nên đầu tháng trung bình sẽ hơi thấp.'],
    ['Sửa sau khi chốt','thêm, dời ngày hay xóa giao dịch làm số dư cuối một tháng đã chốt thay đổi thì app hiện hộp xác nhận: từng nguồn đổi từ bao nhiêu sang bao nhiêu, và tháng đã chốt nào phía sau cũng đổi theo. Vy xác nhận thì bản chốt đi theo số mới và việc đó được ghi thành một lần chốt mới. Đổi nhóm, đổi nội dung, tách mục không hỏi vì không làm số dư đổi.'],
    ['Lịch sử chốt','nằm dưới dòng Số dư cuối tháng trong Tổng kết. Lần 1 là lúc Vy bấm Khớp với ngân hàng; mỗi lần sửa sau đó là một lần mới. Lần nào có số dư ba nguồn đúng bằng lần 1 thì mang nhãn "Đã đối chiếu ngân hàng". Bấm "Quay về lần N" thì app đưa giao dịch của tháng trở lại như lần đó — gỡ khoản đã thêm, đưa lại khoản đã xóa — và chính việc quay về cũng được ghi thành một lần mới, nên không lần nào bị mất.'],
    ['Ngày gõ tay','mọi ô ngày gõ theo kiểu dd/mm/yy, chỉ cần gõ số, app tự thêm dấu /. Bỏ năm thì: ngày hẹn thu/trả lấy lần gần nhất chưa tới, ngày giao dịch lấy lần gần nhất đã qua. Dưới ô luôn hiện app đã hiểu thành thứ mấy, ngày nào, để Vy kiểm tra trước khi lưu.'],
@@ -3614,7 +3634,7 @@ function pickTx(code){
 }
 /* xổ bản đồ khối xuống cấp 2 */
 function askZoom(){
-  const first=byGroup(monthTx(cursor)).find(([id])=>groupOf(id).subs.length);
+  const first=coCau(cursor).nhom.find(([id])=>groupOf(id).subs.length);
   if(first){open.zoom=first[0];open.txCode='';render();}
 }
 function clearFilter(){filterCode='';render();}

@@ -7,6 +7,8 @@ globalThis.__set=(db,cur)=>{DB=db;cursor=cur||new Date();tab='home';open={};msg=
 globalThis.__f={chotCan,khoiChot,vHome,khongTieu,chotKhop,chotSo,chotDieuChinh,hoiChot,del,setDate,balAt,migrate,
   bangTien,khoiTongKet,chotHoiOK,chotHoiHuy,khoiChotHoi,chotVe,chotLan,balSrcAt,chotGhiLech,vBudget};
 globalThis.__tab=t=>{tab=t;};
+globalThis.__cc=d=>coCau(d);
+globalThis.__trend=()=>vTrend();
 globalThis.__hoi=()=>chotHoi;
 globalThis.__mo=k=>{open[k]=1;};
 globalThis.__db=()=>DB;
@@ -339,6 +341,36 @@ console.log('\nH · Tổng quan gọn (v=12)');
   ok(h.includes('<span class="l">Tiết kiệm tháng 9</span>')&&h.includes('<b>'+M(500000)+'</b> <span>/ '+M(2000000)+'</span>'),'dòng Tiết kiệm tháng 9: 500.000 / 2.000.000');
   ok(h.includes('<span class="mt-pc thieu">25%</span>'),'mỗi mục tiêu MỘT dòng, kèm phần trăm 25%');
   ok(!h.includes('Mục tiêu đang thực hiện'),'KHÔNG còn khối "Mục tiêu đang thực hiện" ở cuối trang');
+}
+
+console.log('\nI · Cơ cấu chi tiêu và Xu hướng = Thực chi + cho mượn chưa thu về (Vy duyệt 11/10/2026)');
+{
+  HOM='2026-10-08'; const db=so(); db.batDau='2026-09-01';
+  db.txns.push(
+    {id:nid++,d:'2026-09-10',t:'chi',a:500000,c:'muon',s:'bidv',n:'Cho bạn mượn'},
+    {id:nid++,d:'2026-09-20',t:'thu',a:200000,c:'thuno',s:'bidv',n:'Bạn trả bớt'},
+    {id:nid++,d:'2026-09-12',t:'chi',a:300000,c:'trano_cn',s:'bidv',n:'Trả nợ chị Hà'},
+    {id:nid++,d:'2026-09-25',t:'chi',a:150000,c:'trano_gop',s:'bidv',n:'Trả góp'},
+    {id:nid++,d:'2026-10-02',t:'chi',a:40000,c:'an_ngoai',s:'tm',n:'Ăn'},
+    {id:nid++,d:'2026-10-03',t:'chi',a:50000,c:'muon',s:'bidv',n:'Cho mượn tháng 10'},
+    {id:nid++,d:'2026-10-05',t:'thu',a:80000,c:'thuno',s:'bidv',n:'Thu nợ tháng 10'});
+  ctx.__set(db,T9);
+  const c9=ctx.__cc(T9), b9=F.bangTien(T9), nh=Object.fromEntries(c9.nhom);
+  eq(c9.tong,720000,'tháng 9: ăn 270.000 + trả góp 150.000 + cho mượn chưa thu về 300.000 = 720.000');
+  eq(c9.tong,b9.tongRa+Math.max(0,b9.choRong),'…đúng bằng (3) Thực chi + (4) Tiền đang cho vay');
+  eq(nh.muon,300000,'ô Cho mượn = 500.000 − 200.000 đã thu về = 300.000 (KHÔNG phải 500.000)');
+  eq(nh.trano,150000,'ô Trả nợ chỉ còn trả góp 150.000; trả nợ cá nhân 300.000 KHÔNG tính');
+  let h=F.vHome();
+  ok(h.includes('<b>Cơ cấu chi tiêu</b><em>'+M(720000)+'</em>'),'Tổng quan tháng 9 ghi Cơ cấu chi tiêu 720.000');
+  ok(!h.includes('<em>'+M(1220000)+'</em>'),'KHÔNG còn con số cũ 1.220.000 (cộng mọi khoản chi)');
+  ctx.__set(db,T10);
+  const c10=ctx.__cc(T10);
+  ok(c10.tong===40000&&!c10.nhom.some(x=>x[0]==='muon'),'tháng 10: thu nợ 80.000 nhiều hơn cho mượn 50.000 → KHÔNG có ô Cho mượn, tổng 40.000');
+  ctx.__tab('trend'); h=ctx.__trend(); ctx.__tab('home');
+  ok(h.includes('>'+M(760000)+'<'),'Xu hướng: tổng sáu tháng 720.000 + 40.000 = 760.000');
+  ok(h.includes('trung bình '+M(380000)+' mỗi tháng · tính trên 2 tháng có ghi chép'),'trung bình 380.000 = 760.000 ÷ 2 tháng có ghi chép');
+  ok(!h.includes('trung bình '+M(Math.round(760000/6))+' mỗi tháng'),'KHÔNG còn chia cứng cho 6 (126.667)');
+  ok(h.includes('Đường đứt là mức trung bình 2 tháng có ghi chép'),'chú thích đường đứt ghi đúng 2 tháng');
 }
 
 console.log(loi?'\n✗ '+loi+' lỗi':'\n✓ đạt hết');

@@ -1282,18 +1282,11 @@ function pace(d){
        ở thanhKhoan() (tiêu tự do ÷ ngayCon), không từ hạn mức — Vy duyệt 28/09/2026. */
     chuan:duTru/nd};
 }
+/* Thu nhập ĐÃ NHẬN trong tháng = Lương + Thưởng + Thu khác (không thu nợ, đi vay, điều chỉnh).
+   Chỉ dùng để tính "Lương chưa về" = thu nhập dự kiến − số này. Vy duyệt 17/10/2026 rút gọn: trước
+   đây hàm còn tính ~10 con số không ai dùng, trong đó "chi" vẫn gồm cả cho mượn và trả nợ cá nhân. */
 function metrics(d){
-  const list=monthTx(d);
-  const thu=sum(list.filter(t=>t.t==='thu'&&['luong','thuong','tkhac'].includes(groupOf(t.c).id)));
-  const chi=sumChi(list);
-  const tk=sum(list.filter(t=>t.t==='chi'&&groupOf(t.c).id==='tk'));
-  const no=sum(list.filter(t=>t.t==='chi'&&groupOf(t.c).id==='trano'));
-  const codinh=sum(list.filter(t=>t.t==='chi'&&isFixed(groupOf(t.c).id)));
-  const linhhoat=Math.max(0,chi-codinh-tk);
-  const base=thu||DB.income||0;
-  return {thu,chi,tk,no,codinh,linhhoat,base,
-    rTK:base?tk/base:0, rCD:base?codinh/base:0, rNo:base?no/base:0, rLH:base?linhhoat/base:0,
-    duy:base?(base-chi)/base:0};
+  return {thu:sum(monthTx(d).filter(t=>t.t==='thu'&&['luong','thuong','tkhac'].includes(groupOf(t.c).id)))};
 }
 /* quỹ khẩn cấp cộng dồn: mọi khoản đã bỏ vào Tiết kiệm & đầu tư từ trước tới nay */
 /* Chi trung bình một tháng, lấy tối đa 3 tháng CÓ ghi chép trong 6 tháng gần nhất.

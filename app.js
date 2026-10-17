@@ -402,8 +402,48 @@ function debtLinks(){
   _dl=m; return m;
 }
 const debtTxns=id=>{const m=debtLinks();return DB.txns.filter(t=>m[String(t.id)]===id);};
+/* ---- Nợ theo NGƯỜI (Vy 17/10/2026) ----
+   Một người có thể mượn nhiều lần và trả dần nhiều lần. Các khoản cùng loại (cho / nợ) cùng
+   người gom lại; mọi lần trả / thu của người đó — dù đang gắn vào khoản nào — đem chia LẦN LƯỢT
+   vào khoản cũ nhất trước. Trả dư thì phần dư nằm ở khoản mới nhất. Tên người = d.nguoi, chưa
+   gộp thì là tên khoản. Không cần bước migrate: d.nguoi chỉ có khi Vy sửa tên / gộp. */
+const ngOf=d=>d.nguoi||d.name;
+const ngKhoa=d=>(d.kind==='cho'?'cho':'no')+'|'+ngOf(d);
+function phanBo(khoa){
+  const mk='pb'+khoa; if(mk in _memo)return _memo[mk];
+  const ds=(DB.debts||[]).filter(x=>ngKhoa(x)===khoa).sort((a,b)=>(a.start||'').localeCompare(b.start||''));
+  let quy=ds.reduce((s,d)=>s+debtTxns(d.id).reduce((s2,t)=>s2+t.a,0),0); const m={};
+  ds.forEach((d,i)=>{const tot=d.mode==='gop'?(d.periods||0)*(d.per||0):(d.principal||0);
+    const p=i===ds.length-1?quy:Math.min(tot,quy); m[d.id]=p; quy-=p;});
+  return _memo[mk]=m;
+}
 const paidOf=id=>{const mk='paid'+id; if(mk in _memo)return _memo[mk];
-  return _memo[mk]=debtTxns(id).reduce((s,t)=>s+t.a,0);};
+  const d=(DB.debts||[]).find(x=>x.id===id);
+  return _memo[mk]=d?(phanBo(ngKhoa(d))[id]||0):debtTxns(id).reduce((s,t)=>s+t.a,0);};
+/* danh sách người: {khoa, ten, kind, ds:[khoản], left, total, paid, gd:[lần trả/thu]} */
+function nguoiNo(){
+  const m={};
+  (DB.debts||[]).forEach(d=>{const k=ngKhoa(d); (m[k]=m[k]||{khoa:k,ten:ngOf(d),kind:d.kind==='cho'?'cho':'no',ds:[]}).ds.push(d);});
+  return Object.values(m).map(p=>{
+    p.ds.sort((a,b)=>(a.start||'').localeCompare(b.start||''));
+    const inf=p.ds.map(debtInfo);
+    p.total=inf.reduce((s,i)=>s+i.total,0); p.left=inf.reduce((s,i)=>s+i.left,0); p.paid=p.total-p.left;
+    p.gd=p.ds.flatMap(d=>debtTxns(d.id)).sort((a,b)=>a.d.localeCompare(b.d));
+    p.mo=p.ds.filter((d,i)=>!inf[i].done);           /* khoản còn dở, cũ nhất trước */
+    const han=p.mo.map((d,i)=>debtInfo(d)).filter(i=>i.nextDate).map(i=>i.nextDate).sort();
+    p.han=han[0]||''; p.done=p.left<=0; return p;});
+}
+/* đoán người cho một giao dịch theo tên trong nội dung chuyển khoản */
+function doanNguoi(t,kind){
+  let best='',bs=0;
+  const hay=wordsOf(t.n0||t.n)+wordsOf(t.n);
+  /* nội dung chuyển khoản thường chỉ có TÊN gọi ("LAN tra tien") nên khớp thêm chữ cuối của tên, từ 3 chữ cái */
+  const cuoi=s=>{const w=noAccent(s).replace(/[^a-z0-9]+/g,' ').trim().split(' ').pop()||'';return w.length>=3&&hay.indexOf(' '+w+' ')>=0?w.length:0;};
+  nguoiNo().filter(p=>p.kind===kind).forEach(p=>{let sc=0;
+    p.ds.forEach(d=>{sc=Math.max(sc,debtNameHit(ngOf(d),t),debtNameHit(d.name,t),cuoi(ngOf(d)));}); if(!p.done)sc+=1;
+    if(sc>bs){bs=sc;best=p.khoa;}});
+  return bs>1?best:'';
+}
 /* ---- gán tay: chọn một giao dịch ĐÃ CÓ trong sổ để tính vào khoản nợ,
    thay vì bấm Ghi thanh toán (vốn tạo thêm một dòng chi mới, làm đội chi phí) ---- */
 let debtPick='', debtPickQ='';
@@ -457,6 +497,14 @@ function dueLevel(i,cho){
   if(d<=15)return {k:'soon', cls:'amber', txt:'còn '+d+' ngày'};
   return {k:'far', cls:'grey', txt:'hạn '+i.nextDate.slice(8,10)+'/'+i.nextDate.slice(5,7)};
 }
+/* một dòng một người ở khối Nợ của Tổng quan */
+function dongNguoi(p){
+  const d=p.mo[0]||p.ds[0], lv=dueLevel(debtInfo(d),p.kind==='cho'), gop=p.ds.find(x=>x.mode==='gop');
+  return `<div class="src"><div style="min-width:0"><div class="src-n">${esc(p.ten)}</div>
+    <div class="src-m">${gop?'kỳ '+(debtInfo(gop).kyDone+1)+'/'+gop.periods:(p.kind==='cho'?'cho mượn ':'vay ')+p.ds.length+' lần'}</div>
+    <span class="due ${lv.cls}">${lv.txt}</span></div>
+    <div class="src-a ${p.kind==='cho'?'':'neg'}">${money(p.left)}</div></div>`;
+}
 function debtRow(d){
   const i=debtInfo(d), lv=dueLevel(i,d.kind==='cho');
   const ky=d.mode==='gop'&&!i.done?`kỳ ${i.kyDone+1}/${d.periods}`:'';
@@ -503,6 +551,7 @@ Quy ước:
 - nội dung: rút gọn thành nơi nhận hoặc mục đích dễ hiểu, bỏ số tài khoản và mã tham chiếu dài. Nếu thấy tên NGUYEN THI THAO VY trong nội dung thì bỏ tên đó đi, vì đó là tên tôi chứ không phải đối tác.
 - mã đối tác: số tài khoản của người nhận hoặc người gửi, hoặc số điện thoại nếu là nạp điện thoại. Không có thì để trống.
 - Nếu là chuyển tiền từ BIDV vào ví điện tử (nội dung có CASHIN hoặc tên ví), ghi mã nhóm là napvi.
+- Nếu người khác chuyển khoản vào để Vy đưa lại tiền mặt, hoặc Vy chuyển khoản đi để nhận lại tiền mặt (nội dung kiểu "nhờ rút tiền mặt", "đổi tiền mặt", "đưa tiền mặt"), ghi mã nhóm là doitm.
 - Nếu chỉ có mã QR không rõ nơi bán: nội dung ghi "Thanh toán QR", mã nhóm để trống.
 - Nếu không chắc chắn nhóm nào thì để trống mã nhóm, đừng đoán bừa.
 
@@ -615,6 +664,8 @@ function parsePaste(raw){
     if(!isNaN(b)&&b)row.b=b;
     if(party)row.p=party;
     if(code==='napvi'){row.t='mv';row.s='bidv';row.s2='vi';row.c='';}
+    /* đổi tiền mặt hộ người khác (Vy 17/10/2026): không phải thu hay chi, chỉ là tiền đổi chỗ */
+    else if(code==='doitm'&&s0!=='tm'){row.t0=t;row.t='mv';row.doi=1;row.decided=1;if(t==='thu'){row.s='tm';row.s2=s0;}else{row.s=s0;row.s2='tm';}row.c='';}
     else if(validCode(code,t))row.c=code;
     out.push(row);
   });
@@ -691,14 +742,14 @@ function commit(){
     const o={id:Date.now()+Math.random(),d:t.d,a:t.a,t:t.t,n:t.n,s:t.s||'bidv'};
     if(t.t==='mv')o.s2=t.s2||'vi'; else o.c=t.c;
     if(t.tm)o.tm=t.tm; if(t.b)o.b=t.b; if(t.p)o.p=t.p;
-    if(t.han)o._han=t.han;
+    if(t.han)o._han=t.han; if(t.ng)o._ng=t.ng; if(t.doi)o.doi=1;
     if(t.w)o.w=t.w; if(t.q)o.q=1; if(t.sg)o.sg=t.sg; if(t.n0&&t.n0!==t.n)o.n0=t.n0;
     return o;});
   const drop=new Set(pending.filter(t=>t.keep&&t.rep&&t.repDo===1).map(t=>t.rep.id));
   hoiChot({bo:DB.txns.filter(x=>drop.has(String(x.id))),them:add},()=>{
     if(drop.size)DB.txns=DB.txns.filter(x=>!drop.has(String(x.id)));
     DB.txns=DB.txns.concat(add);
-    add.forEach(t=>noTuGD(t,t._han)); add.forEach(t=>delete t._han);
+    add.forEach(t=>{noTuGD(t,t._han,t._ng); ganNg(t,t._ng);}); add.forEach(t=>{delete t._han; delete t._ng;});
     save();
     const nDrop=drop.size;
     pending=null; msg=''; cursor=new Date(); go('home'); autoBackup();
@@ -2217,12 +2268,14 @@ function vDebt(){
   /* Hai ô trên cùng giống khối Nợ ở Tổng quan; danh sách chỉ còn khoản tồn đọng, khoản đã xong gom
      vào màn Lịch sử (Vy duyệt phác thảo 11/10/2026). */
   const conNo=noList.filter(d=>!debtInfo(d).done), conCho=choList.filter(d=>!debtInfo(d).done);
-  const soXong=DB.debts.length-conNo.length-conCho.length;
+  /* gom theo người (Vy 17/10/2026): mỗi người MỘT thẻ, thẻ đóng chỉ ghi tổng */
+  const ngs=nguoiNo(), ngNo=ngs.filter(p=>p.kind==='no'&&!p.done), ngCho=ngs.filter(p=>p.kind==='cho'&&!p.done);
+  const soXong=ngs.filter(p=>p.done).length;
   let h=`<div class="nohai" style="margin-top:4px">
     <div class="nomot ra"><div class="nonhan">↑ KHOẢN PHẢI TRẢ</div><div class="noso">${money(tot.no)}</div>
-      <div class="noph">${conNo.length} khoản · tiền sẽ ra</div></div>
+      <div class="noph">${ngNo.length} người · tiền sẽ ra</div></div>
     <div class="nomot vao"><div class="nonhan">↓ KHOẢN CHỜ THU</div><div class="noso">${money(tot.cho)}</div>
-      <div class="noph">${conCho.length} khoản · tiền sẽ vào</div></div></div>`;
+      <div class="noph">${ngCho.length} người · tiền sẽ vào</div></div></div>`;
 
   DB.debts.map(d=>({d,i:debtInfo(d),lv:dueLevel(debtInfo(d),d.kind==='cho')}))
     .filter(x=>x.lv.k==='over'||x.lv.k==='now'||x.lv.k==='soon'||x.lv.k==='qua')
@@ -2281,11 +2334,12 @@ function vDebt(){
     return x+`</div>`;
   };
 
-  if(conNo.length){ h+=`<h2>Nợ phải trả</h2>`; conNo.slice().sort(sortByDue).forEach(d=>h+=card(d)); }
-  if(conCho.length){ h+=`<h2>Nợ phải thu</h2>`; conCho.slice().sort(sortByDue).forEach(d=>h+=card(d)); }
+  const theoHan=(a,b)=>(a.han||'9999').localeCompare(b.han||'9999');
+  if(ngNo.length){ h+=`<h2>Nợ phải trả</h2>`; ngNo.slice().sort(theoHan).forEach(p=>h+=theNguoi(p,card)); }
+  if(ngCho.length){ h+=`<h2>Nợ phải thu</h2>`; ngCho.slice().sort(theoHan).forEach(p=>h+=theNguoi(p,card)); }
   if(!DB.debts.length)h+=`<div class="sp"></div><div class="empty"><b>Chưa có khoản nào</b>Ghi một giao dịch nhóm Đi vay hoặc Cho mượn, app sẽ tự tạo khoản ở đây.</div>`;
-  else if(!conNo.length&&!conCho.length)h+=`<div class="sp"></div><div class="empty"><b>Không còn khoản nào tồn đọng</b>Các khoản đã xong nằm trong Lịch sử.</div>`;
-  if(soXong)h+=`<button class="ls2-bt" onclick="moLsNo()"><span>Lịch sử · ${soXong} khoản đã xong</span><span>Xem ›</span></button>`;
+  else if(!ngNo.length&&!ngCho.length)h+=`<div class="sp"></div><div class="empty"><b>Không còn khoản nào tồn đọng</b>Các khoản đã xong nằm trong Lịch sử.</div>`;
+  if(soXong)h+=`<button class="ls2-bt" onclick="moLsNo()"><span>Lịch sử · ${soXong} người đã xong</span><span>Xem ›</span></button>`;
   h+=`<div class="sp"></div>`+(nF&&nF.m==='moi'?`<div class="panel" style="padding:13px">${formNo(null)}</div>`
     :`<div class="nf-btns"><button class="btn ghost" onclick="moNo('moi','cho')">+ Cho mượn</button>
       <button class="btn ghost" onclick="moNo('moi','no')">+ Đi vay</button></div>`);
@@ -2293,28 +2347,99 @@ function vDebt(){
   return h;
 }
 
+/* ---- Thẻ một người ở tab Nợ (Vy duyệt phác thảo 17/10/2026) ----
+   Đóng: tên, số lần, ngày hẹn, tổng còn lại. Mở: từng lần mượn / trả theo ngày, số còn lại, các nút.
+   Khóa người có dấu | và tên có dấu cách nên nút bấm dùng số thứ tự trong NGK (dựng lại mỗi lần vẽ). */
+let NGK=[];
+function theNguoi(p,card){
+  const i=NGK.push(p.khoa)-1, k='ng_'+p.khoa, op=!!open[k], cho=p.kind==='cho', hn=iso(new Date());
+  const gop=p.ds.find(d=>d.mode==='gop'), d0=p.mo[0]||p.ds[p.ds.length-1];
+  let han, cls='ng-han';
+  if(gop){const f=debtInfo(gop); han=f.nextDate?'kỳ tới '+ddmm(f.nextDate)+' · '+money(f.nextAmt):'';}
+  else if(p.han)han=(p.han<hn?'đã qua ngày hẹn '+(cho?'thu ':'trả '):'hẹn '+(cho?'thu ':'trả '))+ddmm(p.han);
+  else {han=cho?'chưa hẹn ngày thu':'chưa hẹn ngày trả'; cls='ng-han xam';}
+  const sub=gop?'trả góp · kỳ '+debtInfo(gop).kyDone+'/'+(gop.periods||'')
+    :(cho?'cho mượn ':'vay ')+p.ds.length+' lần'+(p.gd.length?' · '+(cho?'thu về ':'đã trả ')+p.gd.length+' lần':'');
+  let x=`<div class="ng-the"><button class="ng-dau" onclick="moNg(${i})" aria-expanded="${op?'true':'false'}">
+    <span class="ng-ten"><b>${esc(p.ten)}</b><small>${sub}</small>${han?`<span class="${cls}">${han}</span>`:''}</span>
+    <span class="ng-so"><b class="${cho?'pos':'neg'}">${money(p.left)}</b><small>${cho?'còn chờ thu':'còn phải trả'}</small></span>
+    <span class="ng-mui">${op?'▾':'▸'}</span></button>`;
+  /* đang mở form (thu, sửa) hay đang đối chiếu một khoản của người này thì thẻ tự mở */
+  const coForm=nF&&p.ds.some(d=>d.id===nF.id), dangThu=coForm&&nF.m==='thu', coPick=debtPick&&p.ds.some(d=>d.id===debtPick);
+  const K=t=>open[t+'_'+p.khoa], hienK=K('ngk')||(coForm&&!dangThu)||coPick;
+  if(!op&&!coForm&&!coPick)return x+'</div>';
+  const ev=p.ds.map((d,j)=>({d:d.start||'',n:d.mode==='gop'?'Trả góp · tổng phải trả':j===0?(cho?'Cho mượn':'Vay'):(cho?'Cho mượn thêm':'Vay thêm'),
+      a:debtInfo(d).total,ra:cho}))
+    .concat(p.gd.map(t=>({d:t.d,n:cho?'Thu về':(gop?'Trả kỳ':'Trả'),a:-t.a,ra:!cho,nd:t.n})))
+    .sort((a,b)=>a.d.localeCompare(b.d)||(b.a-a.a));
+  x+=`<div class="ng-ds">${ev.map(e=>`<div class="ng-r"><span class="ng-d">${e.d?ddmm(e.d):''}</span><span>${e.n}</span>
+      <span class="ng-a ${e.ra?'ra':'vao'}">${e.a<0?'−':''}${money(Math.abs(e.a))}</span></div>`).join('')}
+    <div class="ng-con"><span>${cho?'Còn chờ thu':'Còn phải trả'}</span><span class="${cho?'pos':'neg'}">${money(p.left)}</span></div>`;
+  if(dangThu&&!hienK)x+=formNo(DB.debts.find(d=>d.id===nF.id));
+  x+=`<div class="ng-nut"><button onclick="moNo('thu','${d0.id}')">${cho?'Ghi thu về':'Ghi trả'}</button>
+      ${gop?'':`<button onclick="themNguoi(${i})">${cho?'Cho mượn thêm':'Vay thêm'}</button>
+      <button onclick="tgNg(${i},'nh')">${cho?'Hẹn ngày thu':'Hẹn ngày trả'}</button>`}
+      <button onclick="tgNg(${i},'ns')">Sửa tên · gộp</button>
+      <button onclick="tgNg(${i},'ngk')">${hienK?'Ẩn từng khoản':'Từng khoản'}</button></div>`;
+  if(K('nh'))x+=`<div class="ng-form"><div class="cat-meta" style="margin-bottom:5px"><span>${cho?'Ngày hẹn thu':'Ngày hẹn trả'} — áp cho mọi lần còn dở</span></div>
+      ${dtInput('hanng-'+i,p.han||'','toi')}<div class="err" id="loi-hanng-${i}" hidden></div>
+      <button class="btn" style="margin-top:8px" onclick="luuHanNg(${i})">Lưu ngày hẹn</button></div>`;
+  if(K('ns')){const khac=nguoiNo().filter(q=>q.kind===p.kind&&q.khoa!==p.khoa);
+    x+=`<div class="ng-form"><div class="cat-meta" style="margin-bottom:5px"><span>Tên người</span></div>
+      <input class="rename" id="ngten-${i}" value="${esc(p.ten)}" style="margin-top:0">
+      <button class="btn" style="margin-top:8px" onclick="luuTenNg(${i})">Lưu tên</button>
+      ${khac.length?`<div class="cat-meta" style="margin:12px 0 5px"><span>Hoặc gộp vào người khác (cùng một người, ghi hai tên):</span></div>
+        <div class="lo-day">${khac.map(q=>{const j=NGK.push(q.khoa)-1;return `<button class="lo-c" onclick="gopNguoi(${i},${j})">Gộp vào ${esc(q.ten)} <small>${money(q.left)}</small></button>`;}).join('')}</div>`:''}</div>`;}
+  if(hienK)x+=`<div class="ng-khoan">${p.ds.map(d=>card(d)).join('')}</div>`;
+  return x+'</div></div>';
+}
+const ngCuaI=i=>(DB.debts||[]).filter(d=>ngKhoa(d)===NGK[i]);
+function tgNg(i,t){const k=t+'_'+NGK[i]; if(open[k])delete open[k]; else open[k]=1; render();}
+function moNg(i){const k='ng_'+NGK[i]; if(open[k])delete open[k]; else open[k]=1; render();}
+function luuHanNg(i){
+  const h=dtRead(nfv('hanng-'+i),'toi');
+  if(!h){loiO('loi-hanng-'+i,h===''?'Chưa gõ ngày.':'Ngày chưa đúng — gõ dạng dd/mm/yy.');return;}
+  ngCuaI(i).filter(d=>d.mode!=='gop'&&!debtInfo(d).done).forEach(d=>{d.due=h;});
+  delete open['nh_'+NGK[i]]; save(); flash('Đã đặt ngày hẹn '+vnd(h)+'.','ok');
+}
+function luuTenNg(i){
+  const nm=nfv('ngten-'+i).trim().slice(0,40); if(!nm){flash('Chưa ghi tên.','err');return;}
+  ngCuaI(i).forEach(d=>{d.nguoi=nm;}); delete open['ns_'+NGK[i]]; save(); flash('Đã đổi tên thành "'+nm+'".','ok');
+}
+function gopNguoi(i,j){
+  const dich=(DB.debts||[]).find(d=>ngKhoa(d)===NGK[j]); if(!dich)return;
+  const ten=ngOf(dich), ds=ngCuaI(i);
+  if(!confirm('Gộp '+ds.length+' khoản của "'+ngOf(ds[0])+'" vào "'+ten+'"? Hai tên sẽ thành một người.'))return;
+  ds.forEach(d=>{d.nguoi=ten;}); open['ng_'+ngKhoa(dich)]=1; save(); flash('Đã gộp vào "'+ten+'".','ok');
+}
+/* "Cho mượn thêm" / "Vay thêm": sang Ghi tay, chọn sẵn nhóm và người — tiền thật đi qua giao dịch */
+function themNguoi(i){
+  const d=ngCuaI(i)[0]; if(!d)return;
+  _mt=d.kind==='cho'?'chi':'thu'; manualCode=d.kind==='cho'?'muon':'divay';
+  mNhap=Object.assign({},mNhap,{ng:NGK[i],n:(d.kind==='cho'?'Cho ':'Vay ')+ngOf(d)+' thêm'}); go('add');
+}
 /* ---- Lịch sử nợ: màn riêng, chỉ mở khi Vy bấm (Vy duyệt phác thảo 11/10/2026) ---- */
 function moLsNo(){open.lsNo=1;render();}
 function dongLsNo(){delete open.lsNo;render();}
 function vLsNo(){
-  const xong=DB.debts.filter(d=>debtInfo(d).done);
-  const nhom=k=>xong.filter(d=>k==='cho'?d.kind==='cho':d.kind!=='cho').map(d=>{
-    const ps=debtTxns(d.id).slice().sort((a,b)=>a.d.localeCompare(b.d));
-    return {d,i:debtInfo(d),ps,ngay:ps.length?ps[ps.length-1].d:''};}).sort((a,b)=>b.ngay.localeCompare(a.ngay));
-  const R=x=>{const op=!!open['lsn_'+x.d.id];
-    return `<button class="ls2-r" onclick="toggle('lsn_${x.d.id}')" aria-expanded="${op?'true':'false'}">
-      <div><div class="ls2-n">${esc(x.d.name)}</div><div class="ls2-m">${x.d.mode==='gop'?'trả góp '+(x.d.periods||'')+' kỳ'
-        :(x.d.kind==='cho'?'cho mượn ':'vay ')+(x.d.start?ddmm(x.d.start):'')}${x.ps.length>1?' · '+x.ps.length+' lần':''}</div></div>
-      <div class="ls2-a">${money(x.i.total)}<small>${x.d.kind==='cho'?'thu đủ':'xong'}${x.ngay?' '+ddmm(x.ngay):''}</small></div></button>`
-      +(op?`<div class="ls2-ct">${x.ps.length?x.ps.map(p=>`<div><span>${ddmm(p.d)} · ${esc(p.n)}</span><b>${money(p.a)}</b></div>`).join('')
-        :'<div><span>không có giao dịch nào gắn với khoản này</span></div>'}</div>`:'');};
+  /* theo NGƯỜI (Vy 17/10/2026): chỉ người đã xong hết; người còn dở thì từng lần đã xong nằm trong thẻ của họ */
+  const xong=nguoiNo().filter(p=>p.done);
+  const nhom=k=>xong.filter(p=>p.kind===k).map(p=>Object.assign(p,{ngay:p.gd.length?p.gd[p.gd.length-1].d:''}))
+    .sort((a,b)=>b.ngay.localeCompare(a.ngay));
+  const R=p=>{const i=NGK.push(p.khoa)-1, op=!!open['ng_'+p.khoa], cho=p.kind==='cho', gop=p.ds.find(d=>d.mode==='gop');
+    return `<button class="ls2-r" onclick="moNg(${i})" aria-expanded="${op?'true':'false'}">
+      <div><div class="ls2-n">${esc(p.ten)}</div><div class="ls2-m">${gop?'trả góp '+(gop.periods||'')+' kỳ'
+        :(cho?'cho mượn ':'vay ')+p.ds.length+' lần'}${p.gd.length>1?' · '+(cho?'thu ':'trả ')+p.gd.length+' lần':''}</div></div>
+      <div class="ls2-a">${money(p.total)}<small>${cho?'thu đủ':'xong'}${p.ngay?' '+ddmm(p.ngay):''}</small></div></button>`
+      +(op?`<div class="ls2-ct">${p.ds.map(d=>`<div><span>${d.start?ddmm(d.start):''} · ${cho?'cho mượn':'vay'}</span><b>${money(debtInfo(d).total)}</b></div>`).join('')}
+        ${p.gd.map(t=>`<div><span>${ddmm(t.d)} · ${esc(t.n)}</span><b>−${money(t.a)}</b></div>`).join('')}</div>`:'');};
   const khoi=(k,nhan,cls)=>{const ds=nhom(k); if(!ds.length)return '';
-    return `<div class="nohd ${cls} ls2-hd"><i></i><span>${nhan}</span><span style="margin-left:auto;font-weight:700">${money(ds.reduce((s,x)=>s+x.i.total,0))}</span></div>
+    return `<div class="nohd ${cls} ls2-hd"><i></i><span>${nhan}</span><span style="margin-left:auto;font-weight:700">${money(ds.reduce((s,p)=>s+p.total,0))}</span></div>
       <div class="panel ls2-ds">${ds.map(R).join('')}</div>`;};
   return `<div class="ls2-dau"><h3>Khoản nợ đã xong</h3><button onclick="dongLsNo()" aria-label="Đóng">✕</button></div>
     ${khoi('no','↑ ĐÃ TRẢ XONG','ra')}${khoi('cho','↓ ĐÃ THU ĐỦ','vao')}
-    ${xong.length?'<div class="stack-note" style="margin-top:10px"><span>Chạm một khoản để xem từng lần trả / thu.</span></div>'
-      :'<div class="empty"><b>Chưa có khoản nào xong</b></div>'}`;
+    ${xong.length?'<div class="stack-note" style="margin-top:10px"><span>Chạm một người để xem từng lần mượn và trả / thu.</span></div>'
+      :'<div class="empty"><b>Chưa có người nào xong</b></div>'}`;
 }
 /* bảng chọn nhóm hai bước, có hàng hay dùng và ô lọc */
 let picker=null;
@@ -3167,30 +3292,29 @@ function vHome(){
     h+=`<div class="nohai">
       <div class="nomot ra"><div class="nonhan">↑ KHOẢN PHẢI TRẢ</div>
         <div class="noso">${money(dt.no)}</div>
-        <div class="noph">${DB.debts.filter(x=>x.kind!=='cho'&&debtInfo(x).left>0).length} khoản · tiền sẽ ra</div></div>
+        <div class="noph">${nguoiNo().filter(p=>p.kind==='no'&&!p.done).length} người · tiền sẽ ra</div></div>
       <div class="nomot vao"><div class="nonhan">↓ KHOẢN CHỜ THU</div>
         <div class="noso">${money(dt.cho)}</div>
-        <div class="noph">${DB.debts.filter(x=>x.kind==='cho'&&debtInfo(x).left>0).length} khoản · tiền sẽ vào</div></div>
+        <div class="noph">${nguoiNo().filter(p=>p.kind==='cho'&&!p.done).length} người · tiền sẽ vào</div></div>
     </div>`;
     h+=`<button class="fold" id="sec-debt" style="margin-top:0" onclick="toggle('nono')">
       <span style="font-size:13.5px"><span class="xomui" data-mui="nono" data-a="▾" data-b="▸">${open.nono?'▾':'▸'}</span> Xem từng khoản</span></button>`;
     if(1){ h+='<div class="xow" data-xo="'+("nono")+'" data-open="'+((open.nono)?1:0)+'">';
       h+=`<div class="panel" style="border-radius:0 0 var(--r) var(--r);border-top:0">`;
       /* chi liet ke khoan CHUA XONG — khoan da tat toan xem o tab No */
-      const _con=x=>debtInfo(x).left>0;
-      const _no=DB.debts.filter(x=>x.kind!=='cho'&&_con(x));
-      const _cho=DB.debts.filter(x=>x.kind==='cho'&&_con(x));
-      const _xong=DB.debts.length-_no.length-_cho.length;
+      /* theo người (Vy 17/10/2026): mỗi người một dòng, số là tổng còn lại */
+      const _ng=nguoiNo(), _no=_ng.filter(p=>p.kind==='no'&&!p.done), _cho=_ng.filter(p=>p.kind==='cho'&&!p.done);
+      const _xong=_ng.length-_no.length-_cho.length;
       if(_no.length){h+=`<div class="nohd ra"><i></i><span>↑ KHOẢN PHẢI TRẢ</span>`
         +`<span style="margin-left:auto;font-weight:700">${money(dt.no)}</span></div>`;
-        _no.forEach(d=>h+=debtRow(d));}
+        _no.forEach(p=>h+=dongNguoi(p));}
       if(_cho.length){h+=`<div class="nohd vao"><i></i><span>↓ KHOẢN CHỜ THU</span>`
         +`<span style="margin-left:auto;font-weight:700">${money(dt.cho)}</span></div>`;
-        _cho.forEach(d=>h+=debtRow(d));}
+        _cho.forEach(p=>h+=dongNguoi(p));}
       if(!_no.length&&!_cho.length)h+=`<div class="src" style="padding:13px 14px">`
         +`<div class="src-m">Không còn khoản nợ nào chưa xong.</div></div>`;
       if(_xong)h+=`<div class="src" style="padding:10px 14px">`
-        +`<div class="src-m">${_xong} khoản đã tất toán — xem ở tab Nợ.</div></div>`;
+        +`<div class="src-m">${_xong} người đã xong — xem ở tab Nợ.</div></div>`;
       h+=`</div><div class="sp"></div><button class="btn ghost" onclick="go('debt')">Mở sổ nợ</button>`;
       h+='</div>';
     }
@@ -3225,13 +3349,18 @@ function vImport(){
                 <button onclick="askSpend(${i})">Đã tiêu — tôi tự ghi mua gì</button>
                 <button onclick="askKeep(${i})">Mới nạp, chưa tiêu</button>
               </div>`
+          : t.t==='mv'&&t.doi
+            ? `<div class="tag">${esc(srcOf(t.s).n)} → ${esc(srcOf(t.s2).n)} · đổi tiền mặt, không tính là ${t.s==='tm'?'thu':'chi'}</div>
+               <button class="chk-btn" onclick="boDoiP(${i})">không phải đổi tiền mặt</button>`
           : t.t==='mv'
-            ? `<div class="tag">BIDV → ${esc(srcOf(t.s2).n)} · tiền vẫn của Vy, chưa tính là chi</div>`
+            ? `<div class="tag">${esc(srcOf(t.s).n)} → ${esc(srcOf(t.s2).n)} · tiền vẫn của Vy, chưa tính là chi</div>`
             : `${t.q?`<div class="hint">Quét QR nên không có tên nơi bán — Vy điền giúp.</div>`:''}
                <input class="rename" value="${esc(t.n)}" placeholder="${t.q?'Mua gì, ở đâu?':'Nội dung'}" onchange="setName(${i},this.value)">
                ${catBtn(t.c,t.t,'pending',i)}
                ${t.c&&groupOf(t.c).subs.length?`<button class="chk-btn" style="margin-left:8px" onclick="splitStart('pending',${i})">chia nhiều mục</button>`:''}
+               ${t.s!=='tm'&&(t.t==='thu'||t.t==='chi')?`<button class="chk-btn" style="margin-left:8px" onclick="doiTMP(${i})">đổi tiền mặt</button>`:''}
                ${t.w?`<div class="tag">qua ví ${esc(t.w)}</div>`:''}
+               ${khoiChonNg(t,i)}
                ${(()=>{const g=t.c?groupOf(t.c).id:'';const cho=g==='muon'&&t.t==='chi', vay=g==='divay'&&t.t==='thu';
                  return cho||vay?`<div class="rev-han"><div class="cat-meta" style="margin:8px 0 5px"><span>${cho?'Dự kiến thu lại ngày':'Dự kiến trả ngày'}</span></div>
                    ${dtInput('phan-'+i,t.han||'','toi','placeholder="dd/mm/yy · để trống nếu chưa biết" onchange="setHanP('+i+',this.value)"')}</div>`:'';})()}`}
@@ -3283,20 +3412,32 @@ function vImport(){
   h+=`<h2>Ghi tay</h2><div class="panel">
     <div class="two">
       <div class="fld"><span>Loại</span><select id="mt" onchange="_mt=this.value;render()">
-        ${[['chi','Chi'],['thu','Thu'],['mv','Chuyển tiền']].map(([v,n])=>`<option value="${v}" ${_mt===v?'selected':''}>${n}</option>`).join('')}</select></div>
+        ${[['chi','Chi'],['thu','Thu'],['mv','Chuyển nguồn'],['doi','Đổi tiền mặt']].map(([v,n])=>`<option value="${v}" ${_mt===v?'selected':''}>${n}</option>`).join('')}</select></div>
       <div class="fld"><span>Số tiền</span><input id="ma" inputmode="text" placeholder="50k" value="${esc(mNhap.a)}" oninput="mNhap.a=this.value"></div>
     </div>
-    <div class="fld"><span>Nội dung</span><input id="mn" placeholder="${_mt==='mv'?'Rút tiền mặt':'Cà phê sáng'}" value="${esc(mNhap.n)}" oninput="mNhap.n=this.value"></div>
-    <div class="two">
+    <div class="fld"><span>Nội dung</span><input id="mn" placeholder="${_mt==='mv'?'Rút tiền mặt':_mt==='doi'?'Đổi tiền mặt cho anh B':'Cà phê sáng'}" value="${esc(mNhap.n)}" oninput="mNhap.n=this.value"></div>
+    ${_mt==='doi'?`<div class="dt-seg" id="mdoi" data-v="${mNhap.doi||'vao'}">
+        <button type="button" data-v="vao" class="${(mNhap.doi||'vao')==='vao'?'on':''}" onclick="segChon(this);mNhap.doi='vao'">Người khác chuyển khoản vào, Vy đưa tiền mặt</button>
+        <button type="button" data-v="ra" class="${mNhap.doi==='ra'?'on':''}" onclick="segChon(this);mNhap.doi='ra'">Vy chuyển khoản đi, nhận lại tiền mặt</button></div>
+      <div class="fld"><span>Tài khoản nhận / chuyển</span>
+        <select id="msrc" onchange="mNhap.s=this.value">${SRC.filter(s=>s.id!=='tm').map(s=>`<option value="${s.id}" ${s.id===(mNhap.s||'bidv')?'selected':''}>${s.n}</option>`).join('')}</select></div>
+      <div class="dt-hop">Tổng tiền của Vy không đổi: tài khoản và tiền mặt chỉ đổi chỗ cho nhau, không tính là thu hay chi.</div>`:''}
+    ${_mt==='doi'?'':`<div class="two">
       <div class="fld"><span>${_mt==='mv'?'Từ nguồn':'Nguồn tiền'}</span>
         <select id="msrc" onchange="mNhap.s=this.value">${SRC.map(s=>`<option value="${s.id}" ${s.id===(mNhap.s||(_mt==='chi'?'tm':'bidv'))?'selected':''}>${s.n}</option>`).join('')}</select></div>
       <div class="fld"><span>${_mt==='mv'?'Sang nguồn':'Nhóm'}</span>
         ${_mt==='mv'
           ? `<select id="ms2">${SRC.map(s=>`<option value="${s.id}" ${s.id==='tm'?'selected':''}>${s.n}</option>`).join('')}</select>`
           : catBtn(manualCode,_mt,'manual','0')}</div>
-    </div>
+    </div>`}
     <div class="fld"><span>Ngày</span>${dtInput('md',mNhap.d||iso(new Date()),'qua','onchange="mNhapNgay(this)"')}</div>
-    ${(()=>{const g=manualCode&&_mt!=='mv'?groupOf(manualCode).id:'';
+    ${(()=>{/* Cho mượn / Thu nợ / Đi vay / Trả nợ: chọn người (Vy duyệt 17/10/2026) */
+      const l=manualCode&&(_mt==='chi'||_mt==='thu')?loaiNg({c:manualCode,t:_mt}):null; if(!l)return '';
+      const ds=nguoiNo().filter(p=>p.kind===l.kind&&(!p.done||p.khoa===mNhap.ng)); if(!ds.length&&!l.moi)return '';
+      return `<div class="fld"><span>${l.nhan}</span><select id="mng" onchange="mNhap.ng=this.value">
+        <option value="">${l.moi?'+ Người mới (tên lấy từ nội dung)':'Để app tự nhận theo tên'}</option>
+        ${ds.map(p=>`<option value="${esc(p.khoa)}" ${mNhap.ng===p.khoa?'selected':''}>${esc(p.ten)} · ${l.kind==='cho'?'đang chờ thu':'đang nợ'} ${money(p.left)}</option>`).join('')}</select></div>`;})()}
+    ${(()=>{const g=manualCode&&_mt!=='mv'&&_mt!=='doi'?groupOf(manualCode).id:'';
       const vay=g==='divay'&&_mt==='thu', cho=g==='muon'&&_mt==='chi';
       return vay||cho?`<div class="fld fld-han"><span>${cho?'Ngày dự kiến thu':'Ngày dự kiến trả'}
         <em>— app tạo luôn khoản ${cho?'chờ thu':'phải trả'} bên tab Nợ</em></span>
@@ -3913,15 +4054,54 @@ function segChon(b){
   f.querySelectorAll('[data-when^="'+p.id+':"]').forEach(e=>{e.hidden=e.dataset.when!==p.id+':'+b.dataset.v;});
 }
 const nfv=id=>{const e=document.getElementById(id);return e?e.value:'';};
-/* tạo khoản nợ từ một giao dịch Đi vay / Cho mượn — dùng chung cho dán từ AI và ghi tay */
-function noTuGD(t,han){
+/* tạo khoản nợ từ một giao dịch Đi vay / Cho mượn — dùng chung cho dán từ AI và ghi tay.
+   ng: khóa người Vy chọn ("cho|Chị Lan") → khoản mới thuộc người đó. */
+function noTuGD(t,han,ng){
   const g=groupOf(t.c).id;
   if(!((g==='divay'&&t.t==='thu')||(g==='muon'&&t.t==='chi')))return null;
   const d={id:'d'+Date.now()+Math.random().toString(36).slice(2,6),
     name:cleanName(t.n), kind:g==='divay'?'no':'cho', mode:'canhan', principal:t.a, start:t.d};
+  if(ng&&ng.split('|')[0]===d.kind){const cu=(DB.debts||[]).find(x=>ngKhoa(x)===ng); if(cu)d.nguoi=ngOf(cu);}
+  if(!han&&d.nguoi){const cu=(DB.debts||[]).find(x=>ngKhoa(x)===ng&&x.due&&!debtInfo(x).done); if(cu)han=cu.due;}
   if(han)d.due=han;
   DB.debts.push(d); return d;
 }
+/* giao dịch là gì đối với sổ nợ: tạo khoản mới (Cho mượn / Đi vay) hay trả / thu (Thu nợ / Trả nợ) */
+function loaiNg(t){
+  const g=t.c?groupOf(t.c).id:'';
+  if(g==='muon'&&t.t==='chi')return {kind:'cho',moi:1,nhan:'Ghi vào khoản của ai?'};
+  if(g==='thuno'&&t.t==='thu')return {kind:'cho',moi:0,nhan:'Thu về từ ai?'};
+  if(g==='divay'&&t.t==='thu')return {kind:'no',moi:1,nhan:'Vay của ai?'};
+  if(g==='trano'&&t.t==='chi')return {kind:'no',moi:0,nhan:'Trả cho ai?'};
+  return null;
+}
+/* lần trả / thu Vy đã chọn người → gắn vào khoản còn dở cũ nhất của người đó (phanBo chia tiếp nếu dư) */
+function ganNg(t,ng){
+  const l=loaiNg(t); if(!ng||!l||l.moi||ng.split('|')[0]!==l.kind)return;
+  const ds=(DB.debts||[]).filter(x=>ngKhoa(x)===ng).sort((a,b)=>(a.start||'').localeCompare(b.start||''));
+  const d=ds.find(x=>!debtInfo(x).done)||ds[ds.length-1]; if(d)t.debt=d.id;
+}
+/* các nút chọn người cho một dòng đang xem lại ở tab Nhập (Vy duyệt phác thảo 17/10/2026) */
+function khoiChonNg(t,i){
+  const l=loaiNg(t); if(!l)return '';
+  if(t.ng===undefined)t.ng=doanNguoi(t,l.kind);
+  const ds=nguoiNo().filter(p=>p.kind===l.kind&&(!p.done||p.khoa===t.ng));
+  if(!ds.length&&!l.moi)return '';
+  const nut=(on,fn,ten,phu)=>`<button class="${on?'on':''}" onclick="${fn}">${ten} <small>${phu}</small></button>`;
+  return `<div class="dt-hop"><b>${l.nhan}</b><div class="dt-chon">`
+    +ds.map(p=>{const j=NGK.push(p.khoa)-1;
+      return nut(t.ng===p.khoa,`chonNgP(${i},${j})`,esc(p.ten),(l.kind==='cho'?'đang chờ thu ':'đang nợ ')+money(p.left)
+        +(!l.moi&&t.ng===p.khoa?' → còn '+money(Math.max(0,p.left-t.a)):''));}).join('')
+    +(l.moi?nut(!t.ng,`chonNgP(${i},-1)`,'+ Người mới','tên lấy từ nội dung'):'')
+    +'</div></div>';
+}
+/* đổi một dòng thu / chi thành đổi tiền mặt, và đổi lại */
+function doiTMP(i){const t=pending[i]; if(!t||t.t==='mv')return; const s0=t.s||'bidv';
+  t.t0=t.t; t.c0=t.c; if(t.t==='thu'){t.s='tm';t.s2=s0;}else{t.s=s0;t.s2='tm';}
+  t.t='mv'; t.doi=1; t.decided=1; t.c=''; delete t.ng; render();}
+function boDoiP(i){const t=pending[i]; if(!t||!t.doi)return; const bank=t.s==='tm'?t.s2:t.s;
+  t.t=t.t0||(t.s==='tm'?'thu':'chi'); t.s=bank; delete t.s2; t.c=t.c0||''; delete t.doi; delete t.t0; delete t.c0; render();}
+function chonNgP(i,j){pending[i].ng=j<0?'':NGK[j];render();}
 function luuNoMoi(){
   const k=nF.k, nm=nfv('nf-ten').trim(), a=parseAmt(nfv('nf-tien'));
   if(!nm){nfLoi('Chưa ghi tên người hoặc tên món.');return;}
@@ -4131,13 +4311,18 @@ function addManual(){
   const hEl=document.getElementById('mhan'), han=hEl?dtRead(hEl.value,'toi'):'';
   if(han===null){flash('Ngày hẹn chưa đúng — gõ dạng dd/mm/yy.','err');return;}
   const o={id:Date.now()+Math.random(),d:ngay,
-    a,t:type,n:n||(type==='mv'?'Chuyển tiền':'Giao dịch'),s:document.getElementById('msrc').value};
-  if(type==='mv'){o.s2=document.getElementById('ms2').value;
+    a,t:type,n:n||(type==='mv'?'Chuyển tiền':type==='doi'?'Đổi tiền mặt':'Giao dịch'),s:document.getElementById('msrc').value};
+  if(type==='doi'){
+    /* đổi tiền mặt (Vy 17/10/2026): người khác chuyển vào → tiền mặt sang tài khoản; Vy chuyển đi → ngược lại */
+    const tk=o.s; o.t='mv'; o.doi=1;
+    if((mNhap.doi||'vao')==='vao'){o.s='tm';o.s2=tk;}else{o.s=tk;o.s2='tm';}
+  }else if(type==='mv'){o.s2=document.getElementById('ms2').value;
     if(o.s2===o.s){flash('Hai nguồn phải khác nhau.','err');return;}}
   else{o.c=manualCode;
     if(!o.c){flash('Chưa chọn nhóm.','err');return;}}
+  const ngEl=document.getElementById('mng'), ng=ngEl?ngEl.value:'';
   hoiChot({them:[o]},()=>{
-    DB.txns.push(o); noTuGD(o,han);
+    DB.txns.push(o); noTuGD(o,han,ng); ganNg(o,ng);
     manualCode=''; mNhap={a:'',n:'',s:'',d:'',han:''}; save();msg='';cursor=new Date();go('home');autoBackup();
   });
 }
@@ -4164,6 +4349,7 @@ function move(n){cursor=new Date(cursor.getFullYear(),cursor.getMonth()+n,1);sel
 const TABS=[['home','Tổng quan','◉'],['add','Nhập','＋'],['list','Giao dịch','☰'],['debt','Nợ','◈'],['budget','Ngân sách','◐'],['trend','Xu hướng','◪']];
 let toTop=true;
 function render(){
+  NGK=[];
   memoClear();
   const y=window.scrollY||window.pageYOffset||0;
   const showMonth=tab==='home'||tab==='list';

@@ -9,6 +9,8 @@ globalThis.__set=(db,cur,t)=>{DB=db;cursor=cur||new Date();tab=t||'home';open={}
 globalThis.__f={dtFmt,dtRead,vnd,ngayLuongToi,balAt,balSrcAt,vDebt,vImport,vList,vHome,commit,addManual,
   luuNoMoi,luuSuaNo,luuHan,payDebt,setDate,setHanP};
 globalThis.__nF=v=>{nF=v;};
+/* từ v=24 nợ gom theo người: thẻ từng khoản nằm trong thẻ người → mở hết để kiểm */
+globalThis.__moNo=()=>{nguoiNo().forEach(p=>{open['ng_'+p.khoa]=1;open['ngk_'+p.khoa]=1;});};
 globalThis.__pend=p=>{pending=p;};
 globalThis.__man=(c,t)=>{manualCode=c;_mt=t||'chi';mNhap={a:'',n:'',s:'',d:'',han:''};};
 globalThis.__db=()=>DB;
@@ -121,7 +123,7 @@ console.log('\nD · Tab Nợ: thêm khoản ngay trong trang, không hộp tho�
   ok(nam.name==='Anh Nam'&&nam.principal===500000&&!('due' in nam),'gõ "500k", bỏ trống ngày → vẫn lưu, không có hạn');
   eq(new Set(db.debts.map(x=>x.id)).size,db.debts.length,'ba khoản lưu cùng một mili-giây vẫn có mã KHÁC nhau');
 
-  ctx.__nF(null); h=F.vDebt();
+  ctx.__nF(null); ctx.__moNo(); h=F.vDebt();
   ok(h.includes('han-'+nam.id)&&h.includes('Chưa có <b>ngày dự kiến thu</b>'),'khoản chưa có ngày → hiện ô điền ngày ngay trên thẻ');
   ok(!h.includes('han-'+d.id),'khoản ĐÃ có ngày → KHÔNG hiện ô điền ngày');
   {const the=h.slice(h.indexOf('>Anh Nam<'));const i=the.indexOf('data-xo="h_'+nam.id+'"');

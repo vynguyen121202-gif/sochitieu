@@ -11,6 +11,16 @@ globalThis.__cc=d=>coCau(d);
 globalThis.__no=d=>noThang(d);
 globalThis.__nv=(g,d)=>noVuot(g,d);
 globalThis.__tk=d=>thanhKhoan(d);
+globalThis.__ng=()=>nguoiNo();
+globalThis.__mNhap=v=>{mNhap=Object.assign({a:'',n:'',s:'',d:'',han:''},v);manualCode='';};
+Object.assign(globalThis.__f,{addManual});
+globalThis.__ngk=()=>NGK;
+globalThis.__paid=id=>paidOf(id);
+globalThis.__tot=()=>debtTotals();
+globalThis.__pend=p=>{pending=p;};
+globalThis.__pending=()=>pending;
+globalThis.__parse=t=>parsePaste(t);
+Object.assign(globalThis.__f,{gopNguoi,commit,doiTMP,boDoiP});
 globalThis.__tv=(g,d)=>truVuot(g,d);
 globalThis.__ci=(g,d)=>carryIn(g,d);
 globalThis.__lf=()=>listFiltered();
@@ -563,9 +573,9 @@ console.log('\nQ · Tab Nợ: hai ô giống Tổng quan, chỉ khoản tồn đ
   db.txns.push({id:nid++,d:'2026-09-18',t:'thu',a:70000,c:'thuno',s:'bidv',n:'Minh trả',debt:'dB'},
                {id:nid++,d:'2026-09-07',t:'chi',a:200000,c:'trano_cn',s:'bidv',n:'Trả chị Hà',debt:'dC'});
   ctx.__set(db,T10); ctx.__tab('debt'); ctx.__render(); let h=appEl.innerHTML;
-  ok(h.includes('↓ KHOẢN CHỜ THU</div><div class="noso">'+M(500000))&&h.includes('1 khoản · tiền sẽ vào')&&h.includes('0 khoản · tiền sẽ ra'),'hai ô: chờ thu 500.000 (1 khoản), phải trả 0');
+  ok(h.includes('↓ KHOẢN CHỜ THU</div><div class="noso">'+M(500000))&&h.includes('1 người · tiền sẽ vào')&&h.includes('0 người · tiền sẽ ra'),'hai ô: chờ thu 500.000 (1 người), phải trả 0');
   ok(h.includes('>Lan<')&&!h.includes('>Minh<')&&!h.includes('>Chị Hà<'),'danh sách chỉ còn khoản tồn đọng (Lan)');
-  ok(h.includes('Lịch sử · 2 khoản đã xong')&&h.includes('moLsNo()'),'nút "Lịch sử · 2 khoản đã xong"');
+  ok(h.includes('Lịch sử · 2 người đã xong')&&h.includes('moLsNo()'),'nút "Lịch sử · 2 người đã xong"');
   ctx.__moV('lsNo',1); ctx.__render(); h=appEl.innerHTML;
   ok(h.includes('Khoản nợ đã xong')&&h.includes('dongLsNo()'),'màn Lịch sử riêng, có nút ✕ đóng');
   ok(h.includes('↑ ĐÃ TRẢ XONG')&&h.includes('Chị Hà')&&h.includes('xong 07/09'),'phần Đã trả xong: Chị Hà, xong 07/09');
@@ -621,6 +631,85 @@ console.log('\nS · Số tiền còn lại được dùng để chi = min(hạn 
   ctx.__tab('debt'); ctx.__render(); const hn=appEl.innerHTML; ctx.__tab('home');
   ok(hn.includes('Mẹ — đã qua ngày hẹn thu 02/10, còn chờ thu '+M(1000000)),'tab Nợ: "Mẹ — đã qua ngày hẹn thu 02/10, còn chờ thu 1.000.000"');
   ok(!/Mẹ — quá hạn/.test(hn)&&!/Mẹ[^<]*phải trả/.test(hn),'KHÔNG còn "quá hạn", KHÔNG ghi "phải trả" cho khoản chờ thu');
+}
+
+console.log('\nT · Nợ theo người: mượn nhiều lần, trả dần nhiều lần (Vy 17/10/2026)');
+{
+  HOM='2026-10-17'; const db=so(); db.batDau='2026-09-01';
+  db.debts=[{id:'l1',name:'Chị Lan',kind:'cho',mode:'canhan',principal:1000000,start:'2026-09-20'},
+            {id:'l2',name:'Chị Lan',kind:'cho',mode:'canhan',principal:300000,start:'2026-09-29'},
+            {id:'m1',name:'Anh Minh',kind:'cho',mode:'canhan',principal:500000,start:'2026-09-25'}];
+  db.txns.push({id:nid++,d:'2026-09-20',t:'chi',a:1000000,c:'muon',s:'bidv',n:'Chi Lan'},
+    {id:nid++,d:'2026-09-29',t:'chi',a:300000,c:'muon',s:'bidv',n:'Chi Lan'},
+    {id:nid++,d:'2026-10-06',t:'thu',a:1100000,c:'thuno',s:'bidv',n:'Lan tra',debt:'l2'});
+  ctx.__set(db,T10);
+  const p=ctx.__ng().find(x=>x.ten==='Chị Lan');
+  ok(p&&p.ds.length===2&&p.total===1300000&&p.left===200000,'Chị Lan: 2 lần cho mượn 1.300.000, thu về 1.100.000 → còn 200.000');
+  ok(ctx.__paid('l1')===1000000&&ctx.__paid('l2')===100000,'tiền thu chia vào khoản CŨ NHẤT trước: lần 1 đủ 1.000.000, lần 2 mới 100.000 (dù giao dịch gắn vào lần 2)');
+  ok(ctx.__tot().cho===700000,'tổng chờ thu = Lan 200.000 + Minh 500.000 = 700.000');
+  ctx.__tab('debt'); ctx.__render(); let h=appEl.innerHTML;
+  ok(h.includes('2 người · tiền sẽ vào'),'ô chờ thu đếm theo người: 2 người');
+  ok((h.match(/<b>Chị Lan<\/b>/g)||[]).length===1,'Chị Lan chỉ MỘT thẻ, dù có hai lần cho mượn');
+  ok(h.includes('cho mượn 2 lần · thu về 1 lần'),'thẻ đóng ghi "cho mượn 2 lần · thu về 1 lần"');
+  ok(!h.includes('ng-ds'),'thẻ đóng chỉ hiện tổng, không liệt kê từng lần');
+  ctx.__moV('ng_cho|Chị Lan',1); ctx.__render(); h=appEl.innerHTML;
+  ok(h.includes('>Cho mượn<')&&h.includes('>Cho mượn thêm<')&&h.includes('>Thu về<')&&h.includes('−'+M(1100000)),'mở thẻ: Cho mượn · Cho mượn thêm · Thu về −1.100.000 theo ngày');
+  ok(h.indexOf('20/09')<h.indexOf('29/09')&&h.indexOf('29/09')<h.indexOf('06/10'),'xếp theo ngày');
+  ok(h.includes('Còn chờ thu</span><span class="pos">'+M(200000)),'cuối thẻ: Còn chờ thu 200.000');
+  /* gộp hai tên của cùng một người */
+  db.debts.push({id:'m2',name:'Minh',kind:'cho',mode:'canhan',principal:100000,start:'2026-10-08'}); ctx.__set(db,T10);
+  ctx.__tab('debt'); ctx.__render();
+  const ks=ctx.__ngk(), iM=ks.indexOf('cho|Minh'), iAM=ks.indexOf('cho|Anh Minh');
+  F.gopNguoi(iM,iAM);
+  const pm=ctx.__ng().find(x=>x.ten==='Anh Minh');
+  ok(pm&&pm.ds.length===2&&pm.left===600000&&!ctx.__ng().some(x=>x.ten==='Minh'),'gộp "Minh" vào "Anh Minh": một người, còn 600.000');
+  ctx.__tab('home');
+}
+
+console.log('\nU · Tab Nhập: chọn người cho dòng Cho mượn / Thu nợ');
+{
+  HOM='2026-10-17'; const db=so(); db.batDau='2026-09-01';
+  db.debts=[{id:'l1',name:'Chị Lan',kind:'cho',mode:'canhan',principal:1000000,start:'2026-09-20'}];
+  ctx.__set(db,T10);
+  ctx.__pend([{d:'2026-10-10',a:300000,t:'chi',n:'Chuyen tien cho chi Lan',n0:'Chuyen tien cho chi Lan',s:'bidv',c:'muon',keep:true},
+              {d:'2026-10-12',a:400000,t:'thu',n:'LAN tra tien',n0:'LAN tra tien',s:'bidv',c:'thuno',keep:true}]);
+  ctx.__tab('add'); ctx.__render(); const h=appEl.innerHTML;
+  ok(h.includes('Ghi vào khoản của ai?')&&h.includes('Thu về từ ai?'),'hai dòng hiện câu hỏi chọn người');
+  ok(ctx.__pending()[0].ng==='cho|Chị Lan'&&ctx.__pending()[1].ng==='cho|Chị Lan','app tự đoán đúng Chị Lan theo tên trong nội dung');
+  ok(h.includes('+ Người mới'),'dòng Cho mượn có lựa chọn "+ Người mới"');
+  F.commit(); const d2=ctx.__db();
+  const moi=d2.debts.find(x=>x.principal===300000);
+  ok(moi&&ngTen(moi)==='Chị Lan','khoản cho mượn mới thuộc Chị Lan');
+  const thu=d2.txns.find(x=>x.n==='LAN tra tien');
+  ok(thu&&thu.debt==='l1','lần thu gắn vào khoản cũ nhất của Chị Lan');
+  ctx.__set(d2,T10); const p=ctx.__ng().find(x=>x.ten==='Chị Lan');
+  eq(p.left,1000000+300000-400000,'Chị Lan còn 900.000');
+  ctx.__tab('home');
+  function ngTen(d){return d.nguoi||d.name;}
+}
+
+console.log('\nV · Đổi tiền mặt hộ người khác (Vy 17/10/2026)');
+{
+  HOM='2026-10-17'; const db=so(); db.batDau='2026-09-01'; ctx.__set(db,T10);
+  const r=ctx.__parse('2026-10-15 10:00 | bidv | thu | 500000 | NGUYEN VAN B nho rut tien mat | doitm |  | 0123\n2026-10-16 11:00 | bidv | chi | 200000 | Chuyen cho C doi tien mat | doitm |  | 0456');
+  ok(r[0].t==='mv'&&r[0].s==='tm'&&r[0].s2==='bidv'&&r[0].doi,'mã doitm, tiền vào BIDV → Tiền mặt sang BIDV (không phải thu)');
+  ok(r[1].t==='mv'&&r[1].s==='bidv'&&r[1].s2==='tm','mã doitm, tiền ra BIDV → BIDV sang Tiền mặt (không phải chi)');
+  ctx.__pend([{d:'2026-10-15',a:500000,t:'thu',n:'B chuyen',n0:'B chuyen',s:'bidv',c:'tkhac',keep:true}]);
+  F.doiTMP(0); let pd=ctx.__pending()[0];
+  ok(pd.t==='mv'&&pd.s==='tm'&&pd.s2==='bidv'&&!pd.c,'bấm "đổi tiền mặt" trên dòng tiền vào: thành Tiền mặt → BIDV');
+  ctx.__tab('add'); ctx.__render(); ok(appEl.innerHTML.includes('đổi tiền mặt, không tính là thu'),'dòng ghi rõ "đổi tiền mặt, không tính là thu"');
+  F.boDoiP(0); pd=ctx.__pending()[0];
+  ok(pd.t==='thu'&&pd.s==='bidv'&&pd.c==='tkhac','bấm "không phải đổi tiền mặt": trở lại tiền vào, nhóm cũ');
+  F.doiTMP(0); const truoc=F.balAt(T10); F.commit(); const d2=ctx.__db(); ctx.__set(d2,T10);
+  eq(F.balAt(T10),truoc,'lưu xong tổng số dư KHÔNG đổi');
+  const b=F.balSrcAt(T10); ok(F.bangTien(T10).tongVao===F.bangTien(T10).tongVao&&!F.bangTien(T10).vao.some(v=>v.a===500000),'không tính vào Thực thu');
+  { const d3=ctx.__db(); ctx.__set(d3,T10); const tr=F.balSrcAt(T10), tong=F.balAt(T10);
+    O={}; o('mt','doi'); o('ma','300k'); o('mn',''); o('md','16/10/26'); o('msrc','bidv'); ctx.__mNhap({doi:'ra'});
+    F.addManual(); const d4=ctx.__db(), x=d4.txns[d4.txns.length-1]; ctx.__set(d4,T10); const sa=F.balSrcAt(T10);
+    ok(x.t==='mv'&&x.s==='bidv'&&x.s2==='tm'&&x.doi&&x.n==='Đổi tiền mặt','ghi tay "Vy chuyển khoản đi, nhận lại tiền mặt": BIDV → Tiền mặt, tên "Đổi tiền mặt"');
+    ok(sa.bidv===tr.bidv-300000&&sa.tm===tr.tm+300000&&F.balAt(T10)===tong,'BIDV −300.000, Tiền mặt +300.000, tổng không đổi'); O={}; }
+  ok(/doitm/.test(SRC_APP.slice(SRC_APP.indexOf('function promptText'),SRC_APP.indexOf('function promptText')+6000)),'câu lệnh A.I có hướng dẫn mã doitm');
+  ctx.__tab('home');
 }
 
 console.log(loi?'\n✗ '+loi+' lỗi':'\n✓ đạt hết');

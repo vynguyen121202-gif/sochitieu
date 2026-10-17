@@ -655,3 +655,37 @@ input.dt{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius
 .lns-nay .con b{color:var(--ink);font-weight:700}
 .lns-xong{display:flex;gap:10px;align-items:center;padding:11px 14px;margin-top:12px;border-radius:14px;background:var(--okbg);font-size:13px}
 .lns-xong span:first-child{color:var(--pos);font-weight:700}
+/* ---- v=24: nợ theo người (ng-), chọn người / đổi tiền mặt ở tab Nhập (dt-) ---- */
+.ng-the{background:var(--card);border:1px solid var(--line);border-radius:var(--r);margin-bottom:9px;overflow:hidden}
+.ng-dau{display:flex;width:100%;align-items:center;gap:10px;padding:13px 14px;border:0;background:none;text-align:left;color:var(--ink);min-height:56px}
+.ng-ten{flex:1;min-width:0}
+.ng-ten b{display:block;font-size:15px;font-weight:600}
+.ng-ten small{display:block;font-size:12px;color:var(--ink-3);margin-top:2px}
+.ng-so{text-align:right;white-space:nowrap}
+.ng-so b{display:block;font-size:16px;font-weight:700}
+.ng-so b.pos,.ng-con .pos{color:var(--pos)}.ng-so b.neg,.ng-con .neg{color:var(--brick)}
+.ng-so small{display:block;font-size:11px;color:var(--ink-3);margin-top:1px}
+.ng-mui{color:var(--ink-3);font-size:12px;margin-left:2px}
+.ng-han{display:inline-block;margin-top:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:var(--warnbg);color:var(--warntx)}
+.ng-han.xam{background:var(--greybg);color:var(--ink-2)}
+.ng-ds{border-top:1px solid var(--line-2);background:var(--rowb);padding:4px 14px 10px}
+.ng-r{display:grid;grid-template-columns:48px 1fr auto;gap:8px;align-items:baseline;padding:8px 0;border-bottom:1px dashed var(--line);font-size:13px}
+.ng-r .ng-d{color:var(--ink-3);font-size:12px}
+.ng-r .ng-a{font-weight:600;white-space:nowrap}
+.ng-r .ng-a.ra{color:var(--brick)}.ng-r .ng-a.vao{color:var(--pos)}
+.ng-con{display:flex;justify-content:space-between;padding:9px 0 2px;font-size:13px;font-weight:700}
+.ng-nut{display:flex;gap:14px;flex-wrap:wrap;padding:10px 0 2px}
+.ng-nut button{background:none;border:0;padding:6px 0;min-height:36px;color:var(--jade);font-weight:600;font-size:12.5px}
+.ng-form{margin-top:8px;padding:10px 12px;border-radius:12px;background:var(--card);border:1px solid var(--line)}
+.ng-khoan{margin-top:10px}
+.dt-hop{margin-top:10px;padding:10px 12px;border-radius:14px;background:var(--tint);border:1px solid var(--tintbd);font-size:12.5px;line-height:1.5}
+.dt-hop b{font-weight:600}
+.dt-chon{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.dt-chon button{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:44px;padding:8px 12px;border-radius:12px;
+  border:1px solid var(--line);background:var(--card);font-size:13px;text-align:left;color:var(--ink)}
+.dt-chon button.on{border-color:var(--jade);background:var(--tintb);font-weight:600}
+.dt-chon button small{color:var(--ink-3);font-size:11.5px;text-align:right}
+.dt-seg{display:flex;gap:6px;margin:4px 14px 10px}
+.dt-seg button{flex:1;min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--field);font-size:12.5px;font-weight:600;color:var(--ink-2);padding:6px 8px}
+.dt-seg button.on{background:var(--jade);border-color:var(--jade);color:var(--onacc)}
+.panel>.dt-hop{margin:0 14px 12px}

@@ -1210,9 +1210,9 @@ function paceWhy2(pa){
   var f='số dư'+cong.map(function(s){return ' + '+s;}).join('')+tru.map(function(s){return ' − '+s;}).join('')
     +' − ('+soDD+')'+(hen?' · sau khi thu + '+hen:'');
   /* (b) tiền thật trừ để dành; hiện tại và sau khi thu đặt CẠNH NHAU, hai màu khác nhau (Vy 28/09) */
-  var soB=so; x+=ctT('('+so+') Tiền thật trừ để dành',f,q.henTong
+  var soB=so; x+='<div class="ct-r tot">'+ctN(so,'Tiền thật trừ để dành',f)+(q.henTong
     ?'<span class="ct-hai"><b class="'+(q.conTien<0?'am':'duong')+'">'+money(q.conTien)+'</b> <i>→</i> <b class="sau">'+money(q.conTien1)+'</b></span>'
-    :'<b class="'+(q.conTien<0?'am':'duong')+'">'+money(q.conTien)+'</b>');so++;
+    :'<b class="'+(q.conTien<0?'am':'duong')+'">'+money(q.conTien)+'</b>')+'</div>';so++;
   /* (a) hạn mức linh hoạt còn lại; kết quả = số nhỏ hơn (Vy duyệt 11/10/2026) */
   var soA=so; x+=ctR(so,'Hạn mức linh hoạt còn lại',q.conHM,'hạn mức linh hoạt − đã chi linh hoạt');so++;
   x+=ctT('Số tiền còn lại được dùng để chi','số nhỏ hơn giữa ('+soA+') và ('+soB+')'+(q.theoTien?' · đang theo số dư thật':' · đang theo hạn mức'),

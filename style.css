@@ -689,3 +689,8 @@ input.dt{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius
 .dt-seg button{flex:1;min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--field);font-size:12.5px;font-weight:600;color:var(--ink-2);padding:6px 8px}
 .dt-seg button.on{background:var(--jade);border-color:var(--jade);color:var(--onacc)}
 .panel>.dt-hop{margin:0 14px 12px}
+/* dòng tổng trong bảng KẾT QUẢ: tên dài + cặp số "hiện tại → sau khi thu" không đủ một hàng thì số
+   xuống hàng dưới, canh phải — trước đây cả hai đều không được xuống dòng nên chữ đè lên nhau (Vy 17/10) */
+.ct-r.tot{flex-wrap:wrap;row-gap:4px}
+.ct-r.tot>.ct-n{flex:1 1 auto}
+.ct-r.tot>b,.ct-r.tot>.ct-hai{margin-left:auto}

@@ -160,7 +160,7 @@ const K9='2026-09', dem=(s,x)=>s.split(x).length-1;
   db.chot={[K9]:{luc:new Date('2026-10-01T09:12:00').getTime(),bidv:6000000,vi:0,tm:-70000,tong:5930000}};
   db.v=12; db=F.migrate(db);
   eq(JSON.stringify(db.chot[K9].goc),JSON.stringify({luc:db.chot[K9].luc,bidv:6000000,vi:0,tm:-70000,tong:5930000}),'migrate v12 → v13: lần 1 = đúng bản chốt đang có');
-  ok(db.v===14&&Array.isArray(db.chotLS)&&!db.chotLS.length&&db.nsChot&&!Object.keys(db.nsChot).length,'…sổ lên v14, nhật ký chốt rỗng, chưa chốt ngân sách tháng nào');
+  ok(db.v===15&&Array.isArray(db.chotLS)&&!db.chotLS.length&&db.nsChot&&!Object.keys(db.nsChot).length&&db.lichThu&&!Object.keys(db.lichThu).length,'…sổ lên v15, nhật ký chốt rỗng, chưa chốt ngân sách tháng nào, chưa có lịch hẹn thu');
   ctx.__set(db,T9);
   let h=F.vHome();
   ok(h.includes('đã chốt 01/10'),'Tổng kết tháng 9 ghi "đã chốt 01/10"');
@@ -307,8 +307,8 @@ console.log('\nD5 · Cho mượn không phải khoản hạn mức (Vy 11/10/202
 console.log('\nE · Sổ cũ');
 {
   const cu=F.migrate({txns:[],v:10,goals:[],opens:{}});
-  ok(cu.v===14&&cu.nsChot&&cu.chot&&!Object.keys(cu.chot).length&&cu.batDau===''&&Array.isArray(cu.chotLS),'sổ v10 qua migrate → v14, chot rỗng, batDau trống (sẽ hỏi), nhật ký chốt rỗng');
-  ok((SRC_APP.match(/if\(\(d\.v\|\|1\)<14\)d=migrate\(d\);/g)||[]).length===2,'load VÀ khôi phục sao lưu đều chạy migrate khi sổ dưới v14');
+  ok(cu.v===15&&cu.nsChot&&cu.chot&&!Object.keys(cu.chot).length&&cu.batDau===''&&Array.isArray(cu.chotLS),'sổ v10 qua migrate → v15, chot rỗng, batDau trống (sẽ hỏi), nhật ký chốt rỗng');
+  ok((SRC_APP.match(/if\(\(d\.v\|\|1\)<15\)d=migrate\(d\);/g)||[]).length===2,'load VÀ khôi phục sao lưu đều chạy migrate khi sổ dưới v15');
 }
 
 console.log('\nF · Khoản cố định chỉ khớp giao dịch CÙNG NHÓM (lỗi 26/09/2026)');

@@ -1,6 +1,6 @@
 /* Chạy hết bài kiểm tra: node kiemtra/chay-tat-ca.js */
 const {execFileSync}=require('child_process'), path=require('path');
-const bo=['kt-tongquan.js','kt-nhap-tong.js','kt-nhap-loi.js','kt-nhac-ghi-so.js','kt-ngay-no.js','kt-chot-so.js'];
+const bo=['kt-tongquan.js','kt-nhap-tong.js','kt-nhap-loi.js','kt-nhac-ghi-so.js','kt-ngay-no.js','kt-chot-so.js','kt-hen-thu.js'];
 let loi=0, diem=0;
 for(const f of bo){
   let r, chet=false;

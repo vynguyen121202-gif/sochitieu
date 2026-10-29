@@ -678,6 +678,23 @@ input.dt{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius
 .ng-nut button{background:none;border:0;padding:6px 0;min-height:36px;color:var(--jade);font-weight:600;font-size:12.5px}
 .ng-form{margin-top:8px;padding:10px 12px;border-radius:12px;background:var(--card);border:1px solid var(--line)}
 .ng-khoan{margin-top:10px}
+/* lịch hẹn thu nhiều đợt — tiền tố ht- */
+.ht-ds{margin-top:8px}
+.ht-tl{font-size:12px;font-weight:600;color:var(--ink);margin-bottom:2px}
+.ht-dot{display:flex;justify-content:space-between;gap:10px;padding:6px 0;font-size:12.5px;border-bottom:1px dashed var(--line)}
+.ht-dot:last-child{border-bottom:0}
+.ht-xong{color:var(--ink-3);text-decoration:line-through}
+.ht-nho{color:var(--ink-3)}
+.ht-dot em{font-style:normal;font-size:11px;padding:1px 7px;border-radius:99px;background:var(--okbg);color:var(--pos);margin-left:6px;white-space:nowrap}
+.ht-dau{display:grid;grid-template-columns:1fr 1fr 32px;gap:8px;font-size:11px;color:var(--ink-3);font-weight:600;letter-spacing:.03em;text-transform:uppercase}
+.ht-r{display:grid;grid-template-columns:1fr 1fr 32px;gap:8px;align-items:center;margin-top:8px}
+.ht-r input{min-height:44px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--field);color:var(--ink);font-size:16px;text-align:center;min-width:0;width:100%}
+.ht-r button{width:32px;height:32px;border-radius:50%;border:0;background:var(--greybg);color:var(--ink-3)}
+.ht-them{background:none;border:0;color:var(--jade);font-weight:600;font-size:12.5px;padding:8px 0;min-height:36px}
+.ht-cong{display:flex;justify-content:space-between;gap:10px;margin-top:6px;font-size:12.5px;color:var(--ink-2)}
+.ht-cong>span{white-space:nowrap}
+.ht-cong b{color:var(--ink);text-align:right}
+.ht-cong b.am{color:var(--brick)}.ht-cong b.ht-thieu{color:var(--warntx)}
 .dt-hop{margin-top:10px;padding:10px 12px;border-radius:14px;background:var(--tint);border:1px solid var(--tintbd);font-size:12.5px;line-height:1.5}
 .dt-hop b{font-weight:600}
 .dt-chon{margin-top:8px;display:flex;flex-direction:column;gap:6px}

@@ -197,17 +197,19 @@ function migrate(d){
       if(c&&!c.goc)c.goc={luc:c.luc,bidv:c.bidv||0,vi:c.vi||0,tm:c.tm||0,tong:c.tong||0};});
     d.chotLS=Array.isArray(d.chotLS)?d.chotLS:[]; }
   if(v<14){ d.nsChot=d.nsChot||{}; }     /* v14: tháng đã chốt ngân sách — sổ cũ chưa chốt tháng nào */
-  d.v=14; return d;
+  /* v15: lịch hẹn thu nhiều đợt theo NGƯỜI — sổ cũ chưa có lịch nào, khoản cũ vẫn dùng ô due như trước */
+  if(v<15){ d.lichThu=d.lichThu||{}; }
+  d.v=15; return d;
 }
 async function load(){try{const raw=await store.get();if(raw){let d=JSON.parse(raw);
-  if((d.v||1)<14)d=migrate(d);
+  if((d.v||1)<15)d=migrate(d);
   DB=Object.assign({},d,{txns:Array.isArray(d.txns)?d.txns:[],debts:Array.isArray(d.debts)?d.debts:[],
     budgets:d.budgets||{},bm:d.bm||{},goals:Array.isArray(d.goals)?d.goals:[],fixedItems:Array.isArray(d.fixedItems)?d.fixedItems:[],roll:d.roll||{},offsets:Array.isArray(d.offsets)?d.offsets:[],draws:Array.isArray(d.draws)?d.draws:[],income:d.income||0,rules:d.rules||{},
     opens:Object.assign({bidv:0,vi:0,tm:0},d.opens||{}),checks:d.checks||{},
     opts:Object.assign({ab:'off'},d.opts||{}),chainOK:d.chainOK||{},ngayOK:d.ngayOK||{},
     efTarget:d.efTarget||0,efGop:d.efGop||0,goalPlan:Object.assign({mode:'auto',a:0},d.goalPlan||{}),
     payDays:Object.assign({k1:[5,10],k2:[15,25]},d.payDays||{}),
-    chot:d.chot||{},chotLS:Array.isArray(d.chotLS)?d.chotLS:[],nsChot:d.nsChot||{},batDau:d.batDau||'',lastBackup:d.lastBackup||0,v:14});}}catch(e){}}
+    chot:d.chot||{},chotLS:Array.isArray(d.chotLS)?d.chotLS:[],nsChot:d.nsChot||{},lichThu:d.lichThu||{},batDau:d.batDau||'',lastBackup:d.lastBackup||0,v:15});}}catch(e){}}
 /* ==================== nhớ tạm trong một lượt vẽ ====================
    render() dựng lại cả trang, nên cùng một phép tính bị gọi lại hàng chục lần:
    pace() hai lượt, balances() hai lượt, fixedPaid() ba lượt cho mỗi khoản cố định.
@@ -420,6 +422,18 @@ function phanBo(khoa){
 const paidOf=id=>{const mk='paid'+id; if(mk in _memo)return _memo[mk];
   const d=(DB.debts||[]).find(x=>x.id===id);
   return _memo[mk]=d?(phanBo(ngKhoa(d))[id]||0):debtTxns(id).reduce((s,t)=>s+t.a,0);};
+/* ---- Lịch hẹn thu nhiều đợt (Vy duyệt phác thảo đợt 5, 29/10/2026) ----
+   DB.lichThu[khóa người] = {goc, dot:[{d,a}]}; goc = tổng đã thu của người đó lúc lưu lịch.
+   Tiền thu về SAU lúc lưu (đã thu − goc) trừ vào đợt sớm nhất trước.
+   Ví dụ: hẹn 500.000 ngày 20/10 + 500.000 ngày 05/11, thu 300.000 → đợt 20/10 còn 200.000. */
+const thuCuaNg=khoa=>(DB.debts||[]).filter(x=>ngKhoa(x)===khoa).reduce((s,d)=>s+debtTxns(d.id).reduce((s2,t)=>s2+t.a,0),0);
+function lichNg(khoa){
+  const mk='lt'+khoa; if(mk in _memo)return _memo[mk];
+  const L=DB.lichThu&&DB.lichThu[khoa]; if(!L||!Array.isArray(L.dot)||!L.dot.length)return _memo[mk]=null;
+  let con=Math.max(0,thuCuaNg(khoa)-(L.goc||0));
+  const dot=L.dot.slice().sort((a,b)=>a.d.localeCompare(b.d)).map(x=>{const thu=Math.min(x.a,con); con-=thu; return {d:x.d,a:x.a,thu,con:x.a-thu};});
+  return _memo[mk]={dot,toi:dot.find(x=>x.con>0)||null,tong:dot.reduce((s,x)=>s+x.a,0)};
+}
 /* danh sách người: {khoa, ten, kind, ds:[khoản], left, total, paid, gd:[lần trả/thu]} */
 function nguoiNo(){
   const m={};
@@ -481,7 +495,11 @@ function debtInfo(dt){
     kyDone=Math.min(dt.periods||0,Math.floor(paid/dt.per));
     if(left>0){nextDate=addMonths(dt.start||iso(new Date()),kyDone);
       nextAmt=Math.min(left,Math.max(0,dt.per*(kyDone+1)-paid));}
-  }else if(left>0){nextDate=dt.due||'';nextAmt=left;}
+  }else if(left>0){
+    /* khoản chờ thu của người đã có lịch hẹn: ngày hẹn = đợt sớm nhất còn chưa thu đủ */
+    const L=dt.kind==='cho'?lichNg(ngKhoa(dt)):null;
+    if(L){nextDate=L.toi?L.toi.d:'';nextAmt=L.toi?Math.min(left,L.toi.con):0;}
+    else{nextDate=dt.due||'';nextAmt=left;}}
   const days=nextDate?Math.ceil((new Date(nextDate+'T00:00')-new Date(iso(new Date())+'T00:00'))/864e5):null;
   return {total,paid,left,lai,nextDate,nextAmt,kyDone,days,done:left<=0};
 }
@@ -990,11 +1008,21 @@ function thanhKhoan(d){
   let cdLeft=0; Object.keys(gids).forEach(g=>{cdLeft+=fixedOfGroup(g,d).left;});
   /* chỉ cộng khoản hẹn thu CHƯA tới ngày; qua ngày mà chưa thu thì thôi cộng, về lại danh sách chưa thu (Vy 27/09) */
   const k=ym(d), hnay=iso(new Date()); let henTong=0, henNgay="", henCuoi="", henSo=0, treo=[];
+  const coLich={};
   (DB.debts||[]).forEach(x=>{
     if(x.kind!=="cho")return;
     const i=debtInfo(x); if(i.left<=0)return;
+    const kh=ngKhoa(x); if(lichNg(kh)){coLich[kh]=(coLich[kh]||0)+i.left;return;}
     if(x.due&&x.due.slice(0,7)===k&&x.due>=hnay){henTong+=i.left; henSo++; if(!henNgay||x.due<henNgay)henNgay=x.due; if(!henCuoi||x.due>henCuoi)henCuoi=x.due;}
     else treo.push({n:x.name,a:i.left});
+  });
+  /* người có lịch nhiều đợt: chỉ cộng phần còn chưa thu của những đợt rơi vào tháng này và CHƯA tới ngày;
+     phần còn lại (đợt tháng sau, đợt đã qua mà chưa thu) là "chưa tính" */
+  Object.keys(coLich).forEach(kh=>{
+    let a=0; lichNg(kh).dot.forEach(x=>{if(x.con>0&&x.d.slice(0,7)===k&&x.d>=hnay){a+=x.con; henSo++;
+      if(!henNgay||x.d<henNgay)henNgay=x.d; if(!henCuoi||x.d>henCuoi)henCuoi=x.d;}});
+    a=Math.min(a,coLich[kh]); henTong+=a;
+    if(coLich[kh]-a>0)treo.push({n:kh.slice(4),a:coLich[kh]-a});
   });
   const A0=tien+luongChuaVe-noConPhai-cdLeft, A1=A0+henTong;
   const B=Math.max(0,bud("tk",d)-spentOf("tk",d))+goalMonthly();
@@ -2349,7 +2377,9 @@ function theNguoi(p,card){
   const gop=p.ds.find(d=>d.mode==='gop'), d0=p.mo[0]||p.ds[p.ds.length-1];
   let han, cls='ng-han';
   if(gop){const f=debtInfo(gop); han=f.nextDate?'kỳ tới '+ddmm(f.nextDate)+' · '+money(f.nextAmt):'';}
-  else if(p.han)han=(p.han<hn?'đã qua ngày hẹn '+(cho?'thu ':'trả '):'hẹn '+(cho?'thu ':'trả '))+ddmm(p.han);
+  else if(p.han){const L=cho?lichNg(p.khoa):null, nd=L?L.dot.length:0;
+    han=p.han<hn?'đã qua ngày hẹn '+(cho?'thu ':'trả ')+ddmm(p.han)
+      :nd>1?'hẹn thu '+nd+' đợt · đợt tới '+ddmm(p.han):'hẹn '+(cho?'thu ':'trả ')+ddmm(p.han);}
   else {han=cho?'chưa hẹn ngày thu':'chưa hẹn ngày trả'; cls='ng-han xam';}
   const sub=gop?'trả góp · kỳ '+debtInfo(gop).kyDone+'/'+(gop.periods||'')
     :(cho?'cho mượn ':'vay ')+p.ds.length+' lần'+(p.gd.length?' · '+(cho?'thu về ':'đã trả ')+p.gd.length+' lần':'');
@@ -2368,13 +2398,19 @@ function theNguoi(p,card){
   x+=`<div class="ng-ds">${ev.map(e=>`<div class="ng-r"><span class="ng-d">${e.d?ddmm(e.d):''}</span><span>${e.n}</span>
       <span class="ng-a ${e.ra?'ra':'vao'}">${e.a<0?'−':''}${money(Math.abs(e.a))}</span></div>`).join('')}
     <div class="ng-con"><span>${cho?'Còn chờ thu':'Còn phải trả'}</span><span class="${cho?'pos':'neg'}">${money(p.left)}</span></div>`;
+  {const L=cho&&!p.done?lichNg(p.khoa):null;
+    if(L)x+=`<div class="ht-ds"><div class="ht-tl">Lịch hẹn thu</div>${L.dot.map(o=>`<div class="ht-dot">${o.con<=0
+      ?`<span class="ht-xong">${ddmm(o.d)} · ${money(o.a)}</span><span class="ht-nho">đã thu đủ</span>`
+      :o.thu>0?`<span class="ht-xong">${ddmm(o.d)} · ${money(o.a)}</span><span>đã thu ${money(o.thu)}<em>còn ${money(o.con)}</em></span>`
+      :`<span>${ddmm(o.d)}</span><b>${money(o.a)}</b>`}</div>`).join('')}</div>`;}
   if(dangThu&&!hienK)x+=formNo(DB.debts.find(d=>d.id===nF.id));
   x+=`<div class="ng-nut"><button onclick="moNo('thu','${d0.id}')">${cho?'Ghi thu về':'Ghi trả'}</button>
       ${gop?'':`<button onclick="themNguoi(${i})">${cho?'Cho mượn thêm':'Vay thêm'}</button>
       <button onclick="tgNg(${i},'nh')">${cho?'Hẹn ngày thu':'Hẹn ngày trả'}</button>`}
       <button onclick="tgNg(${i},'ns')">Sửa tên · gộp</button>
       <button onclick="tgNg(${i},'ngk')">${hienK?'Ẩn từng khoản':'Từng khoản'}</button></div>`;
-  if(K('nh'))x+=`<div class="ng-form"><div class="cat-meta" style="margin-bottom:5px"><span>${cho?'Ngày hẹn thu':'Ngày hẹn trả'} — áp cho mọi lần còn dở</span></div>
+  if(K('nh')&&cho)x+=formLich(i,p);
+  else if(K('nh'))x+=`<div class="ng-form"><div class="cat-meta" style="margin-bottom:5px"><span>${cho?'Ngày hẹn thu':'Ngày hẹn trả'} — áp cho mọi lần còn dở</span></div>
       ${dtInput('hanng-'+i,p.han||'','toi')}<div class="err" id="loi-hanng-${i}" hidden></div>
       <button class="btn" style="margin-top:8px" onclick="luuHanNg(${i})">Lưu ngày hẹn</button></div>`;
   if(K('ns')){const khac=nguoiNo().filter(q=>q.kind===p.kind&&q.khoa!==p.khoa);
@@ -2387,7 +2423,7 @@ function theNguoi(p,card){
   return x+'</div></div>';
 }
 const ngCuaI=i=>(DB.debts||[]).filter(d=>ngKhoa(d)===NGK[i]);
-function tgNg(i,t){const k=t+'_'+NGK[i]; if(open[k])delete open[k]; else open[k]=1; render();}
+function tgNg(i,t){const k=t+'_'+NGK[i]; if(open[k])delete open[k]; else open[k]=1; if(t==='nh')htF=null; render();}
 function moNg(i){const k='ng_'+NGK[i]; if(open[k])delete open[k]; else open[k]=1; render();}
 function luuHanNg(i){
   const h=dtRead(nfv('hanng-'+i),'toi');
@@ -2395,14 +2431,68 @@ function luuHanNg(i){
   ngCuaI(i).filter(d=>d.mode!=='gop'&&!debtInfo(d).done).forEach(d=>{d.due=h;});
   delete open['nh_'+NGK[i]]; save(); flash('Đã đặt ngày hẹn '+vnd(h)+'.','ok');
 }
+/* ---- bảng sửa lịch hẹn thu nhiều đợt. Chữ đang gõ giữ trong htF để thêm / bớt đợt không mất ---- */
+let htF=null;
+function formLich(i,p){
+  if(!htF||htF.khoa!==p.khoa){const L=lichNg(p.khoa);
+    htF={khoa:p.khoa,dot:L?L.dot.filter(o=>o.con>0).map(o=>({d:vnd(o.d),a:money(o.con)})):[{d:p.han?vnd(p.han):'',a:money(p.left)}]};}
+  return `<div class="ng-form ht-hop">
+    ${htF.dot.length?'<div class="ht-dau"><span>Ngày hẹn</span><span>Số tiền</span><span></span></div>':''}
+    ${htF.dot.map((o,r)=>`<div class="ht-r">
+      <input class="dt" id="htd-${r}" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="dd/mm/yy" data-huong="toi" value="${esc(o.d)}" oninput="dtGo(this,event);htSua(${r},'d',this.value)" aria-label="Ngày hẹn đợt ${r+1}">
+      <input id="hta-${r}" inputmode="numeric" autocomplete="off" placeholder="số tiền" value="${esc(o.a)}" oninput="this.value=fmtTien(this.value);htSua(${r},'a',this.value)" aria-label="Số tiền đợt ${r+1}">
+      <button onclick="htXoa(${r})" aria-label="Bỏ đợt ${r+1}">✕</button></div>`).join('')}
+    <button class="ht-them" onclick="htThem()">+ Thêm đợt</button>
+    <div class="ht-cong" id="ht-cong">${htCong(p.left)}</div>
+    <div class="err" id="loi-ht" hidden></div>
+    <button class="btn" style="margin-top:10px" onclick="luuLich(${i})">Lưu lịch hẹn</button></div>`;
+}
+function htCong(left){
+  const s=htF.dot.reduce((t,o)=>t+(parseAmt(o.a)||0),0);
+  return '<span>Cộng các đợt</span><b class="'+(s>left?'am':s<left?'ht-thieu':'')+'">'+money(s)+' / '+money(left)+' còn chờ thu'
+    +(s===left?' ✓':s<left?' · còn '+money(left-s)+' chưa hẹn':' · nhiều hơn '+money(s-left))+'</b>';
+}
+const htLeft=()=>nguoiNo().find(q=>q.khoa===htF.khoa).left;
+function htSua(r,f,v){htF.dot[r][f]=v; const e=document.getElementById('ht-cong'); if(e)e.innerHTML=htCong(htLeft());}
+function htThem(){htF.dot.push({d:'',a:''});render();}
+function htXoa(r){htF.dot.splice(r,1);render();}
+function luuLich(i){
+  const khoa=NGK[i], left=htLeft(), dot=[];
+  for(let r=0;r<htF.dot.length;r++){const o=htF.dot[r], d=dtRead(o.d,'toi'), a=parseAmt(o.a);
+    if(!d){loiO('loi-ht','Đợt '+(r+1)+': '+(d===''?'chưa gõ ngày.':'ngày chưa đúng — gõ dạng dd/mm/yy.'));return;}
+    if(!a||isNaN(a)){loiO('loi-ht','Đợt '+(r+1)+': chưa có số tiền.');return;}
+    dot.push({d,a:Math.round(a)});}
+  const s=dot.reduce((t,o)=>t+o.a,0);
+  if(s>left){loiO('loi-ht','Cộng các đợt '+money(s)+' nhiều hơn số còn chờ thu '+money(left)+'.');return;}
+  dot.sort((a,b)=>a.d.localeCompare(b.d)); DB.lichThu=DB.lichThu||{};
+  const mo=ngCuaI(i).filter(d=>d.mode!=='gop'&&!debtInfo(d).done);
+  if(dot.length){DB.lichThu[khoa]={goc:thuCuaNg(khoa),dot}; mo.forEach(d=>{d.due=dot[0].d;});}
+  else{delete DB.lichThu[khoa]; mo.forEach(d=>{delete d.due;});}
+  htF=null; delete open['nh_'+khoa]; save();
+  flash(dot.length?'Đã lưu lịch hẹn thu '+dot.length+' đợt.':'Đã bỏ lịch hẹn thu.','ok');
+}
+/* đổi tên / gộp người thì khóa người đổi — lịch hẹn thu đi theo khóa mới.
+   goc cộng thêm phần đã thu của người được gộp vào, để tiền cũ không bị tính là thu theo lịch */
+function doiKhoaLich(cu,moi){
+  const T=DB.lichThu; if(!T||!T[cu]||cu===moi)return;
+  const thuMoi=thuCuaNg(moi);
+  if(T[moi])T[moi].goc=(T[moi].goc||0)+thuCuaNg(cu);
+  else T[moi]=Object.assign({},T[cu],{goc:(T[cu].goc||0)+thuMoi});
+  delete T[cu];
+}
 function luuTenNg(i){
   const nm=nfv('ngten-'+i).trim().slice(0,40); if(!nm){flash('Chưa ghi tên.','err');return;}
-  ngCuaI(i).forEach(d=>{d.nguoi=nm;}); delete open['ns_'+NGK[i]]; save(); flash('Đã đổi tên thành "'+nm+'".','ok');
+  const cu=NGK[i], ds=ngCuaI(i), moi=ds.length?(ds[0].kind==='cho'?'cho':'no')+'|'+nm:cu;
+  if(DB.lichThu&&DB.lichThu[cu])doiKhoaLich(cu,moi);
+  else if(DB.lichThu&&DB.lichThu[moi]&&moi!==cu)DB.lichThu[moi].goc=(DB.lichThu[moi].goc||0)+thuCuaNg(cu);
+  ds.forEach(d=>{d.nguoi=nm;}); delete open['ns_'+cu]; save(); flash('Đã đổi tên thành "'+nm+'".','ok');
 }
 function gopNguoi(i,j){
   const dich=(DB.debts||[]).find(d=>ngKhoa(d)===NGK[j]); if(!dich)return;
   const ten=ngOf(dich), ds=ngCuaI(i);
   if(!confirm('Gộp '+ds.length+' khoản của "'+ngOf(ds[0])+'" vào "'+ten+'"? Hai tên sẽ thành một người.'))return;
+  if(DB.lichThu&&DB.lichThu[NGK[i]])doiKhoaLich(NGK[i],NGK[j]);
+  else if(DB.lichThu&&DB.lichThu[NGK[j]])DB.lichThu[NGK[j]].goc=(DB.lichThu[NGK[j]].goc||0)+thuCuaNg(NGK[i]);
   ds.forEach(d=>{d.nguoi=ten;}); open['ng_'+ngKhoa(dich)]=1; save(); flash('Đã gộp vào "'+ten+'".','ok');
 }
 /* "Cho mượn thêm" / "Vay thêm": sang Ghi tay, chọn sẵn nhóm và người — tiền thật đi qua giao dịch */
@@ -3830,7 +3920,7 @@ function vInfo(){
    ['Hạn mức linh hoạt','tổng hạn mức các nhóm linh hoạt, trừ Tiết kiệm, trừ Trả nợ, trừ Cho mượn, cộng khoản bù qua lại giữa các nhóm và phần hạn mức tồn đã chủ động rút trong tháng, trừ phần vượt tháng trước chưa bù. Tên cũ là "Được tiêu cả tháng".'],
    ['Vượt hạn mức trừ sang tháng sau','nhóm nào tháng trước chi quá hạn mức mà chưa được bù từ nhóm khác thì phần vượt trừ thẳng vào hạn mức linh hoạt của nhóm đó tháng này. Chỉ trừ vào phần linh hoạt, không đụng khoản cố định; trừ không hết thì phần còn lại trừ tiếp sang tháng sau nữa. Ví dụ: Ăn uống tháng 9 vượt 322.500 → hạn mức linh hoạt tháng 10 còn 500.000 − 322.500 = 177.500. Phần dư thì khác: chỉ nhóm bật "cộng dồn" mới giữ lại thành hạn mức tồn.'],
 
-   ['Số tiền còn lại được dùng để chi','lấy SỐ NHỎ HƠN của hai số. (a) Hạn mức linh hoạt còn lại = hạn mức linh hoạt trừ đã chi linh hoạt — đây là cách tính bình thường. (b) Tiền thật trừ để dành = số dư hiện tại + lương kế hoạch chưa về − nợ còn phải trả trong tháng − chi phí cố định chưa trả − phần cần để dành. Chỉ khi tiền thật không đủ cho hạn mức còn lại thì app dùng (b) và ghi "tính theo số dư thật". Khoản cho vay hẹn ngày thu trong tháng, CHƯA tới ngày, được cộng vào (b) và hiện hai số: bây giờ và sau khi thu; qua ngày hẹn mà chưa thu thì thôi cộng. Ví dụ 11/10: (a) 4.342.486 − 2.073.750 = 2.268.736; (b) 7.684.444 − 2.015.000 = 5.669.444; lấy 2.268.736.'],
+   ['Số tiền còn lại được dùng để chi','lấy SỐ NHỎ HƠN của hai số. (a) Hạn mức linh hoạt còn lại = hạn mức linh hoạt trừ đã chi linh hoạt — đây là cách tính bình thường. (b) Tiền thật trừ để dành = số dư hiện tại + lương kế hoạch chưa về − nợ còn phải trả trong tháng − chi phí cố định chưa trả − phần cần để dành. Chỉ khi tiền thật không đủ cho hạn mức còn lại thì app dùng (b) và ghi "tính theo số dư thật". Khoản cho vay hẹn ngày thu trong tháng, CHƯA tới ngày, được cộng vào (b) và hiện hai số: bây giờ và sau khi thu; qua ngày hẹn mà chưa thu thì thôi cộng. Hẹn thu nhiều đợt thì chỉ cộng phần chưa thu của các đợt rơi vào tháng này; tiền thu về trừ vào đợt sớm nhất trước (ví dụ hẹn 500.000 ngày 20/10 + 500.000 ngày 05/11 → tháng 10 cộng 500.000). Ví dụ 11/10: (a) 4.342.486 − 2.073.750 = 2.268.736; (b) 7.684.444 − 2.015.000 = 5.669.444; lấy 2.268.736.'],
    ['Cần để dành','tiền Tiết kiệm & Đầu tư còn phải chuyển trong tháng, cộng mức góp Quỹ dự phòng. Được trừ khỏi tiền thật trước khi so với hạn mức còn lại, nên Số tiền còn lại được dùng để chi không bao giờ ăn vào phần này.'],
    ['Hạn mức cần chú ý','xét riêng phần linh hoạt của từng nhóm: hạn mức trừ đi khoản cố định của nhóm, đã chi trừ đi phần cố định đã trả. Nhóm hiện lên khi tiêu quá hạn mức (đã vượt), tiêu vừa hết (đã hết), đã dùng từ 80% trở lên (sắp hết), hoặc đã dùng vượt nhịp tháng quá 15 điểm phần trăm (tiêu nhanh). Nhóm thuần chi phí cố định không xét. Xếp nhóm dùng nhiều phần trăm nhất lên đầu.'],
    ['Nhịp tiêu — mẫu số','tổng hạn mức các nhóm linh hoạt, trừ Tiết kiệm, trừ Trả nợ, trừ Cho mượn, cộng khoản bù qua lại giữa các nhóm và phần hạn mức tồn đã chủ động rút trong tháng.'],
@@ -4321,11 +4411,11 @@ function addManual(){
 }
 function applyBackup(d){
   if(!d||!Array.isArray(d.txns))throw 0;
-  if((d.v||1)<14)d=migrate(d);
+  if((d.v||1)<15)d=migrate(d);
   DB=Object.assign({},d,{txns:d.txns,debts:Array.isArray(d.debts)?d.debts:[],budgets:d.budgets||{},
     fixedItems:Array.isArray(d.fixedItems)?d.fixedItems:[],roll:d.roll||{},offsets:Array.isArray(d.offsets)?d.offsets:[],draws:Array.isArray(d.draws)?d.draws:[],income:d.income||0,rules:d.rules||{},
     opens:Object.assign({bidv:0,vi:0,tm:0},d.opens||{}),checks:d.checks||{},
-    opts:Object.assign({ab:'off'},d.opts||{}),efGop:d.efGop||0,chot:d.chot||{},chotLS:Array.isArray(d.chotLS)?d.chotLS:[],nsChot:d.nsChot||{},batDau:d.batDau||'',lastBackup:d.lastBackup||0,v:14});
+    opts:Object.assign({ab:'off'},d.opts||{}),efGop:d.efGop||0,chot:d.chot||{},chotLS:Array.isArray(d.chotLS)?d.chotLS:[],nsChot:d.nsChot||{},lichThu:d.lichThu||{},batDau:d.batDau||'',lastBackup:d.lastBackup||0,v:15});
   save();flash('Đã khôi phục '+d.txns.length+' giao dịch.','ok');
 }
 function restoreFile(el){const f=el.files&&el.files[0];if(!f)return;
@@ -4335,7 +4425,7 @@ function restoreFile(el){const f=el.files&&el.files[0];if(!f)return;
 function doRestore(){try{applyBackup(JSON.parse(document.getElementById('restore').value));}
   catch(e){flash('Bản sao lưu không đọc được.','err');}}
 function wipe(){if(confirm('Xóa hết giao dịch, hạn mức và quy tắc? Không khôi phục được.')){
-  DB={txns:[],debts:[],budgets:{},bm:{},goals:[],fixedItems:DB.fixedItems,roll:DB.roll,offsets:[],draws:[],income:DB.income,rules:{},opens:DB.opens,checks:{},opts:DB.opts,efGop:0,chot:{},chotLS:[],nsChot:{},batDau:DB.batDau||'',lastBackup:0,v:14};save();msg='';go('home');}}
+  DB={txns:[],debts:[],budgets:{},bm:{},goals:[],fixedItems:DB.fixedItems,roll:DB.roll,offsets:[],draws:[],income:DB.income,rules:{},opens:DB.opens,checks:{},opts:DB.opts,efGop:0,chot:{},chotLS:[],nsChot:{},lichThu:{},batDau:DB.batDau||'',lastBackup:0,v:15};save();msg='';go('home');}}
 function move(n){cursor=new Date(cursor.getFullYear(),cursor.getMonth()+n,1);selIds={};loc.tu='';loc.den='';toTop=true;render()}
 
 /* ==================== vẽ ==================== */

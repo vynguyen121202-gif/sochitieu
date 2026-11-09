@@ -144,6 +144,10 @@ function findReplace(t,taken){
     if(x.sg||x.debt)return;
     if(taken&&taken.has(String(x.id)))return;
     if(!samePartner(t,x))return;
+    /* đọc sai ngày thì số dư sau giao dịch và giờ vẫn y nguyên. Số dư khác, hoặc (thiếu số dư) giờ khác
+       → hai lần chi thật, ví dụ trà lài 15.000 mỗi trưa — không hỏi (Vy 09/11/2026) */
+    if(x.b&&t.b){if(x.b!==t.b)return;}
+    else if(x.tm&&t.tm&&x.tm!==t.tm)return;
     const dd=Math.abs((new Date(x.d+'T00:00')-new Date(t.d+'T00:00'))/864e5);
     if(dd>REP_DAYS||dd>=bd)return;
     bd=dd;best=x;
@@ -756,7 +760,9 @@ function bindFixed(id,mp){
   save(); render();
 }
 function commit(){
-  const add=pending.filter(t=>t.keep).map(t=>{
+  /* thu nợ dư mà Vy chọn "nhờ rút tiền mặt" / "thu khác" → ghi thành 2 dòng (Vy 09/11/2026) */
+  const add=pending.filter(t=>t.keep).flatMap(t=>{const du=duCho(t);
+    return du>0&&(t.duC==='doi'||t.duC==='khac')?tachDu(t,du,t.duC):[t];}).map(t=>{
     const o={id:Date.now()+Math.random(),d:t.d,a:t.a,t:t.t,n:t.n,s:t.s||'bidv'};
     if(t.t==='mv')o.s2=t.s2||'vi'; else o.c=t.c;
     if(t.tm)o.tm=t.tm; if(t.b)o.b=t.b; if(t.p)o.p=t.p;
@@ -3411,7 +3417,7 @@ function vHome(){
 function vImport(){
   if(pending){
     const on=pending.filter(t=>t.keep), miss=pending.filter(needCat).length,
-          ask=pending.filter(needRep).length;
+          ask=pending.filter(needRep).length, hoiDu=pending.filter(needDu).length;
     const tatCa=pending.length&&on.length===pending.length;
     let h=`<h2>Kiểm tra trước khi lưu</h2>`;
     h+=khoiBoQua();
@@ -3441,7 +3447,7 @@ function vImport(){
                <input class="rename" value="${esc(t.n)}" placeholder="${t.q?'Mua gì, ở đâu?':'Nội dung'}" onchange="setName(${i},this.value)">
                ${catBtn(t.c,t.t,'pending',i)}
                ${t.c&&groupOf(t.c).subs.length?`<button class="chk-btn" style="margin-left:8px" onclick="splitStart('pending',${i})">chia nhiều mục</button>`:''}
-               ${t.s!=='tm'&&(t.t==='thu'||t.t==='chi')?`<button class="chk-btn" style="margin-left:8px" onclick="doiTMP(${i})">đổi tiền mặt</button>`:''}
+               ${t.s!=='tm'&&(t.t==='thu'||t.t==='chi')?`<button class="chk-btn" style="margin-left:8px" onclick="doiTMP(${i})">${t.t==='chi'?'ứng trước · nhận lại tiền mặt':'đổi tiền mặt'}</button>`:''}
                ${t.w?`<div class="tag">qua ví ${esc(t.w)}</div>`:''}
                ${khoiChonNg(t,i)}
                ${(()=>{const g=t.c?groupOf(t.c).id:'';const cho=g==='muon'&&t.t==='chi', vay=g==='divay'&&t.t==='thu';
@@ -3460,12 +3466,17 @@ function vImport(){
           ${t.warn?`<div class="dup">${esc(t.warn)}</div>`:''}
                   </div>
         <div class="tx-a ${t.t==='thu'?'in':t.t==='mv'?'mv':''}">${t.t==='thu'?'+':''}${money(t.a)}</div></div>`;
+      /* hộp hỏi phần dư nằm dưới dòng, rộng hết khung (phác thảo đợt 6) */
+      {const du=t.keep?duCho(t):0;
+        if(du)h+=`<div class="du-ngoai">${khoiDu(nguoiNo().find(q=>q.khoa===t.ng).ten,t.a-du,du,t.duC,'duChonP('+i+',','')}</div>`;}
     });
     h+=`</div><div class="sp"></div>`;
     /* Tổng của những dòng ĐANG ĐƯỢC CHỌN, để đối chiếu với app ngân hàng trước khi lưu.
        Chuyển tiền tách riêng vì nó không phải chi cũng không phải thu. */
     {
-      const oChi=on.filter(t=>t.t==='chi'), oThu=on.filter(t=>t.t==='thu'), oMv=on.filter(t=>t.t==='mv');
+      /* thu nợ dư đã chọn cách tách thì đếm như 2 dòng sẽ lưu */
+      const on2=on.flatMap(t=>{const du=duCho(t);return du>0&&(t.duC==='doi'||t.duC==='khac')?tachDu(t,du,t.duC):[t];});
+      const oChi=on2.filter(t=>t.t==='chi'), oThu=on2.filter(t=>t.t==='thu'), oMv=on2.filter(t=>t.t==='mv');
       const sChi=oChi.reduce((s,t)=>s+t.a,0), sThu=oThu.reduce((s,t)=>s+t.a,0), sMv=oMv.reduce((s,t)=>s+t.a,0);
       const D=(nhan,soKhoan,tien,mau)=>soKhoan?`<div class="src" style="padding:10px 14px">
         <div><div class="src-n" style="font-size:13.5px">${nhan}</div>
@@ -3480,7 +3491,8 @@ function vImport(){
     }
     if(miss)h+=`<div class="err">Còn ${miss} giao dịch chưa chọn nhóm.</div><div class="sp"></div>`;
     if(ask)h+=`<div class="err">Còn ${ask} giao dịch chưa chọn thay khoản cũ hay giữ cả hai.</div><div class="sp"></div>`;
-    h+=`<button class="btn" ${on.length&&!miss&&!ask?'':'disabled'} onclick="commit()">Lưu ${on.length} giao dịch</button>
+    if(hoiDu)h+=`<div class="err">Còn ${hoiDu} khoản thu nợ nhiều hơn số còn nợ — chọn phần dư là gì.</div><div class="sp"></div>`;
+    h+=`<button class="btn" ${on.length&&!miss&&!ask&&!hoiDu?'':'disabled'} onclick="commit()">Lưu ${on.length} giao dịch</button>
       <div class="sp"></div><button class="btn ghost" onclick="pending=null;render()">Quay lại</button>`;
     return h;
   }
@@ -3673,14 +3685,18 @@ function vList(){
     const g=groupOf(t.c), col=t.t==='thu'?'var(--pos)':(t.t==='mv'||t.t==='dc')?'var(--ink-3)':g.c;
     const meta=[t.tm, t.t==='mv'?srcOf(t.s).n+' → '+srcOf(t.s2).n:t.t==='dc'?'điều chỉnh':srcOf(t.s).n, t.w?'ví '+esc(t.w):''].filter(Boolean).join(' · ');
     const sign=t.t==='thu'?'+':t.t==='mv'?'':t.t==='dc'?(t.dir==='-'?'−':'+'):'−';
-    const picked=!!selIds[String(t.id)];
+    const picked=!!selIds[String(t.id)], du=duDaLuu(t);
     h+=`<div class="tx" style="cursor:pointer${picked?';background:var(--row)':''}" onclick="${selMode?`toggleSel('${t.id}')`:`toggleRow('${t.id}')`}">
       ${selMode
         ? `<button class="chk ${picked?'on':''}" style="flex:none;margin-right:10px" aria-label="Chọn" onclick="event.stopPropagation();toggleSel('${t.id}')">${picked?'✓':''}</button>`
         : `<span class="spine" style="background:${gcA(col)}"></span>`}
       <div class="tx-body"><div class="tx-n">${esc(t.n)}</div>
-        <div class="tx-m">${meta}${(t.t==='chi'||t.t==='thu')?' · <span style="color:var(--ink-2)">'+esc(labelOf(t.c))+'</span>':''}</div></div>
+        <div class="tx-m">${meta}${(t.t==='chi'||t.t==='thu')?' · <span style="color:var(--ink-2)">'+esc(labelOf(t.c))+'</span>':''}</div>
+        ${du&&!selMode?`<button class="du-mo" onclick="event.stopPropagation();duMoL('${t.id}')">thu dư ${money(du)} so với số còn nợ · tách ${duMo&&duMo.id===String(t.id)?'▾':'›'}</button>`:''}</div>
       <div class="tx-a ${t.t==='thu'?'in':(t.t==='mv'||t.t==='dc')?'mv':''}">${sign}${money(t.a)}</div></div>`;
+    if(du&&!selMode&&duMo&&duMo.id===String(t.id)){
+      const d0=(DB.debts||[]).find(x=>x.id===debtLinks()[String(t.id)]);
+      h+=`<div class="du-ngoai">${khoiDu(ngOf(d0),t.a-du,du,duMo.c,'duChonL(','duTachL()')}</div>`;}
     if(!selMode&&rowOpen===String(t.id)){
       h+=`<div style="padding:0 14px 13px 28px;background:var(--row);border-bottom:1px solid var(--line-2)">
         ${(t.t==='chi'||t.t==='thu')?`<div class="cat-meta" style="margin:0 0 7px"><span>Nhóm</span></div>${catBtn(t.c,t.t,'txn',t.id)}`:''}
@@ -4163,6 +4179,58 @@ function ganNg(t,ng){
   const l=loaiNg(t); if(!ng||!l||l.moi||ng.split('|')[0]!==l.kind)return;
   const ds=(DB.debts||[]).filter(x=>ngKhoa(x)===ng).sort((a,b)=>(a.start||'').localeCompare(b.start||''));
   const d=ds.find(x=>!debtInfo(x).done)||ds[ds.length-1]; if(d)t.debt=d.id;
+}
+/* ---- Thu về nhiều hơn số người đó còn nợ (Vy duyệt phác thảo đợt 6, 09/11/2026) ----
+   Ví dụ: còn nợ 2.500.000 mà chuyển về 3.500.000 — 1.000.000 là nhờ rút tiền mặt.
+   Phần dư không phải tiền trả nợ: hỏi Vy là nhờ rút tiền mặt, thu khác, hay đúng là trả nợ hết. */
+/* dòng đang xem lại ở tab Nhập: phần dư so với số còn chờ thu của người Vy chọn */
+function duCho(t){
+  if(t.t!=='thu'||!t.ng||!t.c||groupOf(t.c).id!=='thuno'||t.ng.split('|')[0]!=='cho')return 0;
+  const p=nguoiNo().find(q=>q.khoa===t.ng); return p&&t.a>p.left?t.a-p.left:0;
+}
+/* khoản đã lưu: tổng đã thu của người đó vượt tổng đã cho mượn → lần thu muộn nhất gánh phần dư */
+function duDaLuu(t){
+  if(t.t!=='thu'||t.duOK||!t.c||groupOf(t.c).id!=='thuno')return 0;
+  const id=debtLinks()[String(t.id)], d=id&&(DB.debts||[]).find(x=>x.id===id); if(!d||d.kind!=='cho')return 0;
+  const ds=DB.debts.filter(x=>ngKhoa(x)===ngKhoa(d)), tong=ds.reduce((s,x)=>s+debtInfo(x).total,0);
+  const gd=ds.flatMap(x=>debtTxns(x.id)), thu=gd.reduce((s,x)=>s+x.a,0); if(thu<=tong)return 0;
+  const cuoi=gd.slice().sort((a,b)=>(a.d+' '+(a.tm||'')).localeCompare(b.d+' '+(b.tm||''))).pop();
+  return cuoi===t?Math.min(t.a,thu-tong):0;
+}
+/* tách thành [thu nợ phần còn nợ, phần dư]. Hai dòng chung sg, cùng giờ và số dư ngân hàng,
+   để chuỗi đối chiếu BIDV vẫn thấy đúng một lần nhận 3.500.000 */
+function tachDu(t,du,cach){
+  const sg=t.sg||('du'+Date.now()), a=Object.assign({},t,{a:t.a-du,sg});
+  const b={d:t.d,a:du,n:t.n+(cach==='doi'?' · nhờ rút tiền mặt':' · phần dư'),sg};
+  if(t.id)b.id=Date.now()+Math.random();
+  if(t.tm)b.tm=t.tm; if(t.b)b.b=t.b; if(t.n0)b.n0=t.n0;
+  if(cach==='doi'){b.t='mv';b.s='tm';b.s2=t.s||'bidv';b.doi=1;}
+  else{b.t='thu';b.s=t.s||'bidv';b.c='tkhac';}
+  delete a.duC; return [a,b];
+}
+/* hộp hỏi phần dư — dùng chung cho tab Nhập và tab Giao dịch.
+   fn = phần đầu lời gọi, ví dụ "duChonP(3," hay "duChonL(" — nút ghép thêm "'doi')". */
+function khoiDu(ten,con,du,chon,fn,nutTach){
+  const n=(v,nhan)=>`<button class="${chon===v?'on':''}" onclick="event.stopPropagation();${fn}'${v}')">${nhan}</button>`;
+  return `<div class="du-hop" onclick="event.stopPropagation()">${esc(ten)} chỉ còn nợ <b>${money(con)}</b>. Phần dư <b>${money(du)}</b> là gì?
+    <div class="du-nut">${n('doi','Nhờ rút tiền mặt')}${n('khac','Thu khác')}${n('no','Đúng, thu hết là trả nợ')}</div>
+    ${chon==='doi'||chon==='khac'?`<div class="du-tach"><div class="du-r"><span>Thu nợ · ${esc(ten)}</span><b class="du-vao">+${money(con)}</b></div>
+      <div class="du-r"><span>${chon==='doi'?'Đổi tiền mặt · vào BIDV, đưa ra tiền mặt':'Thu khác'}</span><b class="${chon==='doi'?'du-mv':'du-vao'}">${chon==='doi'?'':'+'}${money(du)}</b></div>
+      ${nutTach?'':`<div class="du-ghi">Lưu sẽ thành 2 dòng.${chon==='doi'?' BIDV vẫn nhận đủ '+money(con+du)+', Tiền mặt bớt '+money(du)+'.':''}</div>`}</div>`:''}
+    ${nutTach&&chon?`<button class="btn du-btn" onclick="event.stopPropagation();${nutTach}">${chon==='no'?'Giữ nguyên, thôi hỏi':'Tách thành 2 dòng'}</button>`:''}</div>`;
+}
+const needDu=t=>t.keep&&duCho(t)>0&&!t.duC;
+function duChonP(i,v){pending[i].duC=v;render();}
+let duMo=null;   /* tab Giao dịch: {id, c} — khoản đang mở hộp tách phần dư */
+function duMoL(id){duMo=duMo&&duMo.id===id?null:{id,c:''};render();}
+function duChonL(v){if(duMo)duMo.c=v;render();}
+function duTachL(){
+  const t=duMo&&DB.txns.find(x=>String(x.id)===duMo.id); if(!t)return;
+  const c=duMo.c, du=duDaLuu(t); if(!du)return;
+  if(c==='no'){t.duOK=1; duMo=null; save(); flash('Đã giữ nguyên, cả '+money(t.a)+' là trả nợ.','ok'); return;}
+  const [a,b]=tachDu(t,du,c);
+  hoiChot({bo:[t],them:[a,b]},()=>{DB.txns=DB.txns.filter(x=>x!==t).concat([a,b]); _dl=null; duMo=null; save();
+    flash('Đã tách: thu nợ '+money(a.a)+' · '+(c==='doi'?'đổi tiền mặt ':'thu khác ')+money(b.a)+'.','ok');});
 }
 /* các nút chọn người cho một dòng đang xem lại ở tab Nhập (Vy duyệt phác thảo 17/10/2026) */
 function khoiChonNg(t,i){

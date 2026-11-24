@@ -3710,9 +3710,11 @@ function vList(){
             <input type="time" value="${t.tm||''}" onchange="setTime('${t.id}',this.value)"
               class="dt" style="width:100%"></div>
         </div>
-        <div style="display:flex;gap:16px;margin-top:11px">
+        <div style="display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:11px">
           <button class="chk-btn" onclick="event.stopPropagation();editName('${t.id}')">Sửa nội dung</button>
           ${(t.t==='chi'||t.t==='thu')&&groupOf(t.c).subs.length?`<button class="chk-btn" onclick="event.stopPropagation();splitStart('txn','${t.id}')">Tách nhiều mục</button>`:''}
+          ${coRut(t)?`<button class="chk-btn" onclick="event.stopPropagation();doiRut('${t.id}',0)">Đây là rút tiền mặt</button>
+          <button class="chk-btn" onclick="event.stopPropagation();doiRut('${t.id}',1)">Ứng trước · nhận lại tiền mặt</button>`:''}
           <button class="chk-btn" style="color:var(--brick);margin-left:auto" onclick="event.stopPropagation();del('${t.id}')">Xóa</button></div></div>`;
     }
   });
@@ -4368,6 +4370,20 @@ function learn(t,code){
 }
 function setCat(i,v){const t=pending[i];t.c=v;learn(t,v);save();render()}
 function reCat(id,v){const t=DB.txns.find(x=>String(x.id)===id);if(!t)return;t.c=v;learn(t,v);save();render()}
+/* dòng CHI đã lưu thực ra là rút tiền mặt (ung=0) hoặc ứng trước rồi nhận lại tiền mặt (ung=1)
+   → chuyển nguồn BIDV/Ví → Tiền mặt, giữ giờ và số dư ngân hàng (Vy duyệt phác thảo đợt 7, 24/11/2026).
+   Bỏ luôn quy tắc nhóm đã học từ dòng này để lần sau không ghi sai lại. */
+const coRut=t=>t.t==='chi'&&(t.s||'bidv')!=='tm'&&!['muon','trano'].includes(groupOf(t.c).id);
+function doiRut(id,ung){
+  const t=DB.txns.find(x=>String(x.id)===id); if(!t||!coRut(t))return;
+  const moi=Object.assign({},t,{t:'mv',s:t.s||'bidv',s2:'tm'}); delete moi.c; if(ung)moi.doi=1;
+  hoiChot({bo:[t],them:[moi]},()=>{
+    const cu=t.c, kp='p:'+t.p, kk='k:'+merchantKey(t.n0||t.n);
+    if(t.p&&DB.rules[kp]===cu)delete DB.rules[kp];
+    if(DB.rules[kk]===cu)delete DB.rules[kk];
+    DB.txns=DB.txns.map(x=>x===t?moi:x); rowOpen=''; save();
+    flash((ung?'Đã ghi là ứng trước, nhận lại tiền mặt: ':'Đã ghi là rút tiền mặt: ')+srcOf(moi.s).n+' → Tiền mặt '+money(moi.a)+'.','ok');});
+}
 function del(id){const t=DB.txns.find(x=>String(x.id)===id);
   hoiChot({bo:t?[t]:[],them:[]},()=>{DB.txns=DB.txns.filter(x=>String(x.id)!==id);save();render();});}
 function setDate(id,v){

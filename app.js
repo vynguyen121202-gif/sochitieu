@@ -3,7 +3,7 @@ const GROUPS=[
  {id:'an', k:'chi', n:'Ăn uống', c:'#C0766B', subs:[['an_sang','Ăn sáng'],['an_ngoai','Ăn ngoài'],['an_cafe','Cà phê, trà chiều']]},
  {id:'cho',sn:'Chợ, siêu thị', k:'chi', n:'Chợ & siêu thị', c:'#7E9455', subs:[['cho_vat','Ăn vặt'],['cho_giavi','Gia vị'],['cho_mi','Mì gói']]},
  {id:'di', k:'chi', n:'Di chuyển', c:'#5F86AE', subs:[['di_xang','Xăng xe'],['di_grab','Grab, taxi'],['di_guixe','Gửi xe'],['di_suaxe','Sửa xe'],['di_ve','Vé xe, vé máy bay']]},
- {id:'hd', sn:'Hóa đơn', k:'chi', n:'Hóa đơn & tiện ích', c:'#5C87C4', subs:[['hd_dt','Điện thoại'],['hd_ai','A.I']]},
+ {id:'hd', sn:'Hóa đơn', k:'chi', n:'Hóa đơn & tiện ích', c:'#5C87C4', subs:[['hd_dt','Điện thoại'],['hd_ai','A.I'],['hd_phi','Phí ngân hàng, rút tiền']]},
  {id:'qa', sn:'Quần áo', k:'chi', n:'Quần áo & giày dép', c:'#8E76AB', subs:[['qa_ao','Quần áo'],['qa_giay','Giày dép'],['qa_tui','Túi xách, phụ kiện']]},
  {id:'gdu',sn:'Gia dụng', k:'chi', n:'Đồ gia dụng', c:'#71809A', subs:[]},
  {id:'ld', sn:'Làm đẹp', k:'chi', n:'Làm đẹp & chăm sóc bản thân', c:'#B4709A', subs:[]},
@@ -574,6 +574,7 @@ Quy ước:
 - mã đối tác: số tài khoản của người nhận hoặc người gửi, hoặc số điện thoại nếu là nạp điện thoại. Không có thì để trống.
 - Nếu là chuyển tiền từ BIDV vào ví điện tử (nội dung có CASHIN hoặc tên ví), ghi mã nhóm là napvi.
 - Nếu người khác chuyển khoản vào để Vy đưa lại tiền mặt, hoặc Vy chuyển khoản đi để nhận lại tiền mặt (nội dung kiểu "nhờ rút tiền mặt", "đổi tiền mặt", "đưa tiền mặt"), ghi mã nhóm là doitm.
+- Nếu là rút tiền mặt ở ATM (nội dung có "rút tiền", "ATM", hoặc "Giao dịch thẻ" mà cùng giờ có thêm một dòng "Phí giao dịch thẻ"), ghi mã nhóm là ruttm. Dòng phí rút tiền đó ghi mã nhóm là hd_phi.
 - Nếu chỉ có mã QR không rõ nơi bán: nội dung ghi "Thanh toán QR", mã nhóm để trống.
 - Nếu không chắc chắn nhóm nào thì để trống mã nhóm, đừng đoán bừa.
 
@@ -686,6 +687,8 @@ function parsePaste(raw){
     if(!isNaN(b)&&b)row.b=b;
     if(party)row.p=party;
     if(code==='napvi'){row.t='mv';row.s='bidv';row.s2='vi';row.c='';}
+    /* rút tiền mặt ở ATM (Vy 24/11/2026): tiền chỉ đổi chỗ BIDV → Tiền mặt, không phải chi */
+    else if(code==='ruttm'&&s0!=='tm'&&t==='chi'){row.t='mv';row.s=s0;row.s2='tm';row.c='';}
     /* đổi tiền mặt hộ người khác (Vy 17/10/2026): không phải thu hay chi, chỉ là tiền đổi chỗ */
     else if(code==='doitm'&&s0!=='tm'){row.t0=t;row.t='mv';row.doi=1;row.decided=1;if(t==='thu'){row.s='tm';row.s2=s0;}else{row.s=s0;row.s2='tm';}row.c='';}
     else if(validCode(code,t))row.c=code;

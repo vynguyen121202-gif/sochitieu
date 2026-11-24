@@ -10,6 +10,9 @@ desktop.ini
 # Muốn lưu một bản cụ thể vào repo thì thêm tay bằng: git add -f <tên file>
 sochi-backup*.json
 so-chi-tieu*.json
+# điện thoại có khi thêm mã vào trước tên file khi chia sẻ (abc123_so-chi-tieu-….json)
+*sochi-backup*.json
+*so-chi-tieu*.json
 
 # Ghi chú làm việc riêng của Vy — KHÔNG đẩy lên vì kho này công khai.
 # Vẫn nằm ở máy và Claude Code vẫn đọc bình thường.

@@ -9,7 +9,7 @@ const GROUPS=[
  {id:'ld', sn:'Làm đẹp', k:'chi', n:'Làm đẹp & chăm sóc bản thân', c:'#B4709A', subs:[]},
  {id:'sk', k:'chi', n:'Sức khỏe', c:'#C07470', subs:[['sk_thuoc','Thuốc'],['sk_tpcn','Thực phẩm chức năng'],['sk_kham','Khám bệnh']]},
  {id:'gt', k:'chi', n:'Giải trí', c:'#C08F4E', subs:[['gt_dichoi','Đi chơi, du lịch'],['gt_phim','Phim, sách, game'],['gt_ban','Đi ăn với bạn bè']]},
- {id:'gd', sn:'Gia đình', k:'chi', n:'Gia đình & hiếu hỉ', c:'#A96A58', subs:[['gd_bome','Biếu bố mẹ'],['gd_cuoi','Cưới hỏi'],['gd_ma','Ma chay'],['gd_qua','Quà tặng']]},
+ {id:'gd', sn:'Gia đình', k:'chi', n:'Gia đình & hiếu hỉ', c:'#A96A58', subs:[['gd_bome','Biếu bố mẹ'],['gd_cuoi','Cưới hỏi'],['gd_ma','Ma chay'],['gd_qua','Quà tặng'],['gd_sn','Sinh nhật']]},
  {id:'ht', k:'chi', n:'Học tập', c:'#7A9470', subs:[['ht_khoa','Khóa học'],['ht_sach','Sách'],['ht_thi','Thi chứng chỉ']]},
  {id:'tk', sn:'Tiết kiệm', k:'chi', n:'Tiết kiệm & đầu tư (tiền nhàn rỗi)', c:'#47897A', subs:[['tk_gui','Gửi tiết kiệm'],['tk_vang','Mua vàng']]},
  {id:'tt',  k:'chi', n:'Từ thiện', c:'#9A6B95', subs:[]},
@@ -770,7 +770,7 @@ function commit(){
     if(t.t==='mv')o.s2=t.s2||'vi'; else o.c=t.c;
     if(t.tm)o.tm=t.tm; if(t.b)o.b=t.b; if(t.p)o.p=t.p;
     if(t.han)o._han=t.han; if(t.ng)o._ng=t.ng; if(t.doi)o.doi=1;
-    if(t.w)o.w=t.w; if(t.q)o.q=1; if(t.sg)o.sg=t.sg; if(t.n0&&t.n0!==t.n)o.n0=t.n0;
+    if(t.w)o.w=t.w; if(t.q)o.q=1; if(t.sg)o.sg=t.sg; if(t.n0&&t.n0!==t.n)o.n0=t.n0; if(t.ai&&o.c==='gd_sn')o.ai=t.ai;
     return o;});
   const drop=new Set(pending.filter(t=>t.keep&&t.rep&&t.repDo===1).map(t=>t.rep.id));
   hoiChot({bo:DB.txns.filter(x=>drop.has(String(x.id))),them:add},()=>{
@@ -785,9 +785,24 @@ function commit(){
 }
 
 /* ==================== tính toán ==================== */
-const monthTx=d=>{const k=ym(d), mk='mt'+k;
+/* giao dịch gốc của tháng, đúng như đã ghi — dùng cho danh sách tab Giao dịch */
+const monthRaw=d=>{const k=ym(d), mk='mr'+k;
   if(mk in _memo)return _memo[mk];
   return _memo[mk]=DB.txns.filter(t=>t.d.slice(0,7)===k)};
+/* Khoản hoàn đã gắn vào khoản chi gốc (t.hoan = id khoản chi; Vy duyệt phác thảo đợt 8, 24/11/2026)
+   KHÔNG phải tiền thu: nó là chi ÂM trong đúng nhóm của khoản gốc, tính vào THÁNG NHẬN HOÀN
+   (tháng đã chốt không đổi số). Ví dụ: tiền xe 300.000 (05/10) − hoàn 70.000 (11/10) → Học tập 230.000,
+   Thực thu −70.000, Thực chi −70.000, số dư không đổi. Mọi phép cộng qua monthTx tự trừ đúng. */
+const hoanGoc=t=>{if(t.t!=='thu'||!t.hoan)return null; const g=txById()[String(t.hoan)];
+  return g&&g.t==='chi'&&g.c?g:null;};
+const txById=()=>{if('tid' in _memo)return _memo.tid; const m={}; DB.txns.forEach(t=>{m[String(t.id)]=t;}); return _memo.tid=m;};
+const monthTx=d=>{const k=ym(d), mk='mt'+k;
+  if(mk in _memo)return _memo[mk];
+  return _memo[mk]=monthRaw(d).map(t=>{const g=hoanGoc(t);
+    return g?Object.assign({},t,{t:'chi',c:g.c,a:-t.a,_hoan:t}):t;});};
+/* tổng đã hoàn cho từng khoản chi gốc (mọi tháng) */
+const daHoan=()=>{if('dh' in _memo)return _memo.dh; const m={};
+  DB.txns.forEach(t=>{const g=hoanGoc(t); if(g)m[String(g.id)]=(m[String(g.id)]||0)+t.a;}); return _memo.dh=m;};
 const sum=l=>l.reduce((s,t)=>s+t.a,0);
 const sumChi=l=>sum(l.filter(t=>t.t==='chi'));
 const sumThu=l=>sum(l.filter(t=>t.t==='thu'));
@@ -806,6 +821,8 @@ function coCau(d){
     return g!=='muon'&&!(g==='trano'&&t.c!=='trano_gop'); });
   const muon=Math.max(0,bangTien(d).choRong), nhom=byGroup(list);
   if(muon)nhom.push(['muon',muon]);
+  /* nhóm chỉ có tiền hoàn mà không có chi trong tháng thì ra số âm — không vẽ ô âm */
+  for(let i=nhom.length-1;i>=0;i--)if(nhom[i][1]<=0)nhom.splice(i,1);
   nhom.sort((a,b)=>b[1]-a[1]);
   return _memo[mk]={list,muon,nhom,tong:nhom.reduce((s,x)=>s+x[1],0)};
 }
@@ -938,64 +955,84 @@ function treemap(cc){
 }
 /* ==================== chia một giao dịch thành nhiều mục ==================== */
 let splitting=null;
+/* Tách một giao dịch thành nhiều mục, mỗi mục chọn được NHÓM BẤT KỲ (Vy duyệt phác thảo đợt 8, 24/11/2026).
+   Hai mục đặc biệt, chỉ khi tiền đi / về qua BIDV hoặc Ví:
+   · dòng chi: "Ứng trước · nhận lại tiền mặt" (SP_UNG) → phần đó thành chuyển nguồn sang Tiền mặt;
+   · dòng thu: "Đổi tiền mặt" (SP_DOI) → phần đó là tiền Vy đã đưa tiền mặt trước, nay nhận vào ngân hàng.
+   Ví dụ: Trà sữa 56.000 = Cà phê 28.000 + Ứng trước 28.000 (Vy nhận lại tiền mặt trong ngày). */
+const SP_UNG='__ung', SP_DOI='__doi';
+const coTach=t=>(t.t==='chi'||t.t==='thu')&&!t.debt;
+/* mã nhóm tách: thêm đuôi ngẫu nhiên — hai lần tách trong cùng một mili-giây từng trùng mã,
+   làm chuỗi đối chiếu BIDV gộp hai giao dịch khác nhau thành một */
+const maSg=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 function splitStart(mode,ref){
   const t=mode==='pending'?pending[ref]:DB.txns.find(x=>String(x.id)===ref);
-  if(!t)return;
-  const g=groupOf(t.c);
-  if(!g.id){flash('Chọn nhóm trước đã.','err');return;}
-  if(!g.subs.length){flash('Nhóm '+g.n+' không có mục chi tiết để chia.','err');return;}
-  splitting={mode,ref,gid:g.id,total:t.a,name:t.n,
-    rows:g.subs.map(([code,name])=>({code,name,on:code===t.c,a:0}))};
-  if(!splitting.rows.some(r=>r.on))splitting.rows[0].on=true;
-  splitEven(); render();
+  if(!t||!coTach(t))return;
+  const nua=Math.round(t.a/2);
+  splitting={mode,ref,total:t.a,name:t.n,kind:t.t,s:t.s||'bidv',
+    rows:[{code:t.c||'',a:t.a-nua},{code:'',a:nua}]};
+  render();
 }
-function splitEven(){
-  const on=splitting.rows.filter(r=>r.on); if(!on.length)return;
-  const base=Math.floor(splitting.total/on.length/1000)*1000;
-  on.forEach((r,i)=>r.a=i===on.length-1?splitting.total-base*(on.length-1):base);
-  splitting.rows.filter(r=>!r.on).forEach(r=>r.a=0);
-}
-function splitToggle(i){const r=splitting.rows[i];r.on=!r.on;splitEven();render();}
-function splitSet(i,v){const n=parseAmt(v);splitting.rows[i].a=isNaN(n)?0:n;render();}
+function splitSet(i,v){const n=parseAmt(v);splitting.rows[i].a=isNaN(n)?0:Math.round(n);render();}
+function splitMa(i,v){splitting.rows[i].code=v;render();}
+function splitThem(){const con=splitting.total-splitting.rows.reduce((s,r)=>s+r.a,0);
+  splitting.rows.push({code:'',a:Math.max(0,con)});render();}
+function splitXoa(i){if(splitting.rows.length<=2)return; splitting.rows.splice(i,1);render();}
 function splitCancel(){splitting=null;render();}
+/* một mục → một dòng giao dịch, giữ ngày giờ, số dư ngân hàng, mã đối tác của dòng gốc */
+function splitDong(t,r,sg){
+  const o=Object.assign({},t,{a:r.a,split:1,sg}); delete o.c; delete o.doi; delete o.s2;
+  if(r.code===SP_UNG){o.t='mv';o.s=t.s||'bidv';o.s2='tm';o.doi=1;}
+  else if(r.code===SP_DOI){o.t='mv';o.s='tm';o.s2=t.s||'bidv';o.doi=1;}
+  else{o.t=t.t;o.c=r.code;}
+  return o;
+}
 function splitSave(){
-  const on=splitting.rows.filter(r=>r.on&&r.a>0);
-  const sum=on.reduce((s,r)=>s+r.a,0);
-  if(on.length<2){flash('Cần ít nhất hai mục có số tiền.','err');return;}
+  const rows=splitting.rows, sum=rows.reduce((s,r)=>s+r.a,0);
+  if(rows.length<2){flash('Cần ít nhất hai mục.','err');return;}
+  if(rows.some(r=>!r.code||!(r.a>0))){flash('Mục nào cũng cần chọn nhóm và có số tiền.','err');return;}
   if(sum!==splitting.total){flash('Tổng các mục là '+money(sum)+', phải bằng '+money(splitting.total)+'.','err');return;}
+  const n=rows.length;
   if(splitting.mode==='pending'){
-    const t=pending[splitting.ref];
-    const sg='s'+Date.now();
-    const parts=on.map(r=>Object.assign({},t,{c:r.code,a:r.a,split:1,sg}));
-    pending.splice(splitting.ref,1,...parts);
-  }else{
-    const t=DB.txns.find(x=>String(x.id)===splitting.ref);
-    const sg=t.sg||('s'+Date.now());
-    const parts=on.map(r=>Object.assign({},t,{c:r.code,a:r.a,id:Date.now()+Math.random(),split:1,sg}));
-    DB.txns=DB.txns.filter(x=>String(x.id)!==splitting.ref).concat(parts);
-    save();
+    const t=pending[splitting.ref], sg=maSg('s');
+    pending.splice(splitting.ref,1,...rows.map(r=>splitDong(t,r,sg)));
+    splitting=null; flash('Đã chia thành '+n+' mục.','ok'); return;
   }
-  splitting=null; flash('Đã chia thành '+on.length+' mục.','ok');
+  const t=DB.txns.find(x=>String(x.id)===splitting.ref); if(!t){splitting=null;render();return;}
+  const sg=t.sg||maSg('s');
+  const parts=rows.map(r=>Object.assign(splitDong(t,r,sg),{id:Date.now()+Math.random()}));
+  hoiChot({bo:[t],them:parts},()=>{
+    /* khoản hoàn đang gắn vào dòng gốc → gắn sang mục chi đầu tiên */
+    const p0=parts.find(p=>p.t==='chi');
+    DB.txns.forEach(x=>{if(String(x.hoan)===String(t.id)){if(p0)x.hoan=p0.id; else delete x.hoan;}});
+    DB.txns=DB.txns.filter(x=>x!==t).concat(parts); splitting=null; save();
+    flash('Đã chia thành '+n+' mục.','ok');});
+}
+/* ô chọn nhóm cho một mục: mọi nhóm cùng loại (chi / thu) + mục đặc biệt */
+function splitChon(i,r){
+  const k=splitting.kind, sp=splitting.s!=='tm'?(k==='chi'?[SP_UNG,'Ứng trước · nhận lại tiền mặt']:[SP_DOI,'Đổi tiền mặt']):null;
+  const op=(v,n)=>`<option value="${v}" ${r.code===v?'selected':''}>${esc(n)}</option>`;
+  return `<select class="pill ch-sel" onchange="splitMa(${i},this.value)" aria-label="Nhóm của mục ${i+1}">
+    ${op('','Chọn nhóm…')}${sp?op(sp[0],sp[1]):''}
+    ${GROUPS.filter(g=>g.k===k).map(g=>`<optgroup label="${esc(g.n)}">${op(g.id,g.n+' (chung)')}${g.subs.map(s=>op(s[0],s[1])).join('')}</optgroup>`).join('')}
+  </select>`;
 }
 function vSplit(){
-  const on=splitting.rows.filter(r=>r.on), sum=on.reduce((s,r)=>s+r.a,0), left=splitting.total-sum;
+  const rows=splitting.rows, sum=rows.reduce((s,r)=>s+r.a,0), left=splitting.total-sum, thieu=rows.some(r=>!r.code||!(r.a>0));
   let h=`<h2>Chia giao dịch</h2>
     <div class="panel"><div style="padding:13px 14px">
       <div class="src-n">${esc(splitting.name)}</div>
-      <div class="src-m">${money(splitting.total)} · ${esc(groupOf(splitting.gid).n)}</div></div>`;
-  splitting.rows.forEach((r,i)=>{
-    h+=`<div class="rev">
-      <button class="chk ${r.on?'on':''}" onclick="splitToggle(${i})" aria-label="Chọn mục">${r.on?'✓':''}</button>
-      <div class="tx-body"><div class="tx-n">${esc(r.name)}</div>
-        ${r.on?`<input class="rename" inputmode="text" value="${r.a?money(r.a):''}" placeholder="0" onchange="splitSet(${i},this.value)">`:''}</div>
-      </div>`;
+      <div class="src-m">${srcOf(splitting.s).n} · ${splitting.kind==='thu'?'tiền vào':'tiền ra'} · ${money(splitting.total)}</div></div>`;
+  rows.forEach((r,i)=>{
+    h+=`<div class="ch-r">${splitChon(i,r)}
+      <input inputmode="numeric" value="${r.a?money(r.a):''}" placeholder="0" oninput="this.value=fmtTien(this.value)" onchange="splitSet(${i},this.value)" aria-label="Số tiền mục ${i+1}">
+      <button class="ch-x" onclick="splitXoa(${i})" aria-label="Bỏ mục ${i+1}" ${rows.length<=2?'disabled':''}>✕</button></div>`;
   });
-  h+=`</div><div class="sp"></div>
+  h+=`<button class="ch-them" onclick="splitThem()">+ Thêm mục</button></div><div class="sp"></div>
     <div class="${left===0?'ok':'err'}">${left===0?'Tổng khớp '+money(splitting.total)+'.'
       :left>0?'Còn thiếu '+money(left)+' chưa phân.':'Thừa '+money(-left)+' so với số tiền giao dịch.'}</div>
     <div class="sp"></div>
-    <button class="btn" ${left===0&&on.length>1?'':'disabled'} onclick="splitSave()">Lưu ${on.length} mục</button>
-    <div class="sp"></div><button class="btn ghost" onclick="splitEven();render()">Chia đều lại</button>
+    <button class="btn" ${left===0&&!thieu&&rows.length>1?'':'disabled'} onclick="splitSave()">Lưu ${rows.length} mục</button>
     <div class="sp"></div><button class="btn ghost" onclick="splitCancel()">Hủy</button>`;
   return h;
 }
@@ -1447,18 +1484,13 @@ function hitFixed(it,t){
   return true;
 }
 /* đã trả bao nhiêu trong tháng đang xem */
-/* Nhận diện tự động có lúc trượt (giao dịch không kèm mã, số tiền tháng này khác
-   kế hoạch). Cho phép tự đánh dấu "đã trả" theo từng tháng để khỏi giữ chỗ oan. */
-const fxMarked=(it,d)=>!!(((DB.fxDone||{})[ym(d||cursor)]||{})[it.id]);
-function toggleFxDone(id){
-  const k=ym(cursor); DB.fxDone=DB.fxDone||{};
-  const m=DB.fxDone[k]=DB.fxDone[k]||{};
-  if(m[id])delete m[id]; else m[id]=1;
-  save();
-}
+/* KHÔNG còn đánh dấu "đã trả" bằng tay (Vy 24/11/2026): mọi khoản đã trả phải có giao dịch để đối chiếu,
+   trả bằng tiền mặt thì ghi một dòng chi tiền mặt. Dấu tay cũ từng làm yoga tháng 10 bị đếm hai lần
+   (giao dịch thật nằm ở Sức khỏe + dấu tay ở cố định) → bảng (1)…(5) lệch 550.000.
+   DB.fxDone của sổ cũ vẫn nằm trong dữ liệu nhưng không còn chỗ nào đọc. */
 function fixedPaid(it,d){
   const mk='fp'+it.id+'|'+ym(d||cursor); if(mk in _memo)return _memo[mk];
-  const rows=monthTx(d||cursor).filter(t=>hitFixed(it,t));
+  const rows=monthTx(d||cursor).filter(t=>!t._hoan&&hitFixed(it,t));
   return _memo[mk]={tien:rows.reduce((s2,t)=>s2+t.a,0), rows};
 }
 /* id các giao dịch đã được tính là khoản cố định, để loại khỏi phần linh hoạt.
@@ -1486,19 +1518,17 @@ function fixedOfGroup(gid,d){
   let plan=0,da=0,chi=0;
   its.forEach(it=>{
     const a=it.a||0; plan+=a; let tra=0, doan=false;
-    let tay=false;
     if(it.mp)tra=Math.min(a,fixedPaid(it,d).tien);
     if(it.mp)chi+=fixedPaid(it,d).tien;
-    if(!tra&&fxMarked(it,d)){tra=a;chi+=a;tay=true;}
     if(!tra){
       /* chưa nhận ra bằng mã (chưa gắn mã, hoặc giao dịch dán về không kèm mã)
          → dò theo số tiền xấp xỉ trong nhóm, để không giữ chỗ cho khoản đã trả */
-      const hit=monthTx(d).find(t=>t.t==='chi'&&!used[t.id]&&groupOf(t.c).id===gid
+      const hit=monthTx(d).find(t=>t.t==='chi'&&!t._hoan&&!used[t.id]&&groupOf(t.c).id===gid
         &&a&&Math.abs(t.a-a)<=a*0.15);
       if(hit){used[hit.id]={name:it.name,by:'tien',a};tra=Math.min(a,hit.a);chi+=hit.a;doan=true;}
     }
     if(a&&tra>=a*0.85)tra=a;         /* trả gần đủ thì coi như xong, khỏi giữ chỗ phần lẻ */
-    da+=tra; rows.push({id:it.id,name:it.name,a,tra,mp:!!it.mp,doan,tay});
+    da+=tra; rows.push({id:it.id,name:it.name,a,tra,mp:!!it.mp,doan});
   });
   return _memo[mk]={plan,da,chi,left:Math.max(0,plan-da),rows,ids:used};
 }
@@ -2148,9 +2178,8 @@ function hmDetail(g){
     x+=`<div class="cat-meta" style="padding:5px 0"><span style="color:var(--ink)">Trong đó cố định</span>
       <span>đã trả ${money(fo.da)} / ${money(fo.plan)} · còn giữ <b>${money(fo.left)}</b></span></div>`;
     fo.rows.forEach(r=>x+=`<div class="cat-meta" style="padding:3px 0 3px 10px">
-      <span style="color:var(--ink-3)">${esc(r.name)}${r.tay?' · tự đánh dấu':r.doan?' · nhận ra theo số tiền':r.mp?'':' · chưa gắn mã'}</span>
-      <span style="display:flex;gap:9px;align-items:center;color:var(--ink-3);white-space:nowrap">${r.tra>=r.a-1?'đã trả':r.tra?money(r.tra)+' / '+money(r.a):'chưa trả · '+money(r.a)}
-        ${r.tay||r.tra<r.a-1?`<button class="chk-btn" style="color:var(--ink-3)" onclick="toggleFxDone('${r.id}')">${r.tay?'bỏ dấu':'đã trả'}</button>`:''}</span></div>`);
+      <span style="color:var(--ink-3)">${esc(r.name)}${r.doan?' · nhận ra theo số tiền':r.mp?'':' · chưa gắn mã'}</span>
+      <span style="color:var(--ink-3);white-space:nowrap">${r.tra>=r.a-1?'đã trả':r.tra?money(r.tra)+' / '+money(r.a):'chưa trả · '+money(r.a)}</span></div>`);
   }
   if(!rows.length)x+=`<div class="cat-meta" style="padding:5px 0"><span>chưa chi khoản nào trong tháng</span></div>`;
   rows.slice(0,25).forEach(t=>{
@@ -2190,7 +2219,7 @@ function hmDetail(g){
 function vBudRun(inc){
   const items=fixedItems();
   const fxTong=items.reduce((s2,x)=>s2+x.a,0);
-  const fxDa=items.reduce((s2,x)=>s2+(fxMarked(x,cursor)?x.a:Math.min(x.a,fixedPaid(x,cursor).tien)),0);
+  const fxDa=items.reduce((s2,x)=>s2+Math.min(x.a,fixedPaid(x,cursor).tien),0);
   const fxPc=fxTong?Math.round(fxDa/fxTong*100):0;
   let h=`<div class="panel" style="margin-bottom:10px">
     <button class="fold" style="margin:0;border:0;border-left:3px solid var(--info);border-radius:var(--r)" onclick="toggle('bfx')">
@@ -2201,11 +2230,10 @@ function vBudRun(inc){
   if(1){ h+='<div class="xow" data-xo="'+("bfx")+'" data-open="'+((open.bfx)?1:0)+'">';
     h+=`<div style="padding:0 12px 12px 15px">
       <div class="cat-meta" style="padding:9px 0"><span>đã chi ${money(fxDa)} / ${money(fxTong)}</span></div>`;
-    items.forEach(it=>{const pd=fixedPaid(it,cursor), tay=fxMarked(it,cursor);
+    items.forEach(it=>{const pd=fixedPaid(it,cursor);
       h+=`<div class="cat-meta" style="padding:7px 0;border-top:1px solid var(--line-2)">
-        <span>${esc(it.name)}${tay&&!pd.tien?' · tự đánh dấu':''}</span>
-        <span style="display:flex;gap:9px;align-items:center;white-space:nowrap">${pd.tien?money(pd.tien)+' / '+money(it.a):tay?'đã trả · '+money(it.a):'chưa chi · '+money(it.a)}
-        ${pd.tien?'':`<button class="chk-btn" style="color:var(--ink-3)" onclick="toggleFxDone('${it.id}')">${tay?'bỏ dấu':'đã trả'}</button>`}</span></div>`;});
+        <span>${esc(it.name)}</span>
+        <span style="white-space:nowrap">${pd.tien?money(pd.tien)+' / '+money(it.a):'chưa chi · '+money(it.a)}</span></div>`;});
     if(!items.length)h+=`<div class="cat-meta" style="padding:7px 0"><span>chưa khai khoản cố định nào</span></div>`;
     h+=`</div>`;
     h+='</div>';
@@ -3449,7 +3477,8 @@ function vImport(){
             : `${t.q?`<div class="hint">Quét QR nên không có tên nơi bán — Vy điền giúp.</div>`:''}
                <input class="rename" value="${esc(t.n)}" placeholder="${t.q?'Mua gì, ở đâu?':'Nội dung'}" onchange="setName(${i},this.value)">
                ${catBtn(t.c,t.t,'pending',i)}
-               ${t.c&&groupOf(t.c).subs.length?`<button class="chk-btn" style="margin-left:8px" onclick="splitStart('pending',${i})">chia nhiều mục</button>`:''}
+               ${coTach(t)?`<button class="chk-btn" style="margin-left:8px" onclick="splitStart('pending',${i})">chia nhiều mục</button>`:''}
+               ${t.c==='gd_sn'?`<input class="rename" value="${esc(t.ai||'')}" placeholder="Sinh nhật của ai?" onchange="setAiP(${i},this.value)" aria-label="Sinh nhật của ai">`:''}
                ${t.s!=='tm'&&(t.t==='thu'||t.t==='chi')?`<button class="chk-btn" style="margin-left:8px" onclick="doiTMP(${i})">${t.t==='chi'?'ứng trước · nhận lại tiền mặt':'đổi tiền mặt'}</button>`:''}
                ${t.w?`<div class="tag">qua ví ${esc(t.w)}</div>`:''}
                ${khoiChonNg(t,i)}
@@ -3578,7 +3607,7 @@ function locGo(el,k){
 }
 function locXoa(){loc={nhom:[],nguon:[],tu:'',den:''};render();}
 function khoiLoc(){
-  const all=monthTx(cursor), dem={}, demN={};
+  const all=monthRaw(cursor), dem={}, demN={};
   const demC={};
   all.forEach(t=>{ if(t.c&&t.t!=='mv'&&t.t!=='dc'){const g=groupOf(t.c).id;dem[g]=(dem[g]||0)+1;demC[t.c]=(demC[t.c]||0)+1;}
     demN[t.s||'bidv']=(demN[t.s||'bidv']||0)+1; if(t.t==='mv'&&t.s2&&t.s2!==t.s)demN[t.s2]=(demN[t.s2]||0)+1; });
@@ -3638,12 +3667,13 @@ function delSel(){
   });
 }
 function listFiltered(){
-  let list=monthTx(cursor).slice().sort((a,b)=>(b.d+' '+(b.tm||'')).localeCompare(a.d+' '+(a.tm||'')));
+  let list=monthRaw(cursor).slice().sort((a,b)=>(b.d+' '+(b.tm||'')).localeCompare(a.d+' '+(a.tm||'')));
   if(filterCode){
     const g=groupOf(filterCode), isSub=filterCode!==g.id;
     list=list.filter(t=>isSub?t.c===filterCode:groupOf(t.c).id===filterCode);
   }
-  if(listF!=='all')list=list.filter(t=>listF==='mv'?(t.t==='mv'||t.t==='dc'):t.t===listF);
+  if(listF==='tt')list=list.filter(t=>t.tt);
+  else if(listF!=='all')list=list.filter(t=>listF==='mv'?(t.t==='mv'||t.t==='dc'):t.t===listF);
   if(loc.nhom.length)list=list.filter(t=>t.c&&t.t!=='mv'&&t.t!=='dc'&&(loc.nhom.includes(groupOf(t.c).id)||loc.nhom.includes(t.c)));
   if(loc.nguon.length)list=list.filter(t=>loc.nguon.includes(t.s||'bidv')||(t.t==='mv'&&loc.nguon.includes(t.s2)));
   if(loc.tu)list=list.filter(t=>t.d>=loc.tu);
@@ -3663,7 +3693,7 @@ function vList(){
   }
 
   let h=chip+`<div style="display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 9px">`
-    +[['all','Tất cả'],['chi','Chi'],['thu','Thu'],['mv','Chuyển']].map(([k,n])=>
+    +[['all','Tất cả'],['chi','Chi'],['thu','Thu'],['mv','Chuyển'],['tt','★ Thành tựu']].map(([k,n])=>
       `<button class="chip" style="margin-top:0;padding:6px 12px;font-size:12px;${listF===k?'background:var(--jade);color:var(--onacc);border-color:var(--jade)':''}" onclick="setListF('${k}')">${n}</button>`).join('')
     +`<button class="lo-bt${locSoBat()||open.loc?' on':''}" onclick="toggle('loc')" aria-expanded="${open.loc?'true':'false'}">Lọc${locSoBat()?' · '+locSoBat():''} ${open.loc?'▴':'▾'}</button>`
     +`<button class="chip" style="margin-top:0;padding:6px 12px;font-size:12px;${selMode?'background:var(--jade);color:var(--onacc);border-color:var(--jade)':''}" onclick="${selMode?'selStop()':'selStart()'}">${selMode?'Xong':'Chọn nhiều'}</button>`
@@ -3694,7 +3724,9 @@ function vList(){
         ? `<button class="chk ${picked?'on':''}" style="flex:none;margin-right:10px" aria-label="Chọn" onclick="event.stopPropagation();toggleSel('${t.id}')">${picked?'✓':''}</button>`
         : `<span class="spine" style="background:${gcA(col)}"></span>`}
       <div class="tx-body"><div class="tx-n">${esc(t.n)}</div>
-        <div class="tx-m">${meta}${(t.t==='chi'||t.t==='thu')?' · <span style="color:var(--ink-2)">'+esc(labelOf(t.c))+'</span>':''}</div>
+        <div class="tx-m">${meta}${(t.t==='chi'||t.t==='thu')?' · <span style="color:var(--ink-2)">'+esc(labelOf(t.c))+(t.c==='gd_sn'&&t.ai?' '+esc(t.ai):'')+'</span>':''}${t.tt?'<span class="tt-sao">★ Thành tựu</span>':''}</div>
+        ${hoanGoc(t)?`<div class="ho-ghi">hoàn cho "${esc(hoanGoc(t).n)}" · ${ddmm(hoanGoc(t).d)}</div>`:''}
+        ${daHoan()[String(t.id)]?`<div class="ho-ghi">đã hoàn ${money(daHoan()[String(t.id)])} · thực chi ${money(t.a-daHoan()[String(t.id)])}</div>`:''}
         ${du&&!selMode?`<button class="du-mo" onclick="event.stopPropagation();duMoL('${t.id}')">thu dư ${money(du)} so với số còn nợ · tách ${duMo&&duMo.id===String(t.id)?'▾':'›'}</button>`:''}</div>
       <div class="tx-a ${t.t==='thu'?'in':(t.t==='mv'||t.t==='dc')?'mv':''}">${sign}${money(t.a)}</div></div>`;
     if(du&&!selMode&&duMo&&duMo.id===String(t.id)){
@@ -3703,6 +3735,8 @@ function vList(){
     if(!selMode&&rowOpen===String(t.id)){
       h+=`<div style="padding:0 14px 13px 28px;background:var(--row);border-bottom:1px solid var(--line-2)">
         ${(t.t==='chi'||t.t==='thu')?`<div class="cat-meta" style="margin:0 0 7px"><span>Nhóm</span></div>${catBtn(t.c,t.t,'txn',t.id)}`:''}
+        ${t.c==='gd_sn'?`<input class="rename" value="${esc(t.ai||'')}" placeholder="Sinh nhật của ai?" onclick="event.stopPropagation()" onchange="setAi('${t.id}',this.value)" aria-label="Sinh nhật của ai">`:''}
+        ${khoiHoan(t)}
         <div style="display:flex;gap:8px;margin-top:9px" onclick="event.stopPropagation()">
           <div style="flex:1"><div class="cat-meta" style="margin:0 0 5px"><span>Ngày</span></div>
             ${dtInput('td-'+t.id,t.d,'qua',`onchange="setDate('${t.id}',this.value)"`)}</div>
@@ -3712,7 +3746,8 @@ function vList(){
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:11px">
           <button class="chk-btn" onclick="event.stopPropagation();editName('${t.id}')">Sửa nội dung</button>
-          ${(t.t==='chi'||t.t==='thu')&&groupOf(t.c).subs.length?`<button class="chk-btn" onclick="event.stopPropagation();splitStart('txn','${t.id}')">Tách nhiều mục</button>`:''}
+          ${coTach(t)?`<button class="chk-btn" onclick="event.stopPropagation();splitStart('txn','${t.id}')">Tách nhiều mục</button>`:''}
+          <button class="chk-btn" onclick="event.stopPropagation();togTT('${t.id}')">${t.tt?'Bỏ ★ Thành tựu':'★ Thành tựu'}</button>
           ${coRut(t)?`<button class="chk-btn" onclick="event.stopPropagation();doiRut('${t.id}',0)">Đây là rút tiền mặt</button>
           <button class="chk-btn" onclick="event.stopPropagation();doiRut('${t.id}',1)">Ứng trước · nhận lại tiền mặt</button>`:''}
           <button class="chk-btn" style="color:var(--brick);margin-left:auto" onclick="event.stopPropagation();del('${t.id}')">Xóa</button></div></div>`;
@@ -3720,6 +3755,36 @@ function vList(){
   });
   return h+`</div>`;
 }
+
+/* ---- Thành tựu (Vy duyệt phác thảo đợt 8): đánh dấu giao dịch đáng nhớ để tổng kết năm ---- */
+function togTT(id){const t=DB.txns.find(x=>String(x.id)===id); if(!t)return;
+  if(t.tt)delete t.tt; else t.tt=1; save(); render();}
+/* ---- Gắn khoản hoàn tiền vào khoản chi gốc (phác thảo đợt 8) ----
+   Chỉ cho dòng Thu khác. Gợi ý: khoản chi trong 60 ngày trước, số tiền không nhỏ hơn khoản hoàn,
+   bỏ cho mượn / trả nợ / tiết kiệm. Gõ chữ vào ô tìm thì tìm theo nội dung trong cả sổ. */
+let hoanQ='';
+const coHoan=t=>t.t==='thu'&&groupOf(t.c).id==='tkhac';
+function hoanUngVien(t){
+  const tu=iso(new Date(new Date(t.d+'T00:00')-60*864e5)), q=noAccent(hoanQ.trim());
+  return DB.txns.filter(x=>x.t==='chi'&&x.c&&!['muon','trano','tk'].includes(groupOf(x.c).id)
+      &&(q?noAccent(x.n).indexOf(q)>=0:(x.d<=t.d&&x.d>=tu&&x.a>=t.a)))
+    .sort((a,b)=>(b.d+' '+(b.tm||'')).localeCompare(a.d+' '+(a.tm||''))).slice(0,q?8:5);
+}
+function khoiHoan(t){
+  if(!coHoan(t))return '';
+  const g=hoanGoc(t);
+  if(g)return `<div class="ho-hop" onclick="event.stopPropagation()"><b>Hoàn cho:</b> ${esc(g.n)} · ${ddmm(g.d)} · ${money(g.a)}
+    <button class="chk-btn" style="margin-left:8px" onclick="boHoan('${t.id}')">Bỏ gắn</button></div>`;
+  const ds=hoanUngVien(t);
+  return `<div class="ho-hop" onclick="event.stopPropagation()"><b>Hoàn cho khoản chi nào?</b>
+    ${ds.map(x=>`<button class="ho-c" onclick="ganHoan('${t.id}','${x.id}')"><span>${esc(x.n)}<small>${ddmm(x.d)} · ${esc(labelOf(x.c))}</small></span><b>${money(x.a)}</b></button>`).join('')
+      ||'<div class="cat-meta" style="margin-top:6px"><span>Không thấy khoản nào hợp — tìm theo nội dung.</span></div>'}
+    <input class="rename" placeholder="Tìm khoản khác…" value="${esc(hoanQ)}" onchange="hoanQ=this.value;render()" style="margin-top:8px"></div>`;
+}
+function ganHoan(rid,cid){const t=DB.txns.find(x=>String(x.id)===rid); if(!t)return;
+  t.hoan=cid; hoanQ=''; save(); flash('Đã gắn khoản hoàn vào khoản chi gốc.','ok');}
+function boHoan(rid){const t=DB.txns.find(x=>String(x.id)===rid); if(!t)return;
+  delete t.hoan; save(); render();}
 
 /* ==================== mục tiêu tài chính ==================== */
 function goalList(){
@@ -3953,7 +4018,7 @@ function vInfo(){
    ['So với tháng trước','trong khối Hạn mức cần chú ý, mỗi nhóm so tổng chi từ đầu tháng tới hôm nay với TỔNG CẢ THÁNG trước của chính nhóm đó. Hai vế cùng lấy tổng chi thô của nhóm, không trừ khoản cố định ở vế nào. Vì tháng này còn đang chạy nên app chỉ báo khi đã vượt hẳn tháng trước — tiêu ít hơn thì không nhắc, và tháng trước nhóm đó chưa tiêu đồng nào thì không có gì để so.'],
    ['Nhắc ghi sổ','đếm từ hôm qua lùi dần xem có bao nhiêu ngày liên tiếp sổ không có giao dịch nào, dừng khi gặp ngày có ghi chép. Một ngày trống thì nhắc đúng ngày đó; từ hai ngày trở lên thì báo số ngày kèm lần cuối cập nhật. "Lần cuối" là lúc Vy bấm Lưu, không phải giờ của khoản chi — app suy ra từ mã giao dịch vốn đã mang sẵn mốc thời gian. Bấm "Không phát sinh giao dịch" thì những ngày đang bị nhắc được đánh dấu là ngày thật sự không tiêu gì và thôi nhắc. Chỉ hiện khi xem tháng hiện tại.'],
    ['Hạn mức một nhóm','chi phí cố định thuộc nhóm đó cộng phần linh hoạt đã phân bổ. Riêng Trả nợ lấy đúng kỳ nợ đến hạn trong tháng. Hạn mức lưu riêng từng tháng, tháng chưa đặt thì thừa kế tháng gần nhất trước đó.'],
-   ['Chi phí cố định đã chi chưa','cộng mọi giao dịch trong tháng có mã đối tác trùng mã nhận diện. Nếu bật tùy chọn xấp xỉ thì chỉ tính giao dịch lệch không quá 15%.'],
+   ['Chi phí cố định đã chi chưa','cộng mọi giao dịch trong tháng có mã đối tác trùng mã nhận diện. Chưa gắn mã thì tìm trong cùng nhóm một khoản chi lệch không quá 15% so với kế hoạch. Chỉ tính khoản CÓ giao dịch thật — không còn đánh dấu "đã trả" bằng tay; trả bằng tiền mặt thì Vy ghi một dòng chi tiền mặt. Ví dụ: yoga tháng 10 trả 12/10 qua BIDV 550.000, ghi đúng nhóm Làm đẹp thì app tự nhận là đã trả.'],
    ['Hạn mức tồn','cộng phần dư của tối đa 6 kỳ gần nhất, chỉ tính tháng có ghi chép, trần bằng 6 lần hạn mức tháng. Chỉ áp cho nhóm bật cộng dồn. Kỳ trước tiêu vượt thì thành số âm và bị trừ vào hạn mức tháng này.'],
    ['Rút hạn mức tồn','không tự cộng vào hạn mức. Chỉ khi Vy bấm rút thì phần rút mới vào hạn mức khả dụng và vào mẫu số nhịp tiêu.'],
    ['Thu nhập trong dự trù','tách giao dịch nhóm Lương thành hai kỳ theo ngày, lấy ngày đầu của kỳ 2 làm ranh giới. Kỳ đã về thì lấy đúng số thật; kỳ chưa về thì ước bằng trung bình kỳ đó của tối đa 3 tháng có ghi chép, chưa có lịch sử mới lấy phần còn thiếu so với kế hoạch. Thưởng và thu khác cộng thêm, không giữ chỗ. Cả hai kỳ đã về thì thu nhập tháng chốt bằng số thực nhận, dù cao hay thấp hơn kế hoạch.'],
@@ -4205,7 +4270,7 @@ function duDaLuu(t){
 /* tách thành [thu nợ phần còn nợ, phần dư]. Hai dòng chung sg, cùng giờ và số dư ngân hàng,
    để chuỗi đối chiếu BIDV vẫn thấy đúng một lần nhận 3.500.000 */
 function tachDu(t,du,cach){
-  const sg=t.sg||('du'+Date.now()), a=Object.assign({},t,{a:t.a-du,sg});
+  const sg=t.sg||maSg('du'), a=Object.assign({},t,{a:t.a-du,sg});
   const b={d:t.d,a:du,n:t.n+(cach==='doi'?' · nhờ rút tiền mặt':' · phần dư'),sg};
   if(t.id)b.id=Date.now()+Math.random();
   if(t.tm)b.tm=t.tm; if(t.b)b.b=t.b; if(t.n0)b.n0=t.n0;
@@ -4369,6 +4434,10 @@ function learn(t,code){
   else if(!t.q&&!t.w)DB.rules['k:'+merchantKey(t.n0||t.n)]=code;
 }
 function setCat(i,v){const t=pending[i];t.c=v;learn(t,v);save();render()}
+/* mục Sinh nhật: ghi sinh nhật của ai (Vy 24/11/2026) — để tổng kết năm biết đã mừng ai, bao nhiêu */
+function setAiP(i,v){const t=pending[i],s=String(v).trim().slice(0,40); if(s)t.ai=s; else delete t.ai;}
+function setAi(id,v){const t=DB.txns.find(x=>String(x.id)===id); if(!t)return;
+  const s=String(v).trim().slice(0,40); if(s)t.ai=s; else delete t.ai; save(); render();}
 function reCat(id,v){const t=DB.txns.find(x=>String(x.id)===id);if(!t)return;t.c=v;learn(t,v);save();render()}
 /* dòng CHI đã lưu thực ra là rút tiền mặt (ung=0) hoặc ứng trước rồi nhận lại tiền mặt (ung=1)
    → chuyển nguồn BIDV/Ví → Tiền mặt, giữ giờ và số dư ngân hàng (Vy duyệt phác thảo đợt 7, 24/11/2026).

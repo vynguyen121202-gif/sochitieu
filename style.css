@@ -678,6 +678,18 @@ input.dt{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius
 .ng-nut button{background:none;border:0;padding:6px 0;min-height:36px;color:var(--jade);font-weight:600;font-size:12.5px}
 .ng-form{margin-top:8px;padding:10px 12px;border-radius:12px;background:var(--card);border:1px solid var(--line)}
 .ng-khoan{margin-top:10px}
+/* tách nhiều mục mọi nhóm (ch-), thành tựu (tt-), gắn khoản hoàn (ho-) — phác thảo đợt 8 */
+.ch-r{display:grid;grid-template-columns:1fr 112px 32px;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line-2)}
+.ch-r .ch-sel{margin:0;min-height:44px;width:100%;color:var(--ink);font:inherit;font-size:16px;text-overflow:ellipsis;-webkit-appearance:none;appearance:none;padding:8px 12px}
+.ch-r input{min-height:44px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--field);color:var(--ink);font-size:16px;text-align:right;min-width:0;width:100%;box-sizing:border-box}
+.ch-x{width:32px;height:32px;border-radius:50%;border:0;background:var(--greybg);color:var(--ink-3)}
+.ch-x:disabled{opacity:.35}
+.ch-them{background:none;border:0;color:var(--jade);font-weight:600;font-size:13px;padding:12px 14px;min-height:44px}
+.tt-sao{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:99px;font-size:10.5px;font-weight:700;background:var(--warnbg);color:var(--warntx)}
+.ho-hop{margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--card);border:1px solid var(--line);font-size:12.5px;color:var(--ink)}
+.ho-c{display:flex;justify-content:space-between;gap:10px;width:100%;padding:9px 10px;margin-top:6px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;text-align:left;min-height:44px}
+.ho-c small{display:block;color:var(--ink-3);font-size:11px}
+.ho-ghi{font-size:11.5px;color:var(--pos);margin-top:3px}
 /* thu nợ nhiều hơn số còn nợ — tiền tố du- (phác thảo đợt 6) */
 .du-hop{width:100%;box-sizing:border-box;margin-top:10px;padding:11px 12px;border-radius:12px;background:var(--warnbg);border:1px solid var(--warnbd);font-size:12.5px;color:var(--ink);text-align:left}
 .du-hop b{color:var(--warntx)}

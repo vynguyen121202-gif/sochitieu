@@ -14,7 +14,8 @@ globalThis.__pend=p=>{pending=p;};
 globalThis.__peek=()=>pending;
 globalThis.__mo=id=>{rowOpen=id;};
 globalThis.__lf=v=>{listF=v;};
-globalThis.__f2={setAi,setAiP,commit,fixedOfGroup};
+globalThis.__f2={setAi,setAiP,commit,fixedOfGroup,applyBackup};
+globalThis.__msg=()=>msg;
 globalThis.__f={splitStart,splitSet,splitMa,splitThem,splitXoa,splitSave,vSplit,coTach,togTT,vList,
   hoanUngVien,ganHoan,boHoan,daHoan,hoanGoc,balances,balAt,bangTien,spentOf,coCau,metrics,monthTx,monthRaw,groupOf,labelOf,codeList};`;
 const R=Date, FD=class extends R{constructor(...a){if(!a.length)super('2026-11-24T10:00:00');else super(...a);}
@@ -170,6 +171,11 @@ db.fxDone={'2026-10':{fy:1}}; ctx.__set(db,T10);
   eq(ctx.__f2.fixedOfGroup('ld',T10).da,550000,'có giao dịch thật → đã trả 550.000');
   khop(T10,'có giao dịch thật: bảng vẫn khớp');
   ok(!SRC_APP.includes('toggleFxDone'),'app không còn nút "đã trả" bấm tay');}
+
+console.log('\nM · Khôi phục báo kèm tên file');
+{const msg=[]; const fl=ctx.flash; ctx.__set(so(),T10);
+  ctx.__f2.applyBackup(so(),'so-chi-tieu-sua.json');
+  ok(/Đã khôi phục 10 giao dịch từ file "so-chi-tieu-sua\.json"\./.test(ctx.__msg()),'câu báo có số giao dịch VÀ tên file',ctx.__msg());}
 
 console.log('\nJ · Sinh nhật của ai');
 db=so(); ctx.__set(db,T10);

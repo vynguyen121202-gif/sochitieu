@@ -36,7 +36,10 @@ function labelOf(code){
 const validCode=(code,kind)=>{const g=groupOf(code);return !!code&&g.id&&(!kind||g.k===kind);};
 
 const KEY='sochi:data';
-const VERSION='17.4';
+/* phiên bản = đúng số ?v=N của app.js đang chạy (index.html), để Vy nhìn là biết điện thoại đã lên bản mới chưa.
+   Nhãn cố định '17.4' cũ không bao giờ được cập nhật nên từng làm Vy tưởng app chưa lên bản mới. */
+const VERSION=(()=>{try{const s=document.querySelector('script[src*="app.js"]');
+  const m=s&&/[?&]v=(\d+)/.exec(s.getAttribute('src')||''); return m?m[1]:'?';}catch(e){return '?';}})();
 let DB={txns:[],debts:[],budgets:{},bm:{},goals:[],fixedItems:[],roll:{},offsets:[],draws:[],income:0,rules:{},opens:{bidv:0,vi:0,tm:0},checks:{},opts:{ab:'off'},chainOK:{},chot:{},efTarget:0,goalPlan:{mode:'auto',a:0},payDays:{k1:[5,10],k2:[15,25]},lastBackup:0,v:5};
 let tab='home', cursor=new Date(), pending=null, msg='', msgType='err', open={};
 
@@ -4066,17 +4069,16 @@ function vSet(){
     <div class="empty" style="text-align:left">Thu nhập, khoản cố định và hạn mức đã chuyển sang tab <b>Ngân sách</b> ở thanh dưới.
     <div class="sp"></div><button class="btn ghost" onclick="go('budget')">Mở tab Ngân sách</button></div>`;
 
-  h+=`<h2>Quy tắc đã học (${rules.length})</h2>`;
-  h+= rules.length
-    ? `<div class="panel">`+rules.map(([k,v])=>`<div class="row"><label style="font-size:13.5px">${esc(k.startsWith('p:')?'TK '+k.slice(2):k.slice(2))} → ${esc(labelOf(v))}</label>
-        <button style="background:none;border:0;color:var(--ink-3);font-size:13px" onclick="delRule('${esc(k)}')">Bỏ</button></div>`).join('')+`</div>`
-    : `<div class="empty">Sửa nhóm của một giao dịch có số tài khoản đối tác, app ghi nhớ để lần sau xếp đúng.</div>`;
-
-  const th=(DB.opts&&DB.opts.theme)||'auto';
-  h+=`<h2>Giao diện</h2><div class="panel"><div class="fld"><span>Nền sáng hay tối</span>
-    <select onchange="setTheme(this.value)">
-      ${[['auto','Theo cài đặt máy'],['light','Luôn nền sáng'],['dark','Luôn nền tối']].map(([v,n])=>
-        `<option value="${v}" ${v===th?'selected':''}>${n}</option>`).join('')}</select></div></div>`;
+  /* thu gọn mặc định, Vy bấm mới xổ ra (Vy 24/11/2026) */
+  h+=`<div class="panel" style="margin-top:18px"><button class="fold" style="margin:0;border:0" onclick="toggle('qtac')">
+      <span>Quy tắc đã học <small style="color:var(--ink-3);font-weight:500">${rules.length}</small></span>
+      <span class="xomui" data-mui="qtac" data-a="▴" data-b="▾">${open.qtac?'▴':'▾'}</span></button>
+    <div class="xow" data-xo="qtac" data-open="${open.qtac?1:0}">`
+    +(rules.length
+      ? rules.map(([k,v])=>`<div class="row"><label style="font-size:13.5px">${esc(k.startsWith('p:')?'TK '+k.slice(2):k.slice(2))} → ${esc(labelOf(v))}</label>
+        <button style="background:none;border:0;color:var(--ink-3);font-size:13px" onclick="delRule('${esc(k)}')">Bỏ</button></div>`).join('')
+      : `<div class="row"><label style="font-size:13px;color:var(--ink-3)">Sửa nhóm của một giao dịch có số tài khoản đối tác, app ghi nhớ để lần sau xếp đúng.</label></div>`)
+    +`</div></div>`;
 
   const MODES=[['off','Tắt'],['share','Mở bảng chia sẻ'],['file','Tải file về máy']];
   h+=`<h2>Sao lưu</h2><div class="panel">
@@ -4105,10 +4107,13 @@ function vSet(){
     <div class="empty" style="text-align:left">Toàn bộ công thức app đang dùng: số dư, nhịp tiêu, hạn mức, dự trù, chỉ số.
     <div class="sp"></div><button class="btn ghost" onclick="go('info')">Mở ghi chú cách tính</button></div>`;
 
+  /* chỉ để nút Chép; nội dung câu lệnh thu gọn, bấm mới xem (Vy 24/11/2026) */
   h+=`<h2>Câu lệnh cho AI</h2>
-    <div class="stack-note"><span>Chép câu lệnh này, gửi kèm ảnh chụp giao dịch cho AI, rồi dán kết quả vào tab Nhập. Chạm vào ô để chọn hết.</span></div>
-      <div class="sp"></div><textarea class="mono" rows="8" readonly onclick="this.select()">${esc(promptText())}</textarea>
-      <div class="sp"></div><button class="btn ghost" onclick="copyPrompt()">Chép câu lệnh</button>`;
+    <button class="btn ghost" onclick="copyPrompt()">Chép câu lệnh</button>
+    <div class="sp"></div><div class="panel"><button class="fold" style="margin:0;border:0" onclick="toggle('cauLenh')">
+      <span>Xem câu lệnh</span><span class="xomui" data-mui="cauLenh" data-a="▴" data-b="▾">${open.cauLenh?'▴':'▾'}</span></button>
+    <div class="xow" data-xo="cauLenh" data-open="${open.cauLenh?1:0}"><div style="padding:0 12px 12px">
+      <textarea class="mono" rows="8" readonly onclick="this.select()">${esc(promptText())}</textarea></div></div></div>`;
 
   if(msg)h+=`<div class="${msgType==='ok'?'ok':'err'}">${esc(msg)}</div>`;
   const w=PAY();
@@ -4565,19 +4570,21 @@ function addManual(){
     manualCode=''; mNhap={a:'',n:'',s:'',d:'',han:''}; save();msg='';cursor=new Date();go('home');autoBackup();
   });
 }
-function applyBackup(d){
+function applyBackup(d,ten){
   if(!d||!Array.isArray(d.txns))throw 0;
   if((d.v||1)<15)d=migrate(d);
   DB=Object.assign({},d,{txns:d.txns,debts:Array.isArray(d.debts)?d.debts:[],budgets:d.budgets||{},
     fixedItems:Array.isArray(d.fixedItems)?d.fixedItems:[],roll:d.roll||{},offsets:Array.isArray(d.offsets)?d.offsets:[],draws:Array.isArray(d.draws)?d.draws:[],income:d.income||0,rules:d.rules||{},
     opens:Object.assign({bidv:0,vi:0,tm:0},d.opens||{}),checks:d.checks||{},
     opts:Object.assign({ab:'off'},d.opts||{}),efGop:d.efGop||0,chot:d.chot||{},chotLS:Array.isArray(d.chotLS)?d.chotLS:[],nsChot:d.nsChot||{},lichThu:d.lichThu||{},batDau:d.batDau||'',lastBackup:d.lastBackup||0,v:15});
-  save();flash('Đã khôi phục '+d.txns.length+' giao dịch.','ok');
+  save();flash('Đã khôi phục '+d.txns.length+' giao dịch'+(ten?' từ file "'+ten+'"':'')+'.','ok');
 }
+/* câu báo ghi kèm tên file, để Vy thấy ngay đã chọn đúng file chưa (Vy 24/11/2026 từng chọn nhầm file gốc
+   237 giao dịch thay vì bản đã sửa 239). Xóa ô chọn sau khi đọc: chọn lại cùng file vẫn chạy. */
 function restoreFile(el){const f=el.files&&el.files[0];if(!f)return;
-  const r=new FileReader();
-  r.onload=()=>{try{applyBackup(JSON.parse(r.result));}catch(e){flash('File sao lưu không đọc được.','err');}};
-  r.onerror=()=>flash('Không mở được file.','err'); r.readAsText(f);}
+  const r=new FileReader(), ten=f.name;
+  r.onload=()=>{try{applyBackup(JSON.parse(r.result),ten);}catch(e){flash('File sao lưu không đọc được.','err');}};
+  r.onerror=()=>flash('Không mở được file.','err'); r.readAsText(f); el.value='';}
 function doRestore(){try{applyBackup(JSON.parse(document.getElementById('restore').value));}
   catch(e){flash('Bản sao lưu không đọc được.','err');}}
 function wipe(){if(confirm('Xóa hết giao dịch, hạn mức và quy tắc? Không khôi phục được.')){

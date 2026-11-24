@@ -67,13 +67,16 @@ ctx.__parse('2026-09-20 | bidv | chi | 50000 | Cafe | an_cafe |  | ');
 ok(ctx.__bo().length===0,'khong co dong hong thi danh sach rong');
 ok(ctx.__v().indexOf('không đọc được')<0,'va khong hien khoi canh bao');
 
-console.log('\nF · Cai dat: cau lenh AI mo san');
+/* Vy đổi 24/11/2026: câu lệnh THU GỌN, chỉ để nút Chép ở ngoài — thay quyết định v=7 "mở sẵn" */
+console.log('\nF · Cai dat: cau lenh AI thu gon, nut Chep o ngoai');
 const s=ctx.__vset();
 ok(s.includes('Câu lệnh cho AI'),'van co muc Cau lenh cho AI');
-{const i=s.indexOf('Câu lệnh cho AI'),j=s.indexOf('Chép câu lệnh');
-  ok(i>=0&&j>i&&s.slice(i,j).indexOf('<details>')<0,'muc Cau lenh cho AI khong con giau trong khoi gap');}
-ok(s.includes('Chép câu lệnh'),'van co nut chep');
-ok(s.includes('gửi kèm ảnh chụp giao dịch'),'co dong huong dan dung khi nao');
+{const i=s.indexOf('Câu lệnh cho AI'),j=s.indexOf('Chép câu lệnh'),k=s.indexOf('data-xo="cauLenh"');
+  ok(i>=0&&j>i&&k>j,'nut Chep cau lenh nam NGOAI khoi thu gon, ngay duoi tieu de');
+  ok(/data-xo="cauLenh" data-open="0"/.test(s),'noi dung cau lenh thu gon mac dinh');
+  ok(s.indexOf('Mã nhóm chi:',k)>k,'noi dung cau lenh van nam trong khoi thu gon');}
+ok(/data-xo="qtac" data-open="0"/.test(s),'quy tac da hoc thu gon mac dinh');
+ok((s.match(/<h2>Giao diện<\/h2>/g)||[]).length===1,'khong con hai muc Giao dien trung nhau');
 
 console.log('\n'+(loi?'✗ CON '+loi+' LOI':'✓ TAT CA DEU DAT'));
 process.exit(loi?1:0);

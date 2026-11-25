@@ -1230,6 +1230,96 @@ function ctX(k,sy,ten,v,f,con){
 }
 const CT_SODU='(1) + (2) − (3) − (4) − (5)';
 /* dòng (1)…(5), dùng chung cho tháng đang chạy và tháng đã đóng sổ */
+/* ---------- tháng đã chốt: mục con trong (2)…(5) xổ tiếp ra từng giao dịch (Vy duyệt 25/11/2026) ----------
+   Chi linh hoạt xổ ra nhóm rồi mới tới giao dịch; Chi phí cố định xổ ra từng khoản cố định.
+   Cộng các dòng con luôn bằng dòng cha — kt-tong-ket.js kiểm điều đó trên sổ mẫu. */
+function gdDong(t,am){
+  return '<div class="c3-r"><span class="c3-d">'+ddmm(t.d)+'</span><span class="c3-n">'+esc(t.n||labelOf(t.c))
+    +'</span><b>'+soAm(am?-t.a:t.a)+'</b></div>';
+}
+function dsGD(l,am){return l.slice().sort(function(a,b){return a.d<b.d?-1:a.d>b.d?1:0;})
+  .map(function(t){return gdDong(t,am);}).join('');}
+function ct2(k,ten,v,con,ghi){
+  if(!con)return ctS(ten,v);
+  var op=XO[k]?1:0;
+  return '<div class="xo c2-xo" data-k="'+k+'" data-open="'+op+'">'
+    +'<button class="xo-bt c2-bt" onclick="xoTog(this)" aria-expanded="'+(op?'true':'false')+'">'+XOCH
+    +'<span class="c2-t">'+ten+(ghi?'<i>'+ghi+'</i>':'')+'</span><b>'+soAm(v)+'</b></button>'
+    +'<div class="xo-bd"><div class="xo-in c2-in">'+con+'</div></div></div>';
+}
+/* các nhóm giao dịch đứng sau từng mục con của bangTien(); dùng chung cho bảng và bộ kiểm tra */
+function bangChiTiet(t,d){
+  var list=monthTx(d), moc=PAY().k2[0], fx=fixedTxIds(d);
+  var thuG=function(g){return list.filter(function(x){return x.t==='thu'&&groupOf(x.c).id===g;});};
+  var chiG=function(g){return list.filter(function(x){return x.t==='chi'&&groupOf(x.c).id===g;});};
+  var vao=t.vao.map(function(v){
+    var l=/^Lương kỳ 1/.test(v.n)?thuG('luong').filter(function(z){return +z.d.slice(8,10)<moc;})
+      :/^Lương kỳ 2/.test(v.n)?thuG('luong').filter(function(z){return +z.d.slice(8,10)>=moc;})
+      :v.n==='Lương khác'?[]:v.n==='Thưởng'?thuG('thuong'):v.n==='Thu khác'?thuG('tkhac'):[];
+    return {n:v.n,a:v.a,l:l};
+  });
+  var ra=t.ra.map(function(v){
+    if(v.n==='Chi linh hoạt'){
+      var by={};
+      list.forEach(function(z){ if(z.t!=='chi'||fx[z.id])return; var g=groupOf(z.c).id;
+        if(g==='tk'||g==='muon'||g==='trano')return; (by[g]=by[g]||[]).push(z); });
+      return {n:v.n,a:v.a,nhom:Object.keys(by).map(function(g){return {k:g,n:groupOf(g).n,a:sum(by[g]),l:by[g]};})
+        .sort(function(a,b){return b.a-a.a;})};
+    }
+    if(v.n==='Chi phí cố định'){
+      var b2={}, th=[];
+      list.forEach(function(z){ if(!fx[z.id])return; var n=fx[z.id].name||'Khác';
+        if(!b2[n]){b2[n]=[];th.push(n);} b2[n].push(z); });
+      return {n:v.n,a:v.a,nhom:th.map(function(n,j){return {k:'f'+j,n:n,a:sum(b2[n]),l:b2[n]};})};
+    }
+    return {n:v.n,a:v.a,l:v.n==='Trả góp'?list.filter(function(z){return z.t==='chi'&&z.c==='trano_gop';})
+      :v.n==='Chuyển vào tiết kiệm'?chiG('tk'):[]};
+  });
+  return {vao:vao,ra:ra,muon:chiG('muon'),thuno:thuG('thuno'),
+    traCN:chiG('trano').filter(function(z){return z.c!=='trano_gop';}),divay:thuG('divay')};
+}
+function bangSoDuXo(t,thang){
+  var b=bangChiTiet(t,cursor), dem=function(l,ch){return l.length>1?l.length+' '+(ch||'khoản'):'';};
+  var x=ctR(1,'Số dư đầu '+thang,t.dauThang), c='';
+  b.vao.forEach(function(v,i){c+=ct2('c2v'+i,esc(v.n),v.a,v.l.length?dsGD(v.l):'',dem(v.l));});
+  x+=ctX('ct2',2,'Thực thu',t.tongVao,'',c);
+  c='';
+  b.ra.forEach(function(v,i){
+    if(v.nhom){
+      var con=v.nhom.map(function(g){return ct2('c3'+v.n.charAt(4)+g.k,esc(g.n),g.a,dsGD(g.l),
+        dem(g.l,v.n==='Chi phí cố định'?'lần':'khoản'));}).join('');
+      c+=ct2('c3r'+i,esc(v.n),v.a,'<div class="c2-long">'+con+'</div>',
+        v.nhom.length+(v.n==='Chi linh hoạt'?' nhóm':' khoản'));
+    }else c+=ct2('c3r'+i,esc(v.n),v.a,v.l.length?dsGD(v.l):'',dem(v.l));
+  });
+  x+=ctX('ct3',3,'Thực chi',t.tongRa,'',c);
+  c=(t.muon?ct2('c4m','Cho mượn',t.muon,dsGD(b.muon),dem(b.muon)):'')
+    +(t.thuno?ct2('c4t','Thu nợ',-t.thuno,dsGD(b.thuno,1),dem(b.thuno)):'');
+  x+=ctX('ct4',4,'Tiền đang cho vay',t.choRong,'cho mượn − thu nợ',c);
+  c=(t.traCN?ct2('c5t','Trả nợ cá nhân',t.traCN,dsGD(b.traCN),dem(b.traCN)):'')
+    +(t.divay?ct2('c5v','Đi vay',-t.divay,dsGD(b.divay,1),dem(b.divay)):'');
+  x+=ctX('ct5',5,'Trả nợ',t.vayRong,'trả nợ − đi vay',c);
+  return x;
+}
+/* thẻ "Đã chi" của tháng đã chốt (Vy duyệt 25/11/2026): Thực chi, tỷ lệ Thực chi ÷ Thu nhập,
+   Thu nhập và Còn lại = Thu nhập − Thực chi. "Còn lại" KHÔNG phải số dư cuối tháng. */
+function theDaChi(chi,thu){
+  const th=MONTH(cursor.getMonth()).toLowerCase(), con=thu-chi, ty=thu?chi/thu*100:0;
+  const muc=ty<70?'tot':ty<=100?'vua':'vuot';
+  return '<div class="dc'+(open.anSo?' dc-an':'')+'">'
+    +'<div class="dc-top"><span class="dc-lb">Đã chi trong '+th+'</span><span class="dc-chip">Thực chi</span>'
+    +'<button class="dc-mat" onclick="anSo(this)" aria-label="Ẩn hoặc hiện số tiền">'
+    +'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div>'
+    +'<div class="dc-so"><span class="dc-n">'+money(chi)+'</span></div>'
+    +(thu?'<div class="dc-ty"><span>Tỷ lệ chi tiêu / thu nhập</span><span class="dc-pc '+muc+'">'+ty.toFixed(1).replace('.',',')+'%</span></div>'
+      +'<div class="dc-tr"><i class="'+muc+'" style="width:'+Math.min(100,ty)+'%"></i></div>':'')
+    +'<div class="dc-hai">'
+    +'<div class="dc-o"><span class="dc-ol">Thu nhập '+th+'</span><b><span class="dc-n">'+money(thu)+'</span></b></div>'
+    +'<div class="dc-o"><span class="dc-ol">'+(con<0?'Chi vượt thu nhập':'Còn lại')+'</span><b class="'+(con<0?'am':'duong')+'"><span class="dc-n">'+(con<0?'−':'')+money(Math.abs(con))+'</span></b></div>'
+    +'</div></div>';
+}
+/* con mắt: đổi tại chỗ, không vẽ lại trang; nhớ trong open để lần vẽ sau vẫn ẩn */
+function anSo(bt){open.anSo=!open.anSo;bt.closest('.dc').classList.toggle('dc-an',!!open.anSo);}
 function bangSoDu(t,thang){
   var x=ctR(1,'Số dư đầu '+thang,t.dauThang), c;
   x+=ctX('ct2',2,'Thực thu',t.tongVao,'',t.vao.map(function(v){return ctS(esc(v.n),v.a);}).join(''));
@@ -1245,7 +1335,7 @@ function bangSoDu(t,thang){
    Số cuối lấy balAt() nên đúng cả khi tháng sau đã có giao dịch. */
 function khoiTongKet(){
   var t=bangTien(cursor), thang=MONTH(cursor.getMonth()).toLowerCase();
-  var x='<div class="panel">'+bangSoDu(t,thang);
+  var x='<div class="panel">'+bangSoDuXo(t,thang);
   /* Số dư cuối tháng = chính là phần giữ lại được của tháng đã đóng (Vy chốt 28/09/2026).
      Xổ ra từng nguồn; cộng các nguồn phải ra đúng số đầu dòng. */
   var bs=balSrcAt(cursor), ch=(DB.chot||{})[ym(cursor)];
@@ -3233,6 +3323,8 @@ function vHome(){
   let h=cur?(nsCan()?khoiSangThang():chotCan()?khoiChot():(khoiNSXong()||khoiChot()))+khoiMucTieu():'';
   const bal=balances(), chk=bidvCheck();
   const tongDu=SRC.reduce((s2,x)=>s2+(bal[x.id]||0),0);
+  /* tháng đã chốt: không hiện số dư HÔM NAY (Vy 25/11/2026) — số dư của tháng đó nằm ở Tổng kết */
+  if(cur){
   h+=`<button class="strip" id="sec-bal" onclick="toggle('bal')">
       <span>${SRC.map(x=>'<span class="nw">'+esc(x.n.replace('Ví điện tử','Ví'))+' <b>'+money(bal[x.id]||0)+'</b></span>').join(' · ')}</span>
       <span class="strip-r">${money(tongDu)} <span class="xomui" data-mui="bal" data-a="▲" data-b="▼">${open.bal?'▲':'▼'}</span></span></button>`;
@@ -3254,6 +3346,7 @@ function vHome(){
     h+=`</div>`;
     h+='</div>';
   }
+  }
 
 
   /* Nhắc ghi sổ phải đứng ngoài nhánh if/else: tháng mới sang chưa có giao dịch nào
@@ -3263,7 +3356,8 @@ function vHome(){
   else{
     /* "Đã chi" = đúng dòng (3) Thực chi: cùng một chữ "chi" thì cùng một con số ở mọi chỗ.
        Không gồm cho mượn và trả nợ cá nhân; trả góp thì có (Vy 28/09/2026). */
-    h+=`<div class="hero"><div class="lead">Đã chi trong ${MONTH(cursor.getMonth()).toLowerCase()}</div>
+    if(!cur)h+=theDaChi(bangTien(cursor).tongRa,thuNhap);
+    else h+=`<div class="hero"><div class="lead">Đã chi trong ${MONTH(cursor.getMonth()).toLowerCase()}</div>
       <div class="sum">${money(bangTien(cursor).tongRa)}</div>
       <div class="sub">Thực chi`
       +(thuNhap?` · Thu nhập <b>${money(thuNhap)}</b>`:'')+`</div></div>`;
@@ -4002,6 +4096,8 @@ function vInfo(){
    ['Tổng quan tháng này','(1) số dư đầu tháng + (2) Thực thu − (3) Thực chi − (4) Tiền đang cho vay − (5) Trả nợ, ra đúng số dư hiện tại. Kiểm được bằng cách so với sao kê.'],
    ['Thực thu','tiền đã vào trong tháng: lương từng kỳ, thưởng, thu khác, và dòng điều chỉnh khi đối chiếu. KHÔNG tính thu nợ và tiền đi vay — đó không phải tiền Vy kiếm được, để vào làm Thực thu phồng lên. Trong đó lương + thưởng + thu khác là Thu nhập, app ghi riêng ngay dưới tiêu đề.'],
    ['Thực chi','tiền đã ra trong tháng: chi linh hoạt · chi phí cố định · trả góp · chuyển vào Tiết kiệm & Đầu tư. KHÔNG tính cho mượn và trả nợ cá nhân — hai khoản đó sang hai dòng riêng. Trả góp vẫn ở đây vì đó là tiền đi hẳn mỗi tháng.'],
+   ['Tỷ lệ chi tiêu / thu nhập','chỉ hiện ở tháng đã chốt: Thực chi chia cho Thu nhập. Dưới 70% xanh, 70–100% cam, trên 100% đỏ.'],
+   ['Còn lại (tháng đã chốt)','Thu nhập trừ Thực chi. KHÔNG phải số dư cuối tháng: tiền cho mượn, thu nợ, đi vay và trả nợ cá nhân không nằm trong phép trừ này. Số dư cuối tháng xem ở bảng Tổng kết.'],
    ['Tiền đang cho vay','cho mượn trong tháng trừ thu nợ đã về. Dương là tiền còn nằm ở người khác, trừ vào số dư. Tháng nào thu về nhiều hơn cho mượn thì dòng này mang dấu âm, nghĩa là tiền về túi nhiều hơn tiền ra.'],
    ['Trả nợ','trả nợ cá nhân trong tháng trừ tiền đi vay. Dương là nợ giảm được, trừ vào số dư. Tháng nào vay nhiều hơn trả thì dòng này mang dấu âm, nghĩa là tiền vay về nhiều hơn tiền trả đi. Trả góp không nằm ở đây mà ở Thực chi.'],
    ['Chi linh hoạt','tổng mọi giao dịch chi trong tháng sau khi bỏ ra bốn thứ: các khoản đã khớp chi phí cố định, nhóm Tiết kiệm & Đầu tư, nhóm Trả nợ, nhóm Cho mượn. Đây là phần Vy tự quyết định tiêu, và là con số mà Hạn mức linh hoạt dùng để kiểm soát.'],

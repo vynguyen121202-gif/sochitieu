@@ -737,3 +737,47 @@ input.dt{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius
 .ct-r.tot{flex-wrap:wrap;row-gap:4px}
 .ct-r.tot>.ct-n{flex:1 1 auto}
 .ct-r.tot>b,.ct-r.tot>.ct-hai{margin-left:auto}
+
+/* thẻ "Đã chi" tháng đã chốt + mục con xổ trong Tổng kết (Vy duyệt 25/11/2026). Tiền tố dc-, c2-, c3- */
+.dc{--dclb:#4A5266;--dcmu:#6B7383;--dcok:#137A43;--dcbad:#B83029;--dcwarn:#8A5208;--dcwbg:#FCEBD2;--dcobg:#DDF1E5;--dcebg:#FADCD9;
+  --dcf1:#2E9E5E;--dcf2:#E0911A;--dcf3:#D23C33;--dctr:#DCE5F6;--dcln:#DDE6F7;
+  background:linear-gradient(180deg,#EDF2FC 0%,#F6F8FE 55%,#FFFFFF 100%);border:1px solid var(--line);border-radius:var(--r);
+  padding:14px 16px 0;margin-top:4px;overflow:hidden}
+:root[data-theme="dark"] .dc{--dclb:#C9D2EA;--dcmu:#A7B1CC;--dcok:#7FE0A8;--dcbad:#FF9E9E;--dcwarn:#FFD29A;--dcwbg:rgba(242,184,114,.18);
+  --dcobg:rgba(98,207,147,.16);--dcebg:rgba(240,132,132,.18);--dcf1:#62CF93;--dcf2:#F2B872;--dcf3:#F08484;--dctr:rgba(143,174,240,.18);--dcln:rgba(143,174,240,.18);
+  background:linear-gradient(180deg,rgba(143,174,240,.16) 0%,rgba(143,174,240,.06) 60%,rgba(14,22,48,.80) 100%),rgba(14,22,48,.80);backdrop-filter:blur(12px)}
+.dc-top{display:flex;align-items:center;gap:8px}
+.dc-lb{font-size:14px;color:var(--dclb);white-space:nowrap}
+.dc-chip{font-size:12px;font-weight:600;color:var(--tinttx);background:var(--tintb);border:0;padding:1px 9px;border-radius:8px}
+
+.dc-mat{width:44px;height:36px;margin:-6px -12px -6px auto;border:0;background:none;color:var(--dcmu);display:grid;place-items:center;cursor:pointer}
+.dc-so{font-size:clamp(28px,8.4vw,32px);font-weight:600;letter-spacing:-.02em;line-height:1.15;margin-top:2px;white-space:nowrap;color:var(--ink)}
+.dc small{font-size:.42em;font-weight:600;color:var(--dcmu);text-decoration:underline;margin-left:3px;vertical-align:.18em;letter-spacing:0}
+.dc-ty{display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:13px;color:var(--dclb)}
+.dc-pc{font-size:12.5px;font-weight:700;padding:1px 9px;border-radius:20px}
+.dc-pc.tot{background:var(--dcobg);color:var(--dcok)}.dc-pc.vua{background:var(--dcwbg);color:var(--dcwarn)}.dc-pc.vuot{background:var(--dcebg);color:var(--dcbad)}
+.dc-tr{height:7px;border-radius:8px;background:var(--dctr);margin-top:6px;overflow:hidden}
+.dc-tr i{display:block;height:100%;border-radius:8px}
+.dc-tr i.tot{background:var(--dcf1)}.dc-tr i.vua{background:var(--dcf2)}.dc-tr i.vuot{background:var(--dcf3)}
+.dc-hai{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--dcln);margin:12px -16px 0}
+.dc-o{padding:10px 6px 12px;text-align:center;min-width:0}.dc-o+.dc-o{border-left:1px solid var(--dcln)}
+.dc-ol{display:block;font-size:12px;font-weight:500;color:var(--dclb)}
+.dc-o b{display:block;font-size:16px;font-weight:600;margin-top:1px;white-space:nowrap;color:var(--ink)}
+.dc-o b.duong{color:var(--dcok)}.dc-o b.am{color:var(--dcbad)}
+.dc-o em{display:block;font-style:normal;font-size:11px;color:var(--dcmu);margin-top:1px}
+.dc-an .dc-n{display:none}.dc-an .dc-so::before,.dc-an .dc-o b::before{content:"••••••"}
+.ct-in{padding:0 0 6px}
+.c2-bt{display:flex;align-items:baseline;gap:8px;width:100%;border:0;background:none;text-align:left;
+  padding:7px 14px 7px 30px;font-size:12.5px;color:var(--ink-2);cursor:pointer;min-height:36px}
+.c2-bt .xo-ch{color:var(--ink-3);transform:scale(.8)}
+.c2-t{flex:1;min-width:0}.c2-t i{font-style:normal;font-size:11px;color:var(--ink-3);margin-left:6px}
+.c2-bt b{font-weight:500;white-space:nowrap;color:var(--ink-2)}
+.c2-xo[data-open="1"]>.c2-bt{color:var(--ink)}.c2-xo[data-open="1"]>.c2-bt b{color:var(--ink);font-weight:600}
+.c2-in{padding:0 14px 6px 46px}
+.c2-long{margin:0 -14px 0 -46px}
+.c2-long .c2-bt{padding-left:46px}
+.c2-long .c2-in{padding-left:62px}
+.c3-r{display:flex;align-items:baseline;gap:8px;padding:5px 0;font-size:12px;color:var(--ink-2);border-left:2px solid var(--tintbd);padding-left:10px}
+.c3-d{flex:none;color:var(--ink-3);font-size:11px;width:34px}
+.c3-n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.c3-r b{font-weight:500;white-space:nowrap}

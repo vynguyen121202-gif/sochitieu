@@ -845,3 +845,17 @@ h2.hl .tk-tag{flex:none}
 .ctk-r{display:flex;justify-content:space-between;font-size:13px;padding-top:9px}
 .ctk-r b{font-weight:700}.ctk-r .am{color:var(--brick)}.ctk-r .duong{color:var(--pos)}
 .ctk-r.nho{font-size:12px;color:var(--ink-3);padding-top:4px}
+
+/* gắn hoàn tiền lúc nhập — bắt buộc (Vy duyệt 27/11/2026) */
+.ho-bb{border:1px solid var(--warnbd);background:var(--warnbg)}
+.ho-req{font-size:11px;font-weight:700;color:var(--warntx);margin-left:4px}
+.ho-nh{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);margin:10px 0 2px}
+.ho-c{transition:border-color .2s,box-shadow .2s,background .2s}
+.ho-c.ho-on{border-color:var(--jade);box-shadow:0 0 0 2px var(--tintbd);background:var(--tint)}
+.ho-khong{display:block;margin-top:8px;font:inherit;font-size:12.5px;font-weight:600;color:var(--ink-2);background:none;border:1px dashed var(--dim);border-radius:12px;min-height:44px;width:100%;cursor:pointer;transition:border-color .2s,color .2s}
+.ho-khong.ho-on{border-style:solid;border-color:var(--jade);color:var(--tinttx)}
+.ho-kq{font-size:12.5px;margin-top:8px;color:var(--ink-2)}
+/* dòng tiền ròng trong khối "Sắp ghi vào sổ" */
+.ron{padding:11px 14px;border-top:1px solid var(--line);background:var(--rowb)}
+.ron .src-n{font-size:13.5px;font-weight:700}
+.ron .src-a{font-size:16px;font-weight:700}

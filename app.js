@@ -767,14 +767,20 @@ function bindFixed(id,mp){
 }
 function commit(){
   /* thu nợ dư mà Vy chọn "nhờ rút tiền mặt" / "thu khác" → ghi thành 2 dòng (Vy 09/11/2026) */
+  if(pending.some(needHoan))return;
+  const goc=new Map();   /* dòng cùng lần nhập → id sẽ ghi, để khoản hoàn gắn được vào khoản chưa vào sổ */
   const add=pending.filter(t=>t.keep).flatMap(t=>{const du=duCho(t);
-    return du>0&&(t.duC==='doi'||t.duC==='khac')?tachDu(t,du,t.duC):[t];}).map(t=>{
+    return (du>0&&(t.duC==='doi'||t.duC==='khac')?tachDu(t,du,t.duC):[t]).map(x=>[t,x]);}).map(([t0,t])=>{
     const o={id:Date.now()+Math.random(),d:t.d,a:t.a,t:t.t,n:t.n,s:t.s||'bidv'};
+    if(!goc.has(t0))goc.set(t0,o.id);
+    if(t===t0&&laHoan(t)&&t.hoanP&&t.hoanP!=='khong')o._hp=t.hoanP;
     if(t.t==='mv')o.s2=t.s2||'vi'; else o.c=t.c;
     if(t.tm)o.tm=t.tm; if(t.b)o.b=t.b; if(t.p)o.p=t.p;
     if(t.han)o._han=t.han; if(t.ng)o._ng=t.ng; if(t.doi)o.doi=1;
     if(t.w)o.w=t.w; if(t.q)o.q=1; if(t.sg)o.sg=t.sg; if(t.n0&&t.n0!==t.n)o.n0=t.n0; if(t.ai&&o.c==='gd_sn')o.ai=t.ai;
     return o;});
+  add.forEach(o=>{ if(!o._hp)return;
+    o.hoan=o._hp[0]==='p'?goc.get(pending[+o._hp.slice(1)]):o._hp; delete o._hp; if(!o.hoan)delete o.hoan; });
   const drop=new Set(pending.filter(t=>t.keep&&t.rep&&t.repDo===1).map(t=>t.rep.id));
   hoiChot({bo:DB.txns.filter(x=>drop.has(String(x.id))),them:add},()=>{
     if(drop.size)DB.txns=DB.txns.filter(x=>!drop.has(String(x.id)));
@@ -3690,7 +3696,7 @@ function vHome(){
 function vImport(){
   if(pending){
     const on=pending.filter(t=>t.keep), miss=pending.filter(needCat).length,
-          ask=pending.filter(needRep).length, hoiDu=pending.filter(needDu).length;
+          ask=pending.filter(needRep).length, hoiDu=pending.filter(needDu).length, hoiHoan=pending.filter(needHoan).length;
     const tatCa=pending.length&&on.length===pending.length;
     let h=`<h2>Kiểm tra trước khi lưu</h2>`;
     h+=khoiBoQua();
@@ -3724,6 +3730,7 @@ function vImport(){
                ${t.s!=='tm'&&(t.t==='thu'||t.t==='chi')?`<button class="chk-btn" style="margin-left:8px" onclick="doiTMP(${i})">${t.t==='chi'?'ứng trước · nhận lại tiền mặt':'đổi tiền mặt'}</button>`:''}
                ${t.w?`<div class="tag">qua ví ${esc(t.w)}</div>`:''}
                ${khoiChonNg(t,i)}
+               ${khoiHoanP(t,i)}
                ${(()=>{const g=t.c?groupOf(t.c).id:'';const cho=g==='muon'&&t.t==='chi', vay=g==='divay'&&t.t==='thu';
                  return cho||vay?`<div class="rev-han"><div class="cat-meta" style="margin:8px 0 5px"><span>${cho?'Dự kiến thu lại ngày':'Dự kiến trả ngày'}</span></div>
                    ${dtInput('phan-'+i,t.han||'','toi','placeholder="dd/mm/yy · để trống nếu chưa biết" onchange="setHanP('+i+',this.value)"')}</div>`:'';})()}`}
@@ -3761,12 +3768,15 @@ function vImport(){
         ${D('Tiền ra',oChi.length,sChi,'var(--brick)')}
         ${D('Tiền vào',oThu.length,sThu,'var(--pos)')}
         ${D('Chuyển giữa các nguồn',oMv.length,sMv,'var(--ink-2)')}
+        ${oChi.length||oThu.length?`<div class="src ron"><div><div class="src-n">Dòng tiền ròng</div><div class="src-m">tiền vào − tiền ra · không tính chuyển giữa các nguồn</div></div>
+          <div class="src-a" style="color:${sThu-sChi<0?'var(--brick)':'var(--pos)'}">${sThu-sChi<0?'−':sThu-sChi>0?'+':''}${money(Math.abs(sThu-sChi))}</div></div>`:''}
         </div><div class="sp"></div>`;
     }
     if(miss)h+=`<div class="err">Còn ${miss} giao dịch chưa chọn nhóm.</div><div class="sp"></div>`;
     if(ask)h+=`<div class="err">Còn ${ask} giao dịch chưa chọn thay khoản cũ hay giữ cả hai.</div><div class="sp"></div>`;
     if(hoiDu)h+=`<div class="err">Còn ${hoiDu} khoản thu nợ nhiều hơn số còn nợ — chọn phần dư là gì.</div><div class="sp"></div>`;
-    h+=`<button class="btn" ${on.length&&!miss&&!ask&&!hoiDu?'':'disabled'} onclick="commit()">Lưu ${on.length} giao dịch</button>
+    if(hoiHoan)h+=`<div class="err">Còn ${hoiHoan} khoản hoàn tiền chưa chọn hoàn cho khoản chi nào.</div><div class="sp"></div>`;
+    h+=`<button class="btn" ${on.length&&!miss&&!ask&&!hoiDu&&!hoiHoan?'':'disabled'} onclick="commit()">Lưu ${on.length} giao dịch</button>
       <div class="sp"></div><button class="btn ghost" onclick="pending=null;render()">Quay lại</button>`;
     return h;
   }
@@ -3811,6 +3821,7 @@ function vImport(){
       return vay||cho?`<div class="fld fld-han"><span>${cho?'Ngày dự kiến thu':'Ngày dự kiến trả'}
         <em>— app tạo luôn khoản ${cho?'chờ thu':'phải trả'} bên tab Nợ</em></span>
         ${dtInput('mhan',mNhap.han,'toi','placeholder="dd/mm/yy · để trống nếu chưa biết" onchange="mNhapNgay(this)"')}${dtChips('mhan')}</div>`:'';})()}
+    ${_mt==='thu'&&manualCode==='tkhac_hoan'?khoiHoanTay():''}
   </div><div class="sp"></div><button class="btn ghost" onclick="addManual()">Thêm giao dịch</button>`;
   return h;
 }
@@ -4006,8 +4017,55 @@ function togTT(id){const t=DB.txns.find(x=>String(x.id)===id); if(!t)return;
    bỏ cho mượn / trả nợ / tiết kiệm. Gõ chữ vào ô tìm thì tìm theo nội dung trong cả sổ. */
 let hoanQ='';
 const coHoan=t=>t.t==='thu'&&groupOf(t.c).id==='tkhac';
-function hoanUngVien(t){
-  const tu=iso(new Date(new Date(t.d+'T00:00')-60*864e5)), q=noAccent(hoanQ.trim());
+/* ---- Gắn khoản Hoàn tiền NGAY LÚC NHẬP — bắt buộc (Vy duyệt 27/11/2026) ----
+   Dòng Thu khác › Hoàn tiền phải chọn khoản chi gốc trước khi lưu: khoản chi CÙNG LẦN NHẬP (hoàn trong
+   ngày, khoản gốc chưa vào sổ) đứng trước, rồi khoản đã có trong sổ 60 ngày gần đây, hoặc "Không thuộc
+   khoản nào trong sổ". t.hoanP = 'p'+chỉ số dòng cùng lần nhập · id khoản trong sổ · 'khong'. */
+const laHoan=t=>t.t==='thu'&&t.c==='tkhac_hoan';
+const HOAN_NGOAI={muon:1,trano:1,tk:1};
+const hoanDuoc=x=>!!x&&x.t==='chi'&&!!x.c&&!HOAN_NGOAI[groupOf(x.c).id];
+function hoanHopLe(t){
+  const v=t.hoanP; if(!v)return false; if(v==='khong')return true;
+  if(v[0]==='p'){const x=pending&&pending[+v.slice(1)]; return !!x&&x.keep&&hoanDuoc(x);}
+  return hoanDuoc(txById()[v]);
+}
+const needHoan=t=>t.keep&&laHoan(t)&&!hoanHopLe(t);
+function hoanChonP(i,v){const t=pending[i]; t.hoanP=t.hoanP===v?undefined:v; render();}
+function hoanTimP(i,q){pending[i].hoanQ=q; render();}
+function hoanNut(ten,meta,a,chon,goi){
+  return '<button class="ho-c'+(chon?' ho-on':'')+'" onclick="'+goi+'"><span>'+esc(ten)+'<small>'+meta+'</small></span><b>'+money(a)+'</b></button>';
+}
+function khoiHoanP(t,i){
+  if(!laHoan(t)||!t.keep)return '';
+  const cung=pending.map((x,j)=>({x,j})).filter(o=>o.j!==i&&o.x.keep&&hoanDuoc(o.x)&&o.x.a>=t.a)
+    .sort((a,b)=>(b.x.d===t.d)-(a.x.d===t.d));
+  const so=hoanUngVien(t,t.hoanQ||'');
+  const goc=t.hoanP&&t.hoanP[0]==='p'?pending[+t.hoanP.slice(1)]:t.hoanP&&t.hoanP!=='khong'?txById()[t.hoanP]:null;
+  return '<div class="ho-hop ho-bb"><b>Hoàn cho khoản chi nào?</b> <span class="ho-req">bắt buộc</span>'
+    +(cung.length?'<div class="ho-nh">Cùng lần nhập này</div>'+cung.map(o=>hoanNut(o.x.n,ddmm(o.x.d)+(o.x.d===t.d?' · cùng ngày':'')+' · '+esc(labelOf(o.x.c)),
+      o.x.a,t.hoanP==='p'+o.j,"hoanChonP("+i+",'p"+o.j+"')")).join(''):'')
+    +(so.length?'<div class="ho-nh">'+(t.hoanQ?'Tìm thấy trong sổ':'Đã có trong sổ · 60 ngày gần đây')+'</div>'
+      +so.map(x=>hoanNut(x.n,ddmm(x.d)+' · '+esc(labelOf(x.c)),x.a,t.hoanP===String(x.id),"hoanChonP("+i+",'"+x.id+"')")).join(''):'')
+    +(!cung.length&&!so.length?'<div class="cat-meta" style="margin-top:6px"><span>Không thấy khoản nào hợp — tìm theo nội dung.</span></div>':'')
+    +'<input class="rename" placeholder="Tìm khoản khác…" value="'+esc(t.hoanQ||'')+'" onchange="hoanTimP('+i+',this.value)" style="margin-top:8px">'
+    +'<button class="ho-khong'+(t.hoanP==='khong'?' ho-on':'')+'" onclick="hoanChonP('+i+',\'khong\')">Không thuộc khoản nào trong sổ</button>'
+    +(goc&&hoanHopLe(t)?'<div class="ho-kq">Lưu xong: "'+esc(goc.n)+'" chỉ còn tính <b>'+money(goc.a-t.a)+'</b>.</div>':'')
+    +'</div>';
+}
+/* Ghi tay: cùng hộp, chọn từ khoản đã có trong sổ (mNhap.hoan = id · 'khong') */
+function khoiHoanTay(){
+  const d=/^\d{4}-\d\d-\d\d$/.test(mNhap.d||'')?mNhap.d:iso(new Date()), a=parseAmt(mNhap.a||'')||0;
+  const so=hoanUngVien({d,a},mNhap.hq||'');
+  return '<div class="ho-hop ho-bb" style="margin:4px 0 10px"><b>Hoàn cho khoản chi nào?</b> <span class="ho-req">bắt buộc</span>'
+    +(so.length?'<div class="ho-nh">'+(mNhap.hq?'Tìm thấy trong sổ':'Đã có trong sổ · 60 ngày gần đây')+'</div>'
+      +so.map(x=>hoanNut(x.n,ddmm(x.d)+' · '+esc(labelOf(x.c)),x.a,mNhap.hoan===String(x.id),"mHoan('"+x.id+"')")).join('')
+      :'<div class="cat-meta" style="margin-top:6px"><span>'+(a?'Không thấy khoản nào hợp — tìm theo nội dung.':'Gõ số tiền trước để app gợi ý.')+'</span></div>')
+    +'<input class="rename" placeholder="Tìm khoản khác…" value="'+esc(mNhap.hq||'')+'" onchange="mNhap.hq=this.value;render()" style="margin-top:8px">'
+    +'<button class="ho-khong'+(mNhap.hoan==='khong'?' ho-on':'')+'" onclick="mHoan(\'khong\')">Không thuộc khoản nào trong sổ</button></div>';
+}
+function mHoan(v){mNhap.hoan=mNhap.hoan===v?'':v;render();}
+function hoanUngVien(t,qq){
+  const tu=iso(new Date(new Date(t.d+'T00:00')-60*864e5)), q=noAccent((qq===undefined?hoanQ:qq).trim());
   return DB.txns.filter(x=>x.t==='chi'&&x.c&&!['muon','trano','tk'].includes(groupOf(x.c).id)
       &&(q?noAccent(x.n).indexOf(q)>=0:(x.d<=t.d&&x.d>=tu&&x.a>=t.a)))
     .sort((a,b)=>(b.d+' '+(b.tm||'')).localeCompare(a.d+' '+(a.tm||''))).slice(0,q?8:5);
@@ -4806,7 +4864,11 @@ function addManual(){
   }else if(type==='mv'){o.s2=document.getElementById('ms2').value;
     if(o.s2===o.s){flash('Hai nguồn phải khác nhau.','err');return;}}
   else{o.c=manualCode;
-    if(!o.c){flash('Chưa chọn nhóm.','err');return;}}
+    if(!o.c){flash('Chưa chọn nhóm.','err');return;}
+    if(laHoan(o)){
+      if(!mNhap.hoan){flash('Chưa chọn khoản hoàn này là hoàn cho khoản chi nào.','err');return;}
+      if(mNhap.hoan!=='khong'){if(!hoanDuoc(txById()[mNhap.hoan])){flash('Khoản chi gốc không còn trong sổ — chọn lại.','err');return;}
+        o.hoan=mNhap.hoan;}}}
   const ngEl=document.getElementById('mng'), ng=ngEl?ngEl.value:'';
   hoiChot({them:[o]},()=>{
     DB.txns.push(o); noTuGD(o,han,ng); ganNg(o,ng);

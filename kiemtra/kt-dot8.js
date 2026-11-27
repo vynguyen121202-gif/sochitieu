@@ -14,7 +14,8 @@ globalThis.__pend=p=>{pending=p;};
 globalThis.__peek=()=>pending;
 globalThis.__mo=id=>{rowOpen=id;};
 globalThis.__lf=v=>{listF=v;};
-globalThis.__f2={setAi,setAiP,commit,fixedOfGroup,applyBackup};
+globalThis.__f2={setAi,setAiP,commit,fixedOfGroup,applyBackup,vImport,needHoan,khoiHoanTay,hoanUngVien};
+globalThis.__mn=o=>{mNhap=Object.assign(mNhap,o);};
 globalThis.__msg=()=>msg;
 globalThis.__f={splitStart,splitSet,splitMa,splitThem,splitXoa,splitSave,vSplit,coTach,togTT,vList,
   hoanUngVien,ganHoan,boHoan,daHoan,hoanGoc,balances,balAt,bangTien,spentOf,coCau,metrics,monthTx,monthRaw,groupOf,labelOf,codeList};`;
@@ -188,6 +189,39 @@ db=so(); ctx.__set(db,T10);
   ctx.__pend([{d:'2026-10-18',t:'chi',a:120000,c:'gd_sn',s:'bidv',n:'Bánh kem',keep:true}]); ctx.__f2.setAiP(0,'Bạn E');
   ctx.__f2.commit(); ctx.__set(db,T10);
   eq(db.txns.filter(x=>x.ai==='Bạn E').length,1,'tab Nhập: tên đi theo khi Lưu');}
+
+console.log('\nK · Tab Nhập: khoản Hoàn tiền BẮT BUỘC gắn khoản chi gốc, kể cả khoản cùng lần nhập (Vy 27/11/2026)');
+{db=so(); ctx.__set(db,T10); const n0=db.txns.length;
+  const P=()=>[{d:'2026-10-26',tm:'18:10',t:'chi',a:120000,c:'gd_sn',s:'bidv',n:'Mua bánh kem cùng ngày',keep:true},
+    {d:'2026-10-26',tm:'09:05',t:'chi',a:56000,c:'an_cafe',s:'bidv',n:'Trà sữa sáng',keep:true},
+    {d:'2026-10-26',tm:'21:40',t:'thu',a:40000,c:'tkhac_hoan',s:'bidv',n:'Bạn gửi lại tiền bánh',keep:true},
+    {d:'2026-10-26',tm:'22:00',t:'thu',a:259,c:'tkhac_lai',s:'bidv',n:'Lãi tháng',keep:true}];
+  let p=P(); ctx.__pend(p);
+  let h=ctx.__f2.vImport();
+  ok(h.includes('Hoàn cho khoản chi nào?')&&h.includes('Cùng lần nhập này')&&h.includes('Mua bánh kem cùng ngày<small>26/10 · cùng ngày'),'hộp gắn hoàn hiện khoản chi CÙNG LẦN NHẬP, ghi "cùng ngày"');
+  ok(h.includes('Trà sữa sáng<small>'),'khoản chi khác ≥ số hoàn cũng được gợi ý (Trà sữa 56.000)');
+  ctx.__pend(P().concat([{d:'2026-10-26',t:'chi',a:30000,c:'an_cafe',s:'bidv',n:'Kẹo nhỏ',keep:true}]));
+  ok(!ctx.__f2.vImport().includes('Kẹo nhỏ<small>'),'khoản chi NHỎ HƠN số hoàn (30.000 < 40.000) KHÔNG được gợi ý');
+  ctx.__pend(p);
+  eq((h.match(/Hoàn cho khoản chi nào\?/g)||[]).length,1,'chỉ dòng Hoàn tiền bị hỏi, dòng Lãi tháng KHÔNG');
+  ok(/class="btn" disabled onclick="commit\(\)"/.test(h)&&h.includes('Còn 1 khoản hoàn tiền chưa chọn'),'chưa chọn → nút Lưu khóa, có dòng đỏ nhắc');
+  ok(h.includes('Dòng tiền ròng')&&h.includes('−135.741'),'Dòng tiền ròng = 40.259 − 176.000 = −135.741');
+  ctx.__f2.commit(); eq(db.txns.length,n0,'chưa chọn mà gọi Lưu → KHÔNG ghi gì');
+  p[2].hoanP='p0'; ok(!ctx.__f2.needHoan(p[2]),'chọn khoản cùng lần nhập → hết bắt buộc');
+  p[0].keep=false; ok(ctx.__f2.needHoan(p[2]),'bỏ chọn khoản gốc → lại bắt buộc');
+  p[0].keep=true; ok(ctx.__f2.vImport().includes('chỉ còn tính <b>80.000</b>'),'hộp báo "chỉ còn tính 80.000"');
+  ctx.__f2.commit(); ctx.__set(db,T10);
+  const goc=db.txns.find(x=>x.n==='Mua bánh kem cùng ngày'), hoan=db.txns.find(x=>x.n==='Bạn gửi lại tiền bánh');
+  ok(goc&&hoan&&String(hoan.hoan)===String(goc.id),'lưu xong: khoản hoàn gắn đúng id khoản chi vừa ghi');
+  eq(F.monthTx(T10).filter(x=>x.n==='Mua bánh kem cùng ngày'||x.n==='Bạn gửi lại tiền bánh').reduce((s,x)=>s+(x.t==='chi'?x.a:-x.a),0),80000,
+    'nhóm Sinh nhật tính ròng 120.000 − 40.000 = 80.000');
+  ok(!db.txns.find(x=>x.n==='Lãi tháng').hoan,'dòng Lãi KHÔNG bị gắn');
+  db=so(); ctx.__set(db,T10); p=P(); p[2].hoanP='khong'; ctx.__pend(p); ctx.__f2.commit(); ctx.__set(db,T10);
+  ok(!('hoan' in db.txns.find(x=>x.n==='Bạn gửi lại tiền bánh')),'"Không thuộc khoản nào trong sổ" → lưu, không gắn');
+  db=so(); ctx.__set(db,T10); p=P(); p[2].hoanP='4'; ctx.__pend(p); ctx.__f2.commit(); ctx.__set(db,T10);
+  eq(String(db.txns.find(x=>x.n==='Bạn gửi lại tiền bánh').hoan),'4','chọn khoản đã có trong sổ → gắn đúng id đó');
+  ctx.__mn({a:'40.000',d:'2026-10-26',hoan:'',hq:''});
+  ok(ctx.__f2.khoiHoanTay().includes('Hoàn cho khoản chi nào?')&&ctx.__f2.khoiHoanTay().includes('bắt buộc'),'Ghi tay: cùng hộp bắt buộc');}
 
 console.log('\n'+(loi?'✗ '+loi+' LỖI':'✓ ĐẠT HẾT'));
 process.exit(loi?1:0);

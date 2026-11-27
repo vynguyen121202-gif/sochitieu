@@ -3,7 +3,8 @@ const fs=require('fs'), path=require('path'), vm=require('vm');
 const SRC_APP=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
 let code=SRC_APP.slice(0,SRC_APP.indexOf("try{\n  const mf="));
 code+=`
-globalThis.__set=(db,cur)=>{DB=db;cursor=cur||new Date();tab='home';open={};msg='';chotXN={};chotThat={};chotHoi=null;memoClear();};
+globalThis.__set=(db,cur)=>{DB=db;cursor=cur||new Date();tab='home';open={};msg='';chotXN={};chotThat={};chotHoi=null;ctkDS=[{a:null,s:'bidv'}];ctkKhong=false;memoClear();};
+globalThis.__ctk=(ds,k)=>{ctkDS=ds;ctkKhong=!!k;};
 globalThis.__f={chotCan,khoiChot,vHome,khongTieu,chotKhop,chotSo,chotDieuChinh,hoiChot,del,setDate,balAt,migrate,
   bangTien,khoiTongKet,chotHoiOK,chotHoiHuy,khoiChotHoi,chotVe,chotLan,balSrcAt,chotGhiLech,vBudget};
 globalThis.__tab=t=>{tab=t;};
@@ -137,8 +138,14 @@ console.log('\nC · Xác nhận số dư rồi chốt');
   ok(dc&&dc.t==='dc'&&dc.s==='tm'&&dc.a===30000&&dc.dir==='-'&&dc.d==='2026-09-30'&&/Điều chỉnh khi chốt sổ tháng 9/.test(dc.n),
     'ghi điều chỉnh −30.000 (730.000 app → 700.000 thật), ngày 30/09, tên rõ ràng',JSON.stringify(dc));
   ctx.__set(db,T10); F.chotKhop('bidv','y'); F.chotKhop('vi','y'); F.chotKhop('tm','y');
+  ok(F.khoiChot().includes('Chuyển vào Tiết kiệm &amp; Đầu tư')&&/id="ctk-bt" disabled/.test(F.khoiChot()),'khớp đủ 3 nguồn → hiện bước 4 tiết kiệm, nút chốt còn khóa');
   hoi=[]; F.chotSo();
+  ok(!db.chot['2026-09'],'chưa nhập số tiết kiệm → bấm chốt KHÔNG chốt');
+  ctx.__ctk([{a:999999999,s:'bidv'}]); F.chotSo();
+  ok(!db.chot['2026-09'],'số tiết kiệm vượt số dư BIDV → KHÔNG chốt');
+  ctx.__ctk([{a:0,s:'bidv'}],1); F.chotSo();
   const x=db.chot['2026-09'];
+  ok(x&&x.tk&&x.tk.tong===0&&!x.tk.ds.length,'chọn "không chuyển" → chốt, ghi hẹn tiết kiệm 0');
   ok(x&&x.tong===tong-30000&&x.tm===700000,'chốt: lưu số dư '+M(tong-30000)+', tiền mặt 700.000',JSON.stringify(x));
   eq(hoi.length,0,'chốt sổ KHÔNG bật hộp thoại nào');
   ctx.__set(db,T10);
@@ -163,7 +170,7 @@ const K9='2026-09', dem=(s,x)=>s.split(x).length-1;
   ok(db.v===15&&Array.isArray(db.chotLS)&&!db.chotLS.length&&db.nsChot&&!Object.keys(db.nsChot).length&&db.lichThu&&!Object.keys(db.lichThu).length,'…sổ lên v15, nhật ký chốt rỗng, chưa chốt ngân sách tháng nào, chưa có lịch hẹn thu');
   ctx.__set(db,T9);
   let h=F.vHome();
-  ok(h.includes('đã chốt 01/10'),'Tổng kết tháng 9 ghi "đã chốt 01/10"');
+  ok(h.includes('<span class="tk-tag">✓ Đã chốt sổ</span>'),'Tổng kết tháng 9 có tag "✓ Đã chốt sổ"');
   ok(!h.includes('sau đó sửa'),'chưa sửa gì → KHÔNG có dòng "sau đó sửa"');
   ok(h.includes('Lịch sử chốt')&&h.includes('1 lần'),'có nút "Lịch sử chốt · 1 lần"');
 
@@ -198,8 +205,8 @@ const K9='2026-09', dem=(s,x)=>s.split(x).length-1;
   eq(db.chotLS.length,1,'nhật ký có đúng 1 dòng');
   ctx.__cur(T9); h=F.vHome();
   ok(!h.includes('sau đó sửa'),'KHÔNG còn dòng vàng "sau đó sửa · lệch"');
-  ok(h.includes('chốt lần 2 · 05/10'),'tiêu đề Tổng kết ghi "chốt lần 2 · 05/10"');
-  ok(h.includes('chốt lần 2 · sửa sau khi chốt, chưa đối chiếu lại'),'dòng Số dư cuối ghi rõ chưa đối chiếu lại');
+  ok(h.includes('<span class="tk-tag lech">Đã chốt · chưa đối chiếu lại</span>'),'tiêu đề Tổng kết: tag cam "Đã chốt · chưa đối chiếu lại"');
+  ok(!h.includes('✓ Đã chốt sổ')&&h.includes('(1) + (2) − (3) − (4) − (5)'),'KHÔNG có tag xanh; dòng Số dư cuối ghi công thức');
   ok(h.includes('Đã ghi nhận lần chốt 2 · số dư cuối tháng 9: '+M(5940000)),'báo "Đã ghi nhận lần chốt 2 · số dư cuối tháng 9: 5.940.000"');
   ok(h.includes('2 lần')&&!h.includes('ls-lan'),'lịch sử thu gọn mặc định');
   eq(hoi.length,0,'suốt phần D KHÔNG bật hộp confirm() nào của trình duyệt');
@@ -225,7 +232,8 @@ console.log('\nD2 · Lịch sử chốt và quay về');
   ok(db.chot[K9].tong===5930000&&F.balAt(T9)===5930000,'bản chốt và sổ cùng về 5.930.000');
   eq(F.chotLan(K9).length,3,'quay về được ghi thành LẦN 3, lần 2 không bị xóa');
   ctx.__cur(T9); ctx.__mo('lsChot'); h=F.khoiTongKet();
-  ok(h.includes('chốt lần 3 · quay về lần 1 · khớp BIDV, Ví, Tiền mặt'),'dòng Số dư cuối: "chốt lần 3 · quay về lần 1 · khớp…"');
+  ok(!h.includes('khớp BIDV, Ví, Tiền mặt')&&h.includes('(1) + (2) − (3) − (4) − (5)'),'dòng Số dư cuối chỉ ghi công thức, KHÔNG ghi trạng thái chốt');
+  ok(F.vHome().includes('<span class="tk-tag">✓ Đã chốt sổ</span>'),'quay về lần đã đối chiếu → tag xanh "✓ Đã chốt sổ"');
   ok(h.includes('Quay về lần 1</span>')&&h.includes('Đưa lại <b>Ăn · 01/09'),'lần 3: nhãn "Quay về lần 1" + "Đưa lại …"');
   eq(dem(h,'Đã đối chiếu ngân hàng'),2,'lần 1 và lần 3 cùng mang nhãn "Đã đối chiếu ngân hàng"');
   ok(h.includes("chotVe('2026-09',2)")&&!h.includes("chotVe('2026-09',1)"),'giờ có nút "Quay về lần 2"; lần 1 trùng với lần đang dùng nên KHÔNG có nút');
@@ -301,7 +309,7 @@ console.log('\nD5 · Cho mượn không phải khoản hạn mức (Vy 11/10/202
   ok(h.includes('Hạn mức Ăn uống'),'tab Ngân sách vẫn có ô hạn mức Ăn uống');
   ok(!h.includes('Hạn mức Cho mượn')&&!h.includes("setB('muon'")&&!h.includes("toggleRoll('muon')"),'KHÔNG có ô hạn mức, KHÔNG có chip cộng dồn cho Cho mượn');
   ok(!h.includes('Hạn mức Trả nợ'),'Trả nợ cũng không có ô hạn mức');
-  ok(F.vHome().includes('Tiền đang cho vay'),'tiền cho mượn vẫn hiện ở dòng (4) Tiền đang cho vay');
+  ok(F.vHome().includes('Tiền cho vay ròng'),'tiền cho mượn vẫn hiện ở dòng (4) Tiền cho vay ròng');
 }
 
 console.log('\nE · Sổ cũ');
@@ -501,8 +509,8 @@ console.log('\nN · Tổng kết: khối Nợ giống Tổng quan (Vy duyệt 11
     {id:nid++,d:'2026-09-25',t:'chi',a:100000,c:'trano_gop',s:'bidv',n:'Trả góp máy',debt:'dN'});
   ctx.__set(db,T9); const h=F.vHome();
   ok(h.includes('<b>Nợ</b><em>tính tới hết 30/09</em>'),'tiêu đề "Nợ · tính tới hết 30/09"');
-  ok(h.includes('↑ KHOẢN PHẢI TRẢ</div>\n          <div class="noso">'+M(900000))&&h.includes('↓ KHOẢN CHỜ THU</div>\n          <div class="noso">'+M(500000)),'hai ô: phải trả 900.000 · chờ thu 500.000');
-  ok(h.includes('Xem từng khoản'),'có nút "Xem từng khoản"');
+  ok(h.includes('↑ KHOẢN PHẢI TRẢ <span class="nox-ch">▾</span></div><div class="noso">'+M(900000))&&h.includes('↓ KHOẢN CHỜ THU <span class="nox-ch">▾</span></div><div class="noso">'+M(500000)),'hai ô: phải trả 900.000 · chờ thu 500.000');
+  ok(!h.includes('Xem từng khoản')&&h.includes('data-tg="noTKra"')&&h.includes('data-tg="noTKvao"'),'KHÔNG còn nút "Xem từng khoản": bấm từng ô để xổ');
   ok(!h.includes('Tổng đã cho vay')&&!h.includes('<b>Đã cho vay</b>')&&!h.includes('<b>Khoản nợ</b>'),'KHÔNG còn hai khối cũ "Khoản nợ" / "Đã cho vay"');
 }
 
@@ -525,9 +533,11 @@ console.log('\nO · Cộng dồn với hạn mức chung từ bản cũ; Tổng 
     {id:nid++,d:'2026-09-18',t:'thu',a:70000,c:'thuno',s:'bidv',n:'Hà trả',debt:'dX'},
     {id:nid++,d:'2026-09-10',t:'chi',a:500000,c:'muon',s:'bidv',n:'Lan'});
   ctx.__set(d2,T9); const h=F.vHome();
-  ok(h.includes('<div class="src-n">Hà</div>')&&h.includes('>đã xong</div>'),'Tổng kết: khoản Hà đã thu đủ VẪN được liệt kê, ghi "đã xong"');
+  ok(h.includes('<div class="src-n">Hà</div>')&&h.includes('>thu đủ 18/09</div>'),'Tổng kết: Hà thu đủ TRONG tháng 9 vẫn được liệt kê, ghi "thu đủ 18/09"');
   ok(h.indexOf('<div class="src-n">Lan</div>')<h.indexOf('<div class="src-n">Hà</div>'),'khoản còn dở (Lan) đứng trước khoản đã xong');
-  ok(h.includes('1 khoản · tiền sẽ vào'),'ô Khoản chờ thu vẫn chỉ đếm khoản còn dở');
+  ok(h.includes('1 người · tiền sẽ vào'),'ô Khoản chờ thu chỉ đếm người còn nợ');
+  ctx.__set(d2,T10); const h10=F.vHome();
+  ok(!h10.includes('<div class="src-n">Hà</div>'),'tháng 10: Hà thu đủ từ tháng 9 → KHÔNG liệt kê nữa (xem ở Lịch sử)');
 }
 
 console.log('\nP · Sang tháng mới: chốt sổ xong thì bắt buộc lập và chốt ngân sách (Vy duyệt 11/10/2026)');

@@ -176,8 +176,8 @@ ok(h.indexOf('Thấp hơn')<0,'KHÔNG báo khi tiêu ít hơn tháng trước');
   { const q=c.__thanhKhoan();
     ok(q.luongChuaVe?doan.indexOf('Lương chưa về')>=0:doan.indexOf('Lương chưa về')<0,'Lương chưa về: có thì hiện, bằng 0 thì ẩn'); }
   ok(h.indexOf('(1) + (2) − (3) − (4) − (5)')>=0,'Số dư hiện tại ghi công thức bằng ký hiệu (1)…(5)');
-  ok(h.indexOf('<span class="ct-sy">4</span><span class="ct-t">Tiền đang cho vay</span> <span class="ct-f">cho mượn − thu nợ</span>')>=0,'(4) Tiền đang cho vay, chú thích "cho mượn − thu nợ"');
-  ok(h.indexOf('<span class="ct-sy">5</span><span class="ct-t">Trả nợ</span> <span class="ct-f">trả nợ − đi vay</span>')>=0,'(5) Trả nợ, chú thích "trả nợ − đi vay"');
+  ok(h.indexOf('<span class="ct-sy">4</span><span class="ct-t">Tiền cho vay ròng</span> <span class="ct-f">cho mượn − thu nợ</span>')>=0,'(4) Tiền cho vay ròng, chú thích "cho mượn − thu nợ"');
+  ok(h.indexOf('<span class="ct-sy">5</span><span class="ct-t">Tiền vay mượn</span> <span class="ct-f">trả nợ − đi vay</span>')>=0,'(5) Tiền vay mượn, chú thích "trả nợ − đi vay"');
   ok(['ct2','ct3','ct4','ct5'].every(k=>h.indexOf('class="xo ct-xo" data-k="'+k+'"')>=0||k==='ct4'||k==='ct5'),'(2) Thực thu, (3) Thực chi có nút xổ như bản cũ');
   ok(h.indexOf('data-k="ct1"')<0,'(1) Số dư đầu tháng không có gì để xổ');
   ok(h.indexOf('Xem chi tiết</span></button>')>=0&&h.indexOf(' Cách tính</span>')<0,'nút "Cách tính" đổi thành "Xem chi tiết"');

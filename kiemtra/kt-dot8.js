@@ -131,7 +131,8 @@ db=so(); ctx.__set(db,T10);
   eq(m0-F.metrics(T10).thu,70000,'thu nhập (lương + thưởng + thu khác) bớt 70.000 — hoàn không phải tiền kiếm được');
   khop(T10);
   ctx.__mo('4'); let h=F.vList();
-  ok(h.includes('đã hoàn 70.000 · thực chi 230.000'),'khoản gốc ghi "đã hoàn 70.000 · thực chi 230.000"');
+  ok(h.includes('>đã hoàn 70.000</div>')&&h.includes('<span class="tx-tc">thực chi 230.000</span>'),'khoản gốc ghi "đã hoàn 70.000"; "thực chi 230.000" nằm bên phải, dưới số tiền');
+  ok(!h.includes('đã hoàn 70.000 · thực chi'),'KHÔNG còn "thực chi" nằm bên trái');
   ok(h.includes('hoàn cho "Tiền xe đi thiền khứ hồi"'),'khoản hoàn ghi đang hoàn cho khoản nào');
   eq(F.monthRaw(T10).find(x=>x.id===6).t,'thu','danh sách Giao dịch vẫn hiện khoản hoàn là dòng THU như đã ghi');
   F.boHoan('6'); ctx.__set(db,T10); eq(F.spentOf('ht',T10),600000,'Bỏ gắn → về như cũ');}

@@ -13,11 +13,11 @@ const GROUPS=[
  {id:'ht', k:'chi', n:'Học tập', c:'#7A9470', subs:[['ht_khoa','Khóa học'],['ht_sach','Sách'],['ht_thi','Thi chứng chỉ']]},
  {id:'tk', sn:'Tiết kiệm', k:'chi', n:'Tiết kiệm & đầu tư (tiền nhàn rỗi)', c:'#47897A', subs:[['tk_gui','Gửi tiết kiệm'],['tk_vang','Mua vàng']]},
  {id:'tt',  k:'chi', n:'Từ thiện', c:'#9A6B95', subs:[]},
- {id:'muon',sn:'Cho mượn', k:'chi',n:'Cho mượn', c:'#97885F', subs:[]},
+ {id:'muon',sn:'Cho mượn', k:'chi',n:'Cho mượn', c:'#97885F', subs:[['muon_ung','Ứng trước']]},
  {id:'trano',sn:'Trả nợ', k:'chi',n:'Trả nợ', c:'#8A7D6C', subs:[['trano_cn','Trả nợ cá nhân'],['trano_gop','Trả góp']]},
  {id:'luong', k:'thu', n:'Lương', c:'#56937F', subs:[]},
  {id:'thuong',sn:'Thưởng', k:'thu', n:'Thưởng', c:'#7E9E6A', subs:[['thuong_tet','Thưởng lễ Tết'],['thuong_hq','Thưởng hiệu quả']]},
- {id:'thuno', sn:'Thu nợ', k:'thu', n:'Thu nợ', c:'#97885F', subs:[]},
+ {id:'thuno', sn:'Thu nợ', k:'thu', n:'Thu nợ', c:'#97885F', subs:[['thuno_ung','Nhận lại tiền ứng']]},
  {id:'divay', sn:'Đi vay', k:'thu', n:'Đi vay', c:'#B4709A', subs:[]},
  {id:'tkhac', sn:'Thu khác', k:'thu', n:'Thu khác', c:'#8794A0', subs:[['tkhac_hoan','Hoàn tiền'],['tkhac_ban','Bán đồ cũ'],['tkhac_cho','Người nhà cho'],['tkhac_lai','Lãi tiết kiệm, cổ tức']]}
 ];
@@ -589,6 +589,13 @@ Cách làm việc:
 - Không chào hỏi, không giải thích, không hỏi lại.
 - Nếu một ảnh mờ hoặc thiếu thông tin, thay dòng đó bằng: KHÔNG ĐỌC ĐƯỢC | lý do ngắn gọn. Tuyệt đối không đoán số.
 
+Ảnh "Chi tiết hóa đơn tháng …" của SPayLater (Shopee) thì KHÔNG trả theo dạng trên, mà trả:
+splhd | YYYY-MM (tháng hóa đơn) | YYYY-MM-DD (ngày đến hạn) | tổng số tiền trên hóa đơn
+spl | tên món rút gọn | số tiền | mã nhóm chi | kỳ góp
+- Mỗi món một dòng spl, gồm cả phần "Trả sau 1 kỳ" lẫn "Trả góp". Kỳ góp lấy từ dấu [1/3], [2/2]… ở đầu tên; món trả sau 1 kỳ thì để trống kỳ góp.
+- Tên món bỏ phần [1/3] và các chữ quảng cáo dài. Tổng các dòng spl phải đúng bằng tổng hóa đơn.
+- Hóa đơn dài nhiều ảnh thì gộp lại thành MỘT dòng splhd, không lặp món.
+
 Ví dụ:
 2026-08-22 10:07 | vi | chi | 20000 | Nạp data Viettel | hd_dt |  | 0900000000
 2026-09-02 14:23 | bidv | chi | 950000 | Chuyển tiền đi chơi Phước Hải | gt_dichoi | 235490 | 7170145678910`;
@@ -767,13 +774,14 @@ function bindFixed(id,mp){
 }
 function commit(){
   /* thu nợ dư mà Vy chọn "nhờ rút tiền mặt" / "thu khác" → ghi thành 2 dòng (Vy 09/11/2026) */
-  if(pending.some(needHoan))return;
+  if(pending.some(needHoan)||pending.some(needUng))return;
   const goc=new Map();   /* dòng cùng lần nhập → id sẽ ghi, để khoản hoàn gắn được vào khoản chưa vào sổ */
   const add=pending.filter(t=>t.keep).flatMap(t=>{const du=duCho(t);
     return (du>0&&(t.duC==='doi'||t.duC==='khac')?tachDu(t,du,t.duC):[t]).map(x=>[t,x]);}).map(([t0,t])=>{
     const o={id:Date.now()+Math.random(),d:t.d,a:t.a,t:t.t,n:t.n,s:t.s||'bidv'};
     if(!goc.has(t0))goc.set(t0,o.id);
     if(t===t0&&laHoan(t)&&t.hoanP&&t.hoanP!=='khong')o._hp=t.hoanP;
+    if(t===t0&&laNhanUng(t)&&t.ungP)o._up=t.ungP;
     if(t.t==='mv')o.s2=t.s2||'vi'; else o.c=t.c;
     if(t.tm)o.tm=t.tm; if(t.b)o.b=t.b; if(t.p)o.p=t.p;
     if(t.han)o._han=t.han; if(t.ng)o._ng=t.ng; if(t.doi)o.doi=1;
@@ -781,6 +789,8 @@ function commit(){
     return o;});
   add.forEach(o=>{ if(!o._hp)return;
     o.hoan=o._hp[0]==='p'?goc.get(pending[+o._hp.slice(1)]):o._hp; delete o._hp; if(!o.hoan)delete o.hoan; });
+  add.forEach(o=>{ if(!o._up)return;
+    o.ung=String(o._up[0]==='p'?goc.get(pending[+o._up.slice(1)]):o._up); delete o._up; });
   const drop=new Set(pending.filter(t=>t.keep&&t.rep&&t.repDo===1).map(t=>t.rep.id));
   hoiChot({bo:DB.txns.filter(x=>drop.has(String(x.id))),them:add},()=>{
     if(drop.size)DB.txns=DB.txns.filter(x=>!drop.has(String(x.id)));
@@ -1712,6 +1722,10 @@ function debtDue(d){
     if(a<=0)return;
     tong+=a; rows.push({name:dt.name,a,d:i.nextDate||'',daTra,conPhai});
   });
+  /* hóa đơn SPayLater CHƯA trả có hạn trong tháng = nợ còn phải trả của tháng đó (dự trù, Vy 27/11/2026).
+     Trả rồi thì các món đã nằm trong chi tiêu theo nhóm, không tính thêm ở đây. */
+  splChuaTra().filter(x=>x.han.slice(0,7)===k).forEach(x=>{
+    tong+=x.tong; rows.push({name:'SPayLater '+splTen(x.k),a:x.tong,d:x.han,daTra:0,conPhai:x.tong});});
   return _memo[mk]={tong,rows};
 }
 /* Cho mượn KHÔNG phải khoản hạn mức (Vy 11/10/2026): tiền cho mượn theo dõi ở dòng (4) Tiền đang
@@ -2539,7 +2553,9 @@ function vDebt(){
   if(ngCho.length){ h+=`<h2>Nợ phải thu</h2>`; ngCho.slice().sort(theoHan).forEach(p=>h+=theNguoi(p,card)); }
   if(!DB.debts.length)h+=`<div class="sp"></div><div class="empty"><b>Chưa có khoản nào</b>Ghi một giao dịch nhóm Đi vay hoặc Cho mượn, app sẽ tự tạo khoản ở đây.</div>`;
   else if(!ngNo.length&&!ngCho.length)h+=`<div class="sp"></div><div class="empty"><b>Không còn khoản nào tồn đọng</b>Các khoản đã xong nằm trong Lịch sử.</div>`;
-  if(soXong)h+=`<button class="ls2-bt" onclick="moLsNo()"><span>Lịch sử · ${soXong} người đã xong</span><span>Xem ›</span></button>`;
+  h+=khoiSpl();
+  const splXong=splDS().filter(x=>x.tra).length;
+  if(soXong||splXong)h+=`<button class="ls2-bt" onclick="moLsNo()"><span>Lịch sử · ${[soXong?soXong+' người đã xong':'',splXong?splXong+' hóa đơn SPayLater':''].filter(Boolean).join(' · ')}</span><span>Xem ›</span></button>`;
   h+=`<div class="sp"></div>`+(nF&&nF.m==='moi'?`<div class="panel" style="padding:13px">${formNo(null)}</div>`
     :`<div class="nf-btns"><button class="btn ghost" onclick="moNo('moi','cho')">+ Cho mượn</button>
       <button class="btn ghost" onclick="moNo('moi','no')">+ Đi vay</button></div>`);
@@ -2699,9 +2715,16 @@ function vLsNo(){
     return `<div class="nohd ${cls} ls2-hd"><i></i><span>${nhan}</span><span style="margin-left:auto;font-weight:700">${money(ds.reduce((s,p)=>s+p.total,0))}</span></div>
       <div class="panel ls2-ds">${ds.map(R).join('')}</div>`;};
   return `<div class="ls2-dau"><h3>Khoản nợ đã xong</h3><button onclick="dongLsNo()" aria-label="Đóng">✕</button></div>
-    ${khoi('no','↑ ĐÃ TRẢ XONG','ra')}${khoi('cho','↓ ĐÃ THU ĐỦ','vao')}
+    ${khoi('no','↑ ĐÃ TRẢ XONG','ra')}${khoi('cho','↓ ĐÃ THU ĐỦ','vao')}${splLichSu()}
     ${xong.length?'<div class="stack-note" style="margin-top:10px"><span>Chạm một người để xem từng lần mượn và trả / thu.</span></div>'
-      :'<div class="empty"><b>Chưa có người nào xong</b></div>'}`;
+      :splDS().some(x=>x.tra)?'':'<div class="empty"><b>Chưa có người nào xong</b></div>'}`;
+}
+/* hóa đơn SPayLater đã trả: nằm ở Lịch sử (Vy 27/11/2026), mới nhất lên đầu, chạm để xem từng món */
+function splLichSu(){
+  const ds=splDS().filter(x=>x.tra).sort((a,b)=>b.k.localeCompare(a.k)); if(!ds.length)return '';
+  const mon=m=>'<div class="c3-r"><span class="c3-n sm-wrap">'+esc(m.n)+'<small class="sm-c">'+(m.c?esc(labelOf(m.c)):'')+(m.gop?' · góp '+esc(m.gop):'')+'</small></span><b>'+money(m.a)+'</b></div>';
+  return `<div class="nohd ra ls2-hd"><i></i><span>SPAYLATER ĐÃ TRẢ</span><span style="margin-left:auto;font-weight:700">${money(ds.reduce((s,x)=>s+x.tong,0))}</span></div>
+    <div class="panel"><div class="tk-bang">${ds.map(x=>ctX('spx'+x.k,'',splTen(x.k),x.tong,'trả '+ddmm(x.tra.d)+' · '+x.mon.length+' món',x.mon.map(mon).join(''))).join('')}</div></div>`;
 }
 /* bảng chọn nhóm hai bước, có hàng hay dùng và ô lọc */
 let picker=null;
@@ -3332,6 +3355,7 @@ function alerts(){
   DB.debts.forEach(dt=>{const i=debtInfo(dt), lv=dueLevel(i,dt.kind==='cho');
     if(lv.k==='over'||lv.k==='now')out.push({cls:'red',t:esc(dt.name)+' — '+lv.txt,k:'debt'});
     else if(lv.k==='soon'||lv.k==='qua')out.push({cls:'amber',t:esc(dt.name)+' — '+lv.txt,k:'debt'});});
+  ungNhac().forEach(a=>out.push(a));
   /* lời hẹn chuyển tiết kiệm lúc chốt tháng trước: nhắc tới khi thấy đủ khoản chuyển thật (Vy 27/11/2026) */
   {const tr=new Date(d.getFullYear(),d.getMonth()-1,1), hen=tkHen(tr), con=hen-tkTraHen(d);
    if(hen&&con>0)out.push({cls:'amber',t:'Chuyển tiết kiệm đã hẹn lúc chốt '+MONTH(tr.getMonth()).toLowerCase()+': còn '+money(con)+' chưa thấy trong sổ',k:'add'});}
@@ -3361,6 +3385,7 @@ function jump(k){
   if(k==='budget'){go('budget');return;}
   if(k==='debt'){go('debt');return;}
   if(k==='add'){go('add');return;}
+  if(k==='list'){go('list');return;}
   render();
   setTimeout(()=>{const e=document.getElementById('sec-'+k);if(e)e.scrollIntoView({block:'start'});},30);
 }
@@ -3696,7 +3721,7 @@ function vHome(){
 function vImport(){
   if(pending){
     const on=pending.filter(t=>t.keep), miss=pending.filter(needCat).length,
-          ask=pending.filter(needRep).length, hoiDu=pending.filter(needDu).length, hoiHoan=pending.filter(needHoan).length;
+          ask=pending.filter(needRep).length, hoiDu=pending.filter(needDu).length, hoiHoan=pending.filter(needHoan).length, hoiUng=pending.filter(needUng).length;
     const tatCa=pending.length&&on.length===pending.length;
     let h=`<h2>Kiểm tra trước khi lưu</h2>`;
     h+=khoiBoQua();
@@ -3731,6 +3756,7 @@ function vImport(){
                ${t.w?`<div class="tag">qua ví ${esc(t.w)}</div>`:''}
                ${khoiChonNg(t,i)}
                ${khoiHoanP(t,i)}
+               ${khoiUngP(t,i)}
                ${(()=>{const g=t.c?groupOf(t.c).id:'';const cho=g==='muon'&&t.t==='chi', vay=g==='divay'&&t.t==='thu';
                  return cho||vay?`<div class="rev-han"><div class="cat-meta" style="margin:8px 0 5px"><span>${cho?'Dự kiến thu lại ngày':'Dự kiến trả ngày'}</span></div>
                    ${dtInput('phan-'+i,t.han||'','toi','placeholder="dd/mm/yy · để trống nếu chưa biết" onchange="setHanP('+i+',this.value)"')}</div>`:'';})()}`}
@@ -3776,7 +3802,8 @@ function vImport(){
     if(ask)h+=`<div class="err">Còn ${ask} giao dịch chưa chọn thay khoản cũ hay giữ cả hai.</div><div class="sp"></div>`;
     if(hoiDu)h+=`<div class="err">Còn ${hoiDu} khoản thu nợ nhiều hơn số còn nợ — chọn phần dư là gì.</div><div class="sp"></div>`;
     if(hoiHoan)h+=`<div class="err">Còn ${hoiHoan} khoản hoàn tiền chưa chọn hoàn cho khoản chi nào.</div><div class="sp"></div>`;
-    h+=`<button class="btn" ${on.length&&!miss&&!ask&&!hoiDu&&!hoiHoan?'':'disabled'} onclick="commit()">Lưu ${on.length} giao dịch</button>
+    if(hoiUng)h+=`<div class="err">Còn ${hoiUng} khoản nhận lại tiền ứng chưa gắn khoản ứng (hoặc nhiều hơn số còn chờ).</div><div class="sp"></div>`;
+    h+=`<button class="btn" ${on.length&&!miss&&!ask&&!hoiDu&&!hoiHoan&&!hoiUng?'':'disabled'} onclick="commit()">Lưu ${on.length} giao dịch</button>
       <div class="sp"></div><button class="btn ghost" onclick="pending=null;render()">Quay lại</button>`;
     return h;
   }
@@ -3822,6 +3849,7 @@ function vImport(){
         <em>— app tạo luôn khoản ${cho?'chờ thu':'phải trả'} bên tab Nợ</em></span>
         ${dtInput('mhan',mNhap.han,'toi','placeholder="dd/mm/yy · để trống nếu chưa biết" onchange="mNhapNgay(this)"')}${dtChips('mhan')}</div>`:'';})()}
     ${_mt==='thu'&&manualCode==='tkhac_hoan'?khoiHoanTay():''}
+    ${_mt==='thu'&&manualCode==='thuno_ung'?khoiUngTay():''}
   </div><div class="sp"></div><button class="btn ghost" onclick="addManual()">Thêm giao dịch</button>`;
   return h;
 }
@@ -3977,11 +4005,15 @@ function vList(){
         ? `<button class="chk ${picked?'on':''}" style="flex:none;margin-right:10px" aria-label="Chọn" onclick="event.stopPropagation();toggleSel('${t.id}')">${picked?'✓':''}</button>`
         : `<span class="spine" style="background:${gcA(col)}"></span>`}
       <div class="tx-body"><div class="tx-n">${esc(t.n)}</div>
-        <div class="tx-m">${meta}${(t.t==='chi'||t.t==='thu')?' · <span style="color:var(--ink-2)">'+esc(labelOf(t.c))+(t.c==='gd_sn'&&t.ai?' '+esc(t.ai):'')+'</span>':''}${t.tt?'<span class="tt-sao">★ Thành tựu</span>':''}</div>
+        <div class="tx-m">${meta}${(t.t==='chi'||t.t==='thu')?' · <span style="color:var(--ink-2)">'+esc(labelOf(t.c))+(t.c==='gd_sn'&&t.ai?' '+esc(t.ai):'')+'</span>':''}${t.tt?'<span class="tt-sao">★ Thành tựu</span>':''}${tagSpl(t)}${laUng(t)?tagUng(t):''}</div>
+        ${laNhanUng(t)?tagUng(t):''}
         ${hoanGoc(t)?`<div class="ho-ghi">hoàn cho "${esc(hoanGoc(t).n)}" · ${ddmm(hoanGoc(t).d)}</div>`:''}
-        ${daHoan()[String(t.id)]?`<div class="ho-ghi">đã hoàn ${money(daHoan()[String(t.id)])} · thực chi ${money(t.a-daHoan()[String(t.id)])}</div>`:''}
+        ${daHoan()[String(t.id)]?`<div class="ho-ghi" style="color:var(--ink-3)">đã hoàn ${money(daHoan()[String(t.id)])}</div>`:''}
         ${du&&!selMode?`<button class="du-mo" onclick="event.stopPropagation();duMoL('${t.id}')">thu dư ${money(du)} so với số còn nợ · tách ${duMo&&duMo.id===String(t.id)?'▾':'›'}</button>`:''}</div>
-      <div class="tx-a ${t.t==='thu'?'in':(t.t==='mv'||t.t==='dc')?'mv':''}">${sign}${money(t.a)}</div></div>`;
+      ${daHoan()[String(t.id)]
+        /* thực chi nằm ngay dưới số tiền đã chi (Vy 27/11/2026) */
+        ?`<div class="tx-ac"><span class="tx-a">${sign}${money(t.a)}</span><span class="tx-tc">thực chi ${money(t.a-daHoan()[String(t.id)])}</span></div></div>`
+        :`<div class="tx-a ${t.t==='thu'?'in':(t.t==='mv'||t.t==='dc')?'mv':''}">${sign}${money(t.a)}</div></div>`}`;
     if(du&&!selMode&&duMo&&duMo.id===String(t.id)){
       const d0=(DB.debts||[]).find(x=>x.id===debtLinks()[String(t.id)]);
       h+=`<div class="du-ngoai">${khoiDu(ngOf(d0),t.a-du,du,duMo.c,'duChonL(','duTachL()')}</div>`;}
@@ -3990,6 +4022,8 @@ function vList(){
         ${(t.t==='chi'||t.t==='thu')?`<div class="cat-meta" style="margin:0 0 7px"><span>Nhóm</span></div>${catBtn(t.c,t.t,'txn',t.id)}`:''}
         ${t.c==='gd_sn'?`<input class="rename" value="${esc(t.ai||'')}" placeholder="Sinh nhật của ai?" onclick="event.stopPropagation()" onchange="setAi('${t.id}',this.value)" aria-label="Sinh nhật của ai">`:''}
         ${khoiHoan(t)}
+        ${khoiUngL(t)}
+        ${khoiSplL(t)}
         <div style="display:flex;gap:8px;margin-top:9px" onclick="event.stopPropagation()">
           <div style="flex:1"><div class="cat-meta" style="margin:0 0 5px"><span>Ngày</span></div>
             ${dtInput('td-'+t.id,t.d,'qua',`onchange="setDate('${t.id}',this.value)"`)}</div>
@@ -4003,6 +4037,7 @@ function vList(){
           <button class="chk-btn" onclick="event.stopPropagation();togTT('${t.id}')">${t.tt?'Bỏ ★ Thành tựu':'★ Thành tựu'}</button>
           ${coRut(t)?`<button class="chk-btn" onclick="event.stopPropagation();doiRut('${t.id}',0)">Đây là rút tiền mặt</button>
           <button class="chk-btn" onclick="event.stopPropagation();doiRut('${t.id}',1)">Ứng trước · nhận lại tiền mặt</button>`:''}
+          ${coSpl(t)?`<button class="chk-btn spl-nut" onclick="event.stopPropagation();splMoL('${t.id}')">Đây là SPayLater</button>`:''}
           <button class="chk-btn" style="color:var(--brick);margin-left:auto" onclick="event.stopPropagation();del('${t.id}')">Xóa</button></div></div>`;
     }
   });
@@ -4533,6 +4568,7 @@ const nfv=id=>{const e=document.getElementById(id);return e?e.value:'';};
    ng: khóa người Vy chọn ("cho|Chị Lan") → khoản mới thuộc người đó. */
 function noTuGD(t,han,ng){
   const g=groupOf(t.c).id;
+  if(t.c==='muon_ung')return null;
   if(!((g==='divay'&&t.t==='thu')||(g==='muon'&&t.t==='chi')))return null;
   const d={id:'d'+Date.now()+Math.random().toString(36).slice(2,6),
     name:cleanName(t.n), kind:g==='divay'?'no':'cho', mode:'canhan', principal:t.a, start:t.d};
@@ -4544,6 +4580,7 @@ function noTuGD(t,han,ng){
 /* giao dịch là gì đối với sổ nợ: tạo khoản mới (Cho mượn / Đi vay) hay trả / thu (Thu nợ / Trả nợ) */
 function loaiNg(t){
   const g=t.c?groupOf(t.c).id:'';
+  if(t.c==='muon_ung'||t.c==='thuno_ung')return null;   /* ứng trước không vào sổ Nợ */
   if(g==='muon'&&t.t==='chi')return {kind:'cho',moi:1,nhan:'Ghi vào khoản của ai?'};
   if(g==='thuno'&&t.t==='thu')return {kind:'cho',moi:0,nhan:'Thu về từ ai?'};
   if(g==='divay'&&t.t==='thu')return {kind:'no',moi:1,nhan:'Vay của ai?'};
@@ -4868,7 +4905,12 @@ function addManual(){
     if(laHoan(o)){
       if(!mNhap.hoan){flash('Chưa chọn khoản hoàn này là hoàn cho khoản chi nào.','err');return;}
       if(mNhap.hoan!=='khong'){if(!hoanDuoc(txById()[mNhap.hoan])){flash('Khoản chi gốc không còn trong sổ — chọn lại.','err');return;}
-        o.hoan=mNhap.hoan;}}}
+        o.hoan=mNhap.hoan;}}
+    if(laNhanUng(o)){
+      const x=mNhap.ung&&txById()[mNhap.ung];
+      if(!x||!laUng(x)){flash('Chưa chọn khoản ứng trước được trả lại.','err');return;}
+      if(a>ungCon(x)){flash('Nhận '+money(a)+' nhiều hơn số còn chờ '+money(ungCon(x))+'.','err');return;}
+      o.ung=String(x.id);}}
   const ngEl=document.getElementById('mng'), ng=ngEl?ngEl.value:'';
   hoiChot({them:[o]},()=>{
     DB.txns.push(o); noTuGD(o,han,ng); ganNg(o,ng);
@@ -4936,6 +4978,189 @@ let cuonNen=null;
 /* đổi tab hay đổi tháng mới cuộn lên đầu; bấm trong trang thì giữ nguyên chỗ đang xem */
 function go(t){msg='';tab=t;toTop=true;render();}
 function goTab(t){if(t!=='list'){filterCode='';selMode=false;selIds={};loc={nhom:[],nguon:[],tu:'',den:''};}delete open.lsNo;delete open.lns;go(t);}
+/* ==================== Ứng trước (Vy duyệt 27/11/2026) ====================
+   Cho mượn › Ứng trước (muon_ung): Vy trả trước cho người khác, PHẢI nhận lại đủ. Trong lúc chờ tính như
+   cho mượn — nằm ở dòng (4), không vào Thực chi. Tiền trả lại (tiền mặt hay chuyển khoản, nhiều lần) ghi
+   Thu nợ › Nhận lại tiền ứng (thuno_ung) và BẮT BUỘC gắn khoản ứng: t.ung = id khoản ứng. Không tạo thẻ
+   ở tab Nợ. Chưa nhận đủ từ ngày thứ 2 thì Tổng quan nhắc. */
+const laUng=t=>t.t==='chi'&&t.c==='muon_ung';
+const laNhanUng=t=>t.t==='thu'&&t.c==='thuno_ung';
+const ungDaNhan=()=>{if('un' in _memo)return _memo.un; const m={};
+  DB.txns.forEach(t=>{if(laNhanUng(t)&&t.ung)m[String(t.ung)]=(m[String(t.ung)]||0)+t.a;}); return _memo.un=m;};
+const ungCon=x=>x.a-(ungDaNhan()[String(x.id)]||0);
+const ungDangCho=()=>DB.txns.filter(t=>laUng(t)&&ungCon(t)>0).sort((a,b)=>a.d<b.d?-1:1);
+/* số còn chờ của khoản ứng v (id trong sổ hoặc 'p'+chỉ số cùng lần nhập), trừ các dòng KHÁC cùng lần nhập đã gắn vào nó */
+function ungConP(v,tru){
+  const x=v[0]==='p'?pending&&pending[+v.slice(1)]:txById()[v]; if(!x)return -1;
+  const da=v[0]==='p'?0:(ungDaNhan()[v]||0);
+  const khac=(pending||[]).filter(o=>o!==tru&&o.keep&&laNhanUng(o)&&o.ungP===v).reduce((s,o)=>s+o.a,0);
+  return x.a-da-khac;
+}
+function ungHopLe(t){
+  const v=t.ungP; if(!v)return false;
+  if(v[0]==='p'){const x=pending[+v.slice(1)]; if(!x||!x.keep||!laUng(x))return false;}
+  else if(!laUng(txById()[v]||{}))return false;
+  return t.a<=ungConP(v,t);
+}
+const needUng=t=>t.keep&&laNhanUng(t)&&!ungHopLe(t);
+function ungChonP(i,v){const t=pending[i]; t.ungP=t.ungP===v?undefined:v; render();}
+function khoiUngP(t,i){
+  if(!laNhanUng(t)||!t.keep)return '';
+  const cung=pending.map((x,j)=>({x,j})).filter(o=>o.j!==i&&o.x.keep&&laUng(o.x));
+  const so=ungDangCho();
+  const nut=(v,x)=>{const con=ungConP(v,t);
+    return hoanNut(x.n,ddmm(x.d)+' · ứng '+money(x.a)+(con<x.a?' · đã nhận '+money(x.a-con):''),con,t.ungP===v,"ungChonP("+i+",'"+v+"')").replace('<b>','<b>còn ');};
+  const vuot=t.ungP&&ungConP(t.ungP,t)>=0&&t.a>ungConP(t.ungP,t);
+  return '<div class="ho-hop ho-bb"><b>Nhận lại cho khoản ứng nào?</b> <span class="ho-req">bắt buộc</span>'
+    +(cung.length?'<div class="ho-nh">Cùng lần nhập này</div>'+cung.map(o=>nut('p'+o.j,o.x)).join(''):'')
+    +(so.length?'<div class="ho-nh">Khoản ứng đang chờ</div>'+so.map(x=>nut(String(x.id),x)).join(''):'')
+    +(!cung.length&&!so.length?'<div class="cat-meta" style="margin-top:6px"><span>Không có khoản ứng nào đang chờ. Ghi khoản ứng trước (Cho mượn › Ứng trước) rồi mới gắn được.</span></div>':'')
+    +(vuot?'<div class="ho-loi">Nhận '+money(t.a)+' nhiều hơn số còn chờ '+money(ungConP(t.ungP,t))+' — kiểm lại.</div>'
+      :t.ungP&&ungHopLe(t)?'<div class="ho-kq">'+(ungConP(t.ungP,t)-t.a?'Lưu xong còn chờ '+money(ungConP(t.ungP,t)-t.a)+'.':'Lưu xong: khoản ứng đã nhận đủ ✓')+'</div>':'')
+    +'</div>';
+}
+/* Ghi tay: tiền mặt (hay chuyển khoản) trả lại */
+function khoiUngTay(){
+  const a=parseAmt(mNhap.a||'')||0, so=ungDangCho();
+  return '<div class="ho-hop ho-bb" style="margin:4px 0 10px"><b>Nhận lại cho khoản ứng nào?</b> <span class="ho-req">bắt buộc</span>'
+    +(so.length?'<div class="ho-nh">Khoản ứng đang chờ</div>'+so.map(x=>hoanNut(x.n,ddmm(x.d)+' · ứng '+money(x.a),ungCon(x),mNhap.ung===String(x.id),"mUng('"+x.id+"')").replace('<b>','<b>còn ')).join('')
+      :'<div class="cat-meta" style="margin-top:6px"><span>Không có khoản ứng nào đang chờ.</span></div>')
+    +(mNhap.ung&&a>ungCon(txById()[mNhap.ung]||{a:0})?'<div class="ho-loi">Nhiều hơn số còn chờ — kiểm lại.</div>':'')+'</div>';
+}
+function mUng(v){mNhap.ung=mNhap.ung===v?'':v;render();}
+/* tab Giao dịch: khoản nhận lại đã lưu mà chưa gắn */
+function khoiUngL(t){
+  if(!laNhanUng(t))return '';
+  const g=t.ung&&txById()[String(t.ung)];
+  if(g)return `<div class="ho-hop" onclick="event.stopPropagation()"><b>Nhận lại cho:</b> ${esc(g.n)} · ${ddmm(g.d)} · ${money(g.a)}
+    <button class="chk-btn" style="margin-left:8px" onclick="boUng('${t.id}')">Bỏ gắn</button></div>`;
+  const so=ungDangCho().filter(x=>ungCon(x)>=t.a);
+  return `<div class="ho-hop ho-bb" onclick="event.stopPropagation()"><b>Nhận lại cho khoản ứng nào?</b>
+    ${so.map(x=>hoanNut(x.n,ddmm(x.d)+' · ứng '+money(x.a),ungCon(x),false,"ganUng('"+t.id+"','"+x.id+"')").replace('<b>','<b>còn ')).join('')
+      ||'<div class="cat-meta" style="margin-top:6px"><span>Không có khoản ứng nào còn chờ đủ số này.</span></div>'}</div>`;
+}
+function ganUng(rid,aid){const t=DB.txns.find(x=>String(x.id)===rid); if(!t)return; t.ung=aid; save(); flash('Đã gắn vào khoản ứng trước.','ok');}
+function boUng(rid){const t=DB.txns.find(x=>String(x.id)===rid); if(!t)return; delete t.ung; save(); render();}
+/* nhãn trên dòng giao dịch */
+function tagUng(t){
+  if(laUng(t)){const con=ungCon(t), da=t.a-con;
+    return '<span class="tag-ung'+(con<=0?' xong':'')+'">'+(con<=0?'đã nhận lại đủ':'chờ nhận lại '+money(con))+'</span>'
+      +(da>0&&con>0?'<div class="ung-da">đã nhận '+money(da)+'</div>':'');}
+  if(laNhanUng(t)){const g=t.ung&&txById()[String(t.ung)]; return g?'<div class="ho-ghi">nhận lại cho "'+esc(g.n)+'" · '+ddmm(g.d)+'</div>':'<div class="ho-ghi" style="color:var(--warntx)">chưa gắn khoản ứng</div>';}
+  return '';
+}
+/* nhắc từ ngày thứ 2 (Vy 27/11/2026): hôm nay − ngày ứng ≥ 2 */
+function ungNhac(){
+  const hom=new Date(iso(new Date())+'T00:00');
+  return ungDangCho().map(x=>({x,ngay:Math.round((hom-new Date(x.d+'T00:00'))/864e5)})).filter(o=>o.ngay>=2)
+    .map(o=>({cls:'amber',t:'Ứng trước "'+esc(o.x.n)+'": còn '+money(ungCon(o.x))+' chưa nhận lại · '+o.ngay+' ngày',k:'list'}));
+}
+
+/* ==================== SPayLater (Vy duyệt 27/11/2026) ====================
+   DB.spl = [{k:'YYYY-MM' (tháng hóa đơn), han:'YYYY-MM-DD', tong, mon:[{n,a,c,gop}], tra:{d,id}|null}].
+   Hóa đơn chưa trả = khoản phải trả, dự trù vào tháng có hạn (debtDue). Khoản BIDV trả hóa đơn được tách theo
+   món, ghi vào ngày trả (chi tiêu tháng trả), mỗi món mang t.spl = tháng hóa đơn (+ t.gop = kỳ góp).
+   Trả xong thì hóa đơn sang Lịch sử. Không có hóa đơn ước tính. Trường tùy chọn: sổ cũ không có = []. */
+const splDS=()=>DB.spl||[];
+const splTen=k=>'HĐ tháng '+(+k.slice(5))+(k.slice(0,4)!==String(new Date().getFullYear())?'/'+k.slice(0,4):'');
+function splDoc(txt){
+  const out={k:'',han:'',tong:0,mon:[],loi:[]};
+  String(txt||'').split(/\r?\n/).map(l=>l.trim()).filter(Boolean).forEach(l=>{
+    const p=l.split('|').map(s=>s.trim()), ma=(p[0]||'').toLowerCase();
+    if(ma==='splhd'){
+      if(!/^\d{4}-\d{2}$/.test(p[1]||''))out.loi.push('Tháng hóa đơn phải dạng 2026-11: '+l);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(p[2]||''))out.loi.push('Hạn trả phải dạng 2026-12-10: '+l);
+      out.k=p[1]||''; out.han=p[2]||''; out.tong=+String(p[3]||'').replace(/[^0-9]/g,'')||0;
+    }else if(ma==='spl'){
+      const a=+String(p[2]||'').replace(/[^0-9]/g,'')||0, c=p[3]||'', g=groupOf(c);
+      if(!p[1]||!a){out.loi.push('Dòng thiếu tên hoặc số tiền: '+l);return;}
+      out.mon.push({n:p[1],a,c:g.id&&g.k==='chi'?c:'',gop:/^\d+\/\d+$/.test(p[4]||'')?p[4]:''});
+    }
+  });
+  if(!out.k)out.loi.push('Thiếu dòng đầu "splhd | tháng | hạn | tổng".');
+  if(!out.mon.length)out.loi.push('Chưa có món nào.');
+  const cong=out.mon.reduce((s,m)=>s+m.a,0);
+  if(out.k&&out.mon.length&&cong!==out.tong)out.loi.push('Cộng các món '+money(cong)+' khác tổng hóa đơn '+money(out.tong)+'.');
+  return out;
+}
+let splNhap='', splLoi='';
+function splLuuHD(){
+  const el=document.getElementById('spl-ta'); splNhap=el?el.value:splNhap;
+  const h=splDoc(splNhap); if(h.loi.length){splLoi=h.loi.join(' ');render();return;}
+  DB.spl=splDS().slice(); const i=DB.spl.findIndex(x=>x.k===h.k);
+  if(i>=0&&DB.spl[i].tra){splLoi=splTen(h.k)+' đã trả rồi, không cập nhật được.';render();return;}
+  const hd={k:h.k,han:h.han,tong:h.tong,mon:h.mon,tra:null};
+  if(i>=0)DB.spl[i]=hd; else DB.spl.push(hd);
+  splNhap=''; splLoi=''; open.splThem=false; save(); flash((i>=0?'Đã cập nhật ':'Đã ghi ')+splTen(h.k)+' · '+h.mon.length+' món.','ok');
+}
+/* nợ SPayLater còn phải trả trong tháng d (vào debtDue → thanhKhoan) */
+const splChuaTra=()=>splDS().filter(x=>!x.tra).sort((a,b)=>a.han.localeCompare(b.han));
+/* tab Giao dịch: dòng chi BIDV / Ví chưa tách, không dính nợ */
+const coSpl=t=>t.t==='chi'&&t.s!=='tm'&&!t.sg&&!t.spl&&!['muon','trano','tk'].includes(groupOf(t.c).id);
+let splMo=null;   /* id dòng đang mở hộp SPayLater */
+function splMoL(id){splMo=splMo===id?null:id; splNhap=''; splLoi=''; render();}
+function splTach(id,k){
+  const t=DB.txns.find(x=>String(x.id)===id), hd=splDS().find(x=>x.k===k);
+  if(!t||!hd||hd.tra||hd.tong!==t.a)return;
+  const sg=maSg('s');
+  const parts=hd.mon.map(m=>{const o=Object.assign(splitDong(t,{code:m.c||'',a:m.a},sg),{id:Date.now()+Math.random(),n:m.n,spl:hd.k});
+    if(!m.c)delete o.c; if(m.gop)o.gop=m.gop; return o;});
+  hoiChot({bo:[t],them:parts},()=>{
+    DB.txns=DB.txns.filter(x=>x!==t).concat(parts);
+    DB.spl=splDS().map(x=>x.k===k?Object.assign({},x,{tra:{d:t.d,id:String(parts[0].id)}}):x);
+    splMo=null; save(); flash('Đã tách thành '+parts.length+' khoản theo '+splTen(k)+'.','ok');});
+}
+/* chưa có hóa đơn: dán ngay tại dòng, khớp số tiền thì lưu hóa đơn rồi tách */
+function splDanTach(id){
+  const t=DB.txns.find(x=>String(x.id)===id), el=document.getElementById('spl-ta-'+id); if(!t)return;
+  splNhap=el?el.value:splNhap; const h=splDoc(splNhap);
+  if(!h.loi.length&&h.tong!==t.a)h.loi.push('Tổng hóa đơn '+money(h.tong)+' khác khoản BIDV '+money(t.a)+'.');
+  if(!h.loi.length&&splDS().some(x=>x.k===h.k&&x.tra))h.loi.push(splTen(h.k)+' đã trả rồi.');
+  if(h.loi.length){splLoi=h.loi.join(' ');render();return;}
+  DB.spl=splDS().filter(x=>x.k!==h.k).concat([{k:h.k,han:h.han,tong:h.tong,mon:h.mon,tra:null}]);
+  splTach(id,h.k);
+}
+function khoiSplL(t){
+  if(splMo!==String(t.id))return '';
+  const hd=splChuaTra().find(x=>x.tong===t.a);
+  if(hd)return `<div class="ho-hop" onclick="event.stopPropagation()"><b>Khớp SPayLater ${splTen(hd.k)}</b> · ${money(hd.tong)} · ${hd.mon.length} món
+    <div class="cat-meta" style="margin-top:4px"><span>Tách theo hóa đơn đã ghi, không cần dán lại.</span></div>
+    <button class="btn" style="margin-top:8px" onclick="splTach('${t.id}','${hd.k}')">Tách thành ${hd.mon.length} khoản</button></div>`;
+  return `<div class="ho-hop ho-bb" onclick="event.stopPropagation()"><b>Hóa đơn SPayLater gồm những gì?</b>
+    <div class="cat-meta" style="margin-top:4px"><span>Chưa có hóa đơn nào ${money(t.a)}. Gửi ảnh "Chi tiết hóa đơn" trong Shopee cho A.I, dán kết quả vào đây.</span></div>
+    <textarea id="spl-ta-${t.id}" class="spl-ta" placeholder="splhd | 2026-10 | 2026-11-10 | ${t.a}&#10;spl | Tên món | số tiền | mã nhóm | kỳ góp">${esc(splNhap)}</textarea>
+    ${splLoi?`<div class="ho-loi">${esc(splLoi)}</div>`:''}
+    <button class="btn" style="margin-top:8px" onclick="splDanTach('${t.id}')">Đọc và tách</button></div>`;
+}
+function tagSpl(t){return t.spl?'<span class="spl-tag">SPayLater · '+(t.gop?'góp '+esc(t.gop):'HĐ T'+(+t.spl.slice(5)))+'</span>':'';}
+/* tab Nợ: khối SPayLater theo cách sắp xếp của Tổng quan (hai ô + bảng nhiều cấp); trả xong sang Lịch sử */
+function khoiSpl(){
+  const ds=splChuaTra(), hom=new Date(iso(new Date())+'T00:00');
+  const them=`<button class="fold" style="margin-top:${ds.length?0:4}px" onclick="toggle('splThem')"><span style="font-size:13.5px">
+      <span class="xomui" data-mui="splThem" data-a="▾" data-b="▸">${open.splThem?'▾':'▸'}</span> ${ds.length?'Thêm / cập nhật hóa đơn':'Thêm hóa đơn SPayLater'}</span></button>
+    <div class="xow" data-xo="splThem" data-open="${open.splThem?1:0}"><div class="panel" style="border-radius:0 0 var(--r) var(--r);border-top:0;padding:12px 14px">
+      <div class="sm-m">Gửi ảnh "Chi tiết hóa đơn tháng …" trong Shopee cho A.I, dán kết quả vào đây. Hóa đơn cùng tháng đã có thì app cập nhật đè.</div>
+      <textarea id="spl-ta" class="spl-ta" placeholder="splhd | 2026-11 | 2026-12-10 | 1311850&#10;spl | Tên món | số tiền | mã nhóm | kỳ góp">${esc(splNhap)}</textarea>
+      ${splLoi&&!splMo?`<div class="ho-loi">${esc(splLoi)}</div>`:''}
+      <button class="btn" style="margin-top:8px" onclick="splLuuHD()">Đọc hóa đơn</button></div></div>`;
+  let h=`<h2 class="hl"><i style="background:${gcA('#C7553A')}"></i><b>SPayLater</b><em>${ds.length?ds.length+' hóa đơn chưa trả':'không có hóa đơn chưa trả'}</em></h2>`;
+  if(!ds.length)return h+them;
+  const tong=ds.reduce((s,x)=>s+x.tong,0), gan=ds[0], con=Math.round((new Date(gan.han+'T00:00')-hom)/864e5);
+  const conChu=d=>d>0?'còn '+d+' ngày':d===0?'hôm nay':'quá hạn '+(-d)+' ngày';
+  h+=`<div class="nohai"><div class="nomot ra"><div class="nonhan">CHƯA TRẢ</div><div class="noso">${money(tong)}</div><div class="noph">${ds.length} hóa đơn</div></div>
+    <div class="nomot han"><div class="nonhan">HẠN GẦN NHẤT · ${ddmm(gan.han)}</div><div class="noso">${money(gan.tong)}</div><div class="noph">${splTen(gan.k)} · ${conChu(con)}</div></div></div><div class="sp"></div>`;
+  const mon=m=>'<div class="c3-r"><span class="c3-n sm-wrap">'+esc(m.n)+'<small class="sm-c">'+(m.c?esc(labelOf(m.c)):'chưa chọn nhóm')+(m.gop?' · góp '+esc(m.gop):'')+'</small></span><b>'+money(m.a)+'</b></div>';
+  let x='';
+  ds.forEach(hd=>{
+    const sau=hd.mon.filter(m=>!m.gop), gop=hd.mon.filter(m=>m.gop), d=Math.round((new Date(hd.han+'T00:00')-hom)/864e5);
+    const c=(sau.length?ct2('spa'+hd.k,'Trả sau 1 kỳ',sum(sau),sau.map(mon).join(''),sau.length+' món'):'')
+      +(gop.length?ct2('spb'+hd.k,'Trả góp',sum(gop),gop.map(mon).join(''),gop.length+' món'):'');
+    x+=ctX('sp'+hd.k,'',splTen(hd.k),hd.tong,'hạn '+ddmm(hd.han)+' · '+conChu(d),c);
+  });
+  x+=ctT('Chưa trả',ds.map(hd=>splTen(hd.k)).join(' + '),'<b class="am">'+money(tong)+'</b>');
+  return h+`<div class="panel"><div class="tk-bang">${x}</div></div><div class="sp"></div>`+them;
+}
+
 try{
   const mf={name:'Sổ chi tiêu',short_name:'Sổ chi',display:'standalone',start_url:'.',
     background_color:'#F3F6FB',theme_color:'#F3F6FB',

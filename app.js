@@ -668,6 +668,8 @@ function parsePaste(raw){
     if(!s)return;
     if(!s.includes('|')){hong('không có dấu | nào để tách cột');return;}
     const p=s.split('|').map(x=>x.trim());
+    /* dòng hóa đơn SPayLater lẫn trong kết quả A.I: gom riêng, doPaste ghi vào khối SPayLater (Vy 27/11/2026) */
+    if(/^spl(hd)?$/i.test(p[0])){splTuDan.push(s);return;}
     if(/^[-: ]+$/.test(p[0]))return;
     if(/ngay|ngày|date/.test(noAccent(p[0]))&&/nguon|source/.test(noAccent(p[1]||'')))return;
     if(p.length<4){hong('chỉ có '+p.length+' cột, cần ít nhất 4');return;}
@@ -719,9 +721,30 @@ function khoiBoQua(){
     </div>`).join('')}
   </div>`;
 }
+/* hóa đơn SPayLater dán ở tab Nhập: mỗi dòng splhd mở một hóa đơn mới; hợp lệ thì ghi thẳng vào khối
+   SPayLater (không phải giao dịch, không đổi số dư); sai thì báo lý do như dòng hỏng */
+let splTuDan=[], splBao='';
+function splTuTabNhap(){
+  const nhom=[]; splTuDan.forEach(l=>{ if(/^splhd/i.test(l)||!nhom.length)nhom.push([]); nhom[nhom.length-1].push(l); });
+  splTuDan=[]; const ghi=[];
+  nhom.forEach(ls=>{
+    const h=splDoc(ls.join('\n')), cu=splDS().find(x=>x.k===h.k);
+    if(!h.loi.length&&cu&&cu.tra)h.loi.push(splTen(h.k)+' đã trả rồi, không cập nhật.');
+    if(h.loi.length){boQua.push({so:'SPayLater',ly:h.loi.join(' '),goc:ls[0]});return;}
+    DB.spl=splDS().filter(x=>x.k!==h.k).concat([{k:h.k,han:h.han,tong:h.tong,mon:h.mon,tra:null}]);
+    ghi.push(splTen(h.k)+' · '+h.mon.length+' món · '+money(h.tong));
+  });
+  if(ghi.length)save();
+  return ghi;
+}
 function doPaste(){
   const raw=document.getElementById('paste').value;
-  const rows=parsePaste(raw);
+  splTuDan=[];
+  const rows=parsePaste(raw), spl=splTuDan.length?splTuTabNhap():[];
+  if(!rows.length&&(spl.length||boQua.some(b=>b.so==='SPayLater'))){
+    if(spl.length)flash('Đã ghi hóa đơn SPayLater vào tab Nợ: '+spl.join(' · ')+'.','ok'); else render();
+    return;}
+  splBao=spl.length?'Đã ghi hóa đơn SPayLater vào tab Nợ: '+spl.join(' · ')+'.':'';
   if(!rows.length){flash('Chưa đọc được dòng nào. Mỗi dòng cần đủ: ngày | nguồn | chi/thu | số tiền | nội dung | nhóm | số dư | mã đối tác','err');return;}
   const seen=new Set(DB.txns.map(fid)), have=new Set(), taken=new Set();
   pending=[];
@@ -3724,6 +3747,7 @@ function vImport(){
           ask=pending.filter(needRep).length, hoiDu=pending.filter(needDu).length, hoiHoan=pending.filter(needHoan).length, hoiUng=pending.filter(needUng).length;
     const tatCa=pending.length&&on.length===pending.length;
     let h=`<h2>Kiểm tra trước khi lưu</h2>`;
+    if(splBao)h+=`<div class="ok">${esc(splBao)}</div><div class="sp"></div>`;
     h+=khoiBoQua();
     if(boQua.length)h+=`<div class="sp"></div>`;
     h+=`<div class="stack-note" style="margin-bottom:8px">
@@ -5072,7 +5096,9 @@ function splDoc(txt){
       if(!/^\d{4}-\d{2}-\d{2}$/.test(p[2]||''))out.loi.push('Hạn trả phải dạng 2026-12-10: '+l);
       out.k=p[1]||''; out.han=p[2]||''; out.tong=+String(p[3]||'').replace(/[^0-9]/g,'')||0;
     }else if(ma==='spl'){
-      const a=+String(p[2]||'').replace(/[^0-9]/g,'')||0, c=p[3]||'', g=groupOf(c);
+      /* mã nhóm luôn chữ thường; A.I hay đọc "ld" thành "Id" (I hoa) — sửa lại cho khớp */
+      let c=(p[3]||'').toLowerCase(); if(!groupOf(c).id&&groupOf(c.replace(/^i/,'l')).id)c=c.replace(/^i/,'l');
+      const a=+String(p[2]||'').replace(/[^0-9]/g,'')||0, g=groupOf(c);
       if(!p[1]||!a){out.loi.push('Dòng thiếu tên hoặc số tiền: '+l);return;}
       out.mon.push({n:p[1],a,c:g.id&&g.k==='chi'?c:'',gop:/^\d+\/\d+$/.test(p[4]||'')?p[4]:''});
     }

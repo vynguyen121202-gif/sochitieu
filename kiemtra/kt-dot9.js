@@ -13,7 +13,8 @@ globalThis.__set=(db,cur)=>{DB=db;cursor=cur;tab='home';open={};msg='';pending=n
 globalThis.__pend=p=>{pending=p;};
 globalThis.__mo=id=>{splMo=id;};
 globalThis.__f={bangTien,alerts,commit,vImport,needUng,ungCon,vList,vDebt,vLsNo,splDoc,splLuuHD,splTach,splDanTach,debtDue,thanhKhoan,
-  coSpl,loaiNg,promptText,khoiUngTay,balAt,monthTx};
+  coSpl,loaiNg,promptText,khoiUngTay,balAt,monthTx,doPaste};
+globalThis.__bq=()=>boQua;globalThis.__pd=()=>pending;globalThis.__msg=()=>msg;
 globalThis.__row=id=>{rowOpen=id;};
 globalThis.__db=()=>DB;`;
 let HOM='2026-11-07';
@@ -153,6 +154,34 @@ spl | Mũ bảo hiểm Royal M239 | 194950 | qa_tui | 1/2`;
 F.splDanTach('10'); el0.value=''; db=ctx.__db(); ctx.__set(db,T11);
 eq(db.txns.filter(t=>t.spl==='2026-10').reduce((s,t)=>s+t.a,0),748456,'tách 6 món, cộng 748.456');
 ok(db.spl.find(x=>x.k==='2026-10').tra,'hóa đơn tháng 10 vào sổ, đã trả');
+
+console.log('\nH · Dán ở tab Nhập: kết quả A.I lẫn giao dịch + hóa đơn SPayLater (Vy test 27/11/2026)');
+db=so(); db.txns=db.txns.slice(0,1); HOM='2026-11-27'; ctx.__set(db,T11);
+el0.value=`2026-11-26 09:05 | bidv | chi | 56000 | Trà sữa | an_cafe | 4000000 |
+splhd | 2026-12 | 2027-01-11 | 995516
+spl | Worry Thỏ Hà Lan Lùn | 111354 | gt
+spl | Sách Liễu Phàm Tứ Huấn | 16057 | ht_sach | 2/3
+spl | Son kem Dinto | 72757 | ld | 2/3
+spl | Kem dưỡng Angel's Liquid | 124750 | ld | 2/3
+spl | Mặt nạ ngủ môi Laneige | 105000 | ld | 2/3
+spl | Angel's Liquid 60ml | 127250 | ld | 2/3
+spl | Máy tăm nước Halio | 253225 | ld | 2/3
+spl | Kem dưỡng cấp ẩm Angel's Liquid | 95333 | ld | 2/3
+spl | Nước tẩy trang Cocoon | 89790 | ld | 2/3
+Sửa 3 dòng cũ (đây là chữ A.I tự thêm)`;
+F.doPaste(); el0.value=''; db=ctx.__db();
+ok(!ctx.__bq().some(b=>/spl/.test(b.goc)),'KHÔNG còn báo "không đọc được ngày từ spl"');
+eq(ctx.__bq().length,1,'chỉ dòng chữ A.I tự thêm bị bỏ qua');
+eq((db.spl||[]).find(x=>x.k==='2026-12').mon.length,9,'hóa đơn tháng 12 (9 món, 995.516) vào khối SPayLater');
+eq((ctx.__pd()||[]).length,1,'giao dịch Trà sữa vẫn vào bước kiểm tra');
+ok(F.vImport().includes('Đã ghi hóa đơn SPayLater vào tab Nợ: HĐ tháng 12'),'màn kiểm tra báo đã ghi hóa đơn');
+db=so(); db.txns=db.txns.slice(0,1); ctx.__set(db,T11);
+el0.value='splhd | 2026-12 | 2027-01-11 | 995516\nspl | Worry Thỏ | 111354 | gt'; F.doPaste(); el0.value=''; db=ctx.__db();
+ok(!(db.spl||[]).length&&ctx.__bq().some(b=>b.ly.includes('khác tổng hóa đơn')),'hóa đơn thiếu món (tổng lệch) → KHÔNG ghi, báo lý do');
+db=so(); db.txns=db.txns.slice(0,1); ctx.__set(db,T11);
+el0.value=HD11; F.doPaste(); el0.value=''; db=ctx.__db();
+ok((db.spl||[]).length===1&&!ctx.__pd()&&ctx.__msg().includes('HĐ tháng 11 · 11 món · 1.311.850'),'chỉ dán hóa đơn → ghi luôn, báo "HĐ tháng 11 · 11 món · 1.311.850"');
+ok(F.splDoc('splhd | 2026-12 | 2027-01-11 | 72757\nspl | Son kem Dinto | 72757 | Id | 2/3').mon[0].c==='ld','mã "Id" (I hoa) được hiểu là ld (Làm đẹp)');
 
 console.log('\nG · Câu lệnh A.I');
 ok(F.promptText().includes('splhd | YYYY-MM')&&F.promptText().includes('muon_ung=')&&F.promptText().includes('thuno_ung='),'câu lệnh có dạng hóa đơn SPayLater và mã Ứng trước / Nhận lại tiền ứng');

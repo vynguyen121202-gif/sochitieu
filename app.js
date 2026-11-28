@@ -578,6 +578,7 @@ Quy ước:
 - Nếu là chuyển tiền từ BIDV vào ví điện tử (nội dung có CASHIN hoặc tên ví), ghi mã nhóm là napvi.
 - Nếu người khác chuyển khoản vào để Vy đưa lại tiền mặt, hoặc Vy chuyển khoản đi để nhận lại tiền mặt (nội dung kiểu "nhờ rút tiền mặt", "đổi tiền mặt", "đưa tiền mặt"), ghi mã nhóm là doitm.
 - Nếu là rút tiền mặt ở ATM (nội dung có "rút tiền", "ATM", hoặc "Giao dịch thẻ" mà cùng giờ có thêm một dòng "Phí giao dịch thẻ"), ghi mã nhóm là ruttm. Dòng phí rút tiền đó ghi mã nhóm là hd_phi.
+- Nếu là thanh toán hóa đơn SPayLater / ShopeePay trả sau: để trống mã nhóm (app tự tách theo hóa đơn).
 - Nếu chỉ có mã QR không rõ nơi bán: nội dung ghi "Thanh toán QR", mã nhóm để trống.
 - Nếu không chắc chắn nhóm nào thì để trống mã nhóm, đừng đoán bừa.
 
@@ -585,7 +586,7 @@ Mã nhóm chi: ${codeList('chi')}
 Mã nhóm thu: ${codeList('thu')}
 
 Cách làm việc:
-- Mỗi lần tôi gửi ảnh, chỉ trả về các dòng của đúng những ảnh vừa gửi, không nhắc lại dòng cũ.
+- Mỗi lần tôi gửi ảnh, chỉ trả về các dòng của đúng những ảnh vừa gửi, không nhắc lại dòng cũ — kể cả để sửa dòng cũ.
 - Không chào hỏi, không giải thích, không hỏi lại.
 - Nếu một ảnh mờ hoặc thiếu thông tin, thay dòng đó bằng: KHÔNG ĐỌC ĐƯỢC | lý do ngắn gọn. Tuyệt đối không đoán số.
 
@@ -595,6 +596,7 @@ spl | tên món rút gọn | số tiền | mã nhóm chi | kỳ góp
 - Mỗi món một dòng spl, gồm cả phần "Trả sau 1 kỳ" lẫn "Trả góp". Kỳ góp lấy từ dấu [1/3], [2/2]… ở đầu tên; món trả sau 1 kỳ thì để trống kỳ góp.
 - Tên món bỏ phần [1/3] và các chữ quảng cáo dài. Tổng các dòng spl phải đúng bằng tổng hóa đơn.
 - Hóa đơn dài nhiều ảnh thì gộp lại thành MỘT dòng splhd, không lặp món.
+- Hóa đơn đã thanh toán (không còn ngày đến hạn) thì để trống ô ngày đến hạn.
 
 Ví dụ:
 2026-08-22 10:07 | vi | chi | 20000 | Nạp data Viettel | hd_dt |  | 0900000000
@@ -666,7 +668,8 @@ function parsePaste(raw){
     const hong=ly=>{boQua.push({so:i+1,ly,goc:line.trim()});};
     let s=line.trim().replace(/^\|/,'').replace(/\|$/,'').trim();
     if(!s)return;
-    if(!s.includes('|')){hong('không có dấu | nào để tách cột');return;}
+    /* câu A.I tự viết thêm (không mở đầu bằng ngày) thì bỏ lặng lẽ; dòng có ngày mà thiếu cột mới báo (Vy 28/11/2026) */
+    if(!s.includes('|')){if(/^\d/.test(s))hong('không có dấu | nào để tách cột');return;}
     const p=s.split('|').map(x=>x.trim());
     /* dòng hóa đơn SPayLater lẫn trong kết quả A.I: gom riêng, doPaste ghi vào khối SPayLater (Vy 27/11/2026) */
     if(/^spl(hd)?$/i.test(p[0])){splTuDan.push(s);return;}
@@ -721,31 +724,70 @@ function khoiBoQua(){
     </div>`).join('')}
   </div>`;
 }
-/* hóa đơn SPayLater dán ở tab Nhập: mỗi dòng splhd mở một hóa đơn mới; hợp lệ thì ghi thẳng vào khối
-   SPayLater (không phải giao dịch, không đổi số dư); sai thì báo lý do như dòng hỏng */
-let splTuDan=[], splBao='';
-function splTuTabNhap(){
+/* hóa đơn SPayLater dán ở tab Nhập (Vy 28/11/2026): KHÔNG ghi ngay — giữ trong splCho, hiện trên màn Kiểm tra,
+   chỉ vào sổ khi Vy bấm Lưu (như mọi dòng khác). Hóa đơn đã trả thì A.I để trống hạn: chỉ nhận khi cùng lần dán
+   có khoản thanh toán đúng bằng tổng hóa đơn. Sai thì báo lý do như dòng hỏng. */
+let splTuDan=[], splCho=[];
+function splDocDan(){
   const nhom=[]; splTuDan.forEach(l=>{ if(/^splhd/i.test(l)||!nhom.length)nhom.push([]); nhom[nhom.length-1].push(l); });
-  splTuDan=[]; const ghi=[];
+  splTuDan=[]; const ds=[];
   nhom.forEach(ls=>{
-    const h=splDoc(ls.join('\n')), cu=splDS().find(x=>x.k===h.k);
+    const h=splDoc(ls.join('\n'),1), cu=splDS().find(x=>x.k===h.k);
     if(!h.loi.length&&cu&&cu.tra)h.loi.push(splTen(h.k)+' đã trả rồi, không cập nhật.');
+    if(!h.loi.length&&ds.some(x=>x.k===h.k))h.loi.push(splTen(h.k)+' bị dán hai lần, chỉ lấy lần đầu.');
     if(h.loi.length){boQua.push({so:'SPayLater',ly:h.loi.join(' '),goc:ls[0]});return;}
-    DB.spl=splDS().filter(x=>x.k!==h.k).concat([{k:h.k,han:h.han,tong:h.tong,mon:h.mon,tra:null}]);
-    ghi.push(splTen(h.k)+' · '+h.mon.length+' món · '+money(h.tong));
+    ds.push({k:h.k,han:h.han,tong:h.tong,mon:h.mon,cu:!!cu,goc:ls[0]});
   });
-  if(ghi.length)save();
-  return ghi;
+  return ds;
+}
+/* khoản thanh toán hóa đơn SPayLater: chi BIDV / Ví, đúng tổng hóa đơn, trả SAU tháng hóa đơn */
+const splKhop=(t,hd)=>t.t==='chi'&&t.s!=='tm'&&t.a===hd.tong&&t.d.slice(0,7)>hd.k;
+const laSplTen=t=>/spaylater|shopee/.test(noAccent(t.n0||t.n||''));
+/* hóa đơn của dòng đang chờ lưu: hóa đơn dán cùng lần, hoặc hóa đơn chưa trả đã có trong sổ */
+const splCuaP=t=>t.splK?(splCho.find(x=>x.k===t.splK)||splChuaTra().find(x=>x.k===t.splK)||null):null;
+function splGhepP(){
+  const dung=new Set();
+  const ghep=hd=>{
+    const ung=pending.filter(t=>!t.splK&&!t.splBo&&!t.dup&&splKhop(t,hd));
+    const t=ung.find(laSplTen)||ung[0];
+    if(t){t.splK=hd.k; dung.add(hd.k);}
+  };
+  splCho.forEach(ghep);
+  /* hóa đơn đã nằm trong sổ mà chưa trả: chỉ ghép dòng có chữ SPayLater / Shopee */
+  splChuaTra().filter(x=>!splCho.some(y=>y.k===x.k)).forEach(hd=>{
+    const t=pending.find(t=>!t.splK&&!t.splBo&&!t.dup&&splKhop(t,hd)&&laSplTen(t));
+    if(t)t.splK=hd.k;
+  });
+  /* hóa đơn không có hạn trả mà cũng không có khoản thanh toán → không biết dự trù vào tháng nào */
+  splCho=splCho.filter(hd=>{
+    if(hd.han||dung.has(hd.k))return true;
+    boQua.push({so:'SPayLater',ly:splTen(hd.k)+' chưa có hạn trả, và lần dán này không có khoản thanh toán đúng '+money(hd.tong)+'. Hóa đơn chưa trả cần hạn trả (2026-12-10).',goc:hd.goc});
+    return false;
+  });
+}
+function splBoP(i){const t=pending[i]; t.splBo=1; delete t.splK; render();}
+/* hóa đơn sẽ ghi khi bấm Lưu: có hạn, hoặc khoản thanh toán của nó đang được chọn */
+const splSeGhi=()=>splCho.filter(hd=>hd.han||pending.some(t=>t.keep&&t.splK===hd.k));
+/* đã có trong sổ: cùng ngày, cùng số tiền, cùng nguồn và cùng SỐ DƯ sau giao dịch — kể cả khi mã đối tác khác,
+   hoặc dòng cũ đã tách nhiều mục (cộng các mục chung sg) (Vy 28/11/2026) */
+function daCoTheoSoDu(t){
+  if(!t.b)return false;
+  const sg={};
+  const co=DB.txns.some(x=>{
+    if(x.d!==t.d||x.b!==t.b||(x.s||'bidv')!==(t.s||'bidv'))return false;
+    if(x.sg){sg[x.sg]=(sg[x.sg]||0)+x.a; return false;}
+    return x.a===t.a&&x.t===t.t;
+  });
+  return co||Object.values(sg).some(v=>v===t.a);
 }
 function doPaste(){
   const raw=document.getElementById('paste').value;
   splTuDan=[];
-  const rows=parsePaste(raw), spl=splTuDan.length?splTuTabNhap():[];
-  if(!rows.length&&(spl.length||boQua.some(b=>b.so==='SPayLater'))){
-    if(spl.length)flash('Đã ghi hóa đơn SPayLater vào tab Nợ: '+spl.join(' · ')+'.','ok'); else render();
-    return;}
-  splBao=spl.length?'Đã ghi hóa đơn SPayLater vào tab Nợ: '+spl.join(' · ')+'.':'';
-  if(!rows.length){flash('Chưa đọc được dòng nào. Mỗi dòng cần đủ: ngày | nguồn | chi/thu | số tiền | nội dung | nhóm | số dư | mã đối tác','err');return;}
+  const rows=parsePaste(raw);
+  splCho=splTuDan.length?splDocDan():[];
+  if(!rows.length&&!splCho.length){
+    if(boQua.some(b=>b.so==='SPayLater')){pending=[];msg='';render();return;}
+    flash('Chưa đọc được dòng nào. Mỗi dòng cần đủ: ngày | nguồn | chi/thu | số tiền | nội dung | nhóm | số dư | mã đối tác','err');return;}
   const seen=new Set(DB.txns.map(fid)), have=new Set(), taken=new Set();
   pending=[];
   rows.forEach(t=>{
@@ -760,7 +802,7 @@ function doPaste(){
       if(t.c&&groupOf(t.c).k!==t.t)t.c='';
     }
     const f=fid(t); if(have.has(f))return; have.add(f);
-    t.dup=seen.has(f); t.keep=!t.dup;
+    t.dup=seen.has(f)||daCoTheoSoDu(t); t.keep=!t.dup;
     if(t.dup)t.warn='Đã có trong sổ, bỏ chọn sẵn';
     else{
       const old=findReplace(t,taken);
@@ -776,9 +818,10 @@ function doPaste(){
     pending.push(t);
   });
   pending.sort((a,b)=>(b.d+' '+(b.tm||'')).localeCompare(a.d+' '+(a.tm||'')));
+  splGhepP();
   msg=''; render();
 }
-const needCat=t=>t.keep&&((t.t!=='mv'&&!t.c)||(t.t==='mv'&&t.s2==='vi'&&!t.decided));
+const needCat=t=>t.keep&&((t.t!=='mv'&&!t.c&&!t.splK)||(t.t==='mv'&&t.s2==='vi'&&!t.decided));
 const needRep=t=>t.keep&&!!t.rep&&t.repDo===null;
 function repYes(i){const t=pending[i];t.repDo=1;
   if(!t.c&&t.rep&&t.rep.c&&groupOf(t.rep.c).k===t.t)t.c=t.rep.c;
@@ -798,7 +841,9 @@ function bindFixed(id,mp){
 function commit(){
   /* thu nợ dư mà Vy chọn "nhờ rút tiền mặt" / "thu khác" → ghi thành 2 dòng (Vy 09/11/2026) */
   if(pending.some(needHoan)||pending.some(needUng))return;
+  if(!pending.some(t=>t.keep)&&!splSeGhi().length)return;
   const goc=new Map();   /* dòng cùng lần nhập → id sẽ ghi, để khoản hoàn gắn được vào khoản chưa vào sổ */
+  const splTra={};       /* tháng hóa đơn SPayLater → {d,id} khoản trả nó trong lần lưu này */
   const add=pending.filter(t=>t.keep).flatMap(t=>{const du=duCho(t);
     return (du>0&&(t.duC==='doi'||t.duC==='khac')?tachDu(t,du,t.duC):[t]).map(x=>[t,x]);}).map(([t0,t])=>{
     const o={id:Date.now()+Math.random(),d:t.d,a:t.a,t:t.t,n:t.n,s:t.s||'bidv'};
@@ -809,7 +854,16 @@ function commit(){
     if(t.tm)o.tm=t.tm; if(t.b)o.b=t.b; if(t.p)o.p=t.p;
     if(t.han)o._han=t.han; if(t.ng)o._ng=t.ng; if(t.doi)o.doi=1;
     if(t.w)o.w=t.w; if(t.q)o.q=1; if(t.sg)o.sg=t.sg; if(t.n0&&t.n0!==t.n)o.n0=t.n0; if(t.ai&&o.c==='gd_sn')o.ai=t.ai;
-    return o;});
+    /* khoản thanh toán SPayLater: tách luôn theo món của hóa đơn, như splTach (Vy 28/11/2026) */
+    const hd=t===t0&&t.t==='chi'?splCuaP(t):null;
+    if(hd){
+      const sg=maSg('s');
+      const parts=hd.mon.map(m=>{const x=Object.assign(splitDong(o,{code:m.c||'',a:m.a},sg),{id:Date.now()+Math.random(),n:m.n,spl:hd.k});
+        if(!m.c)delete x.c; if(m.gop)x.gop=m.gop; return x;});
+      goc.set(t0,parts[0].id); splTra[hd.k]={d:o.d,id:String(parts[0].id)};
+      return parts;
+    }
+    return [o];}).flat();
   add.forEach(o=>{ if(!o._hp)return;
     o.hoan=o._hp[0]==='p'?goc.get(pending[+o._hp.slice(1)]):o._hp; delete o._hp; if(!o.hoan)delete o.hoan; });
   add.forEach(o=>{ if(!o._up)return;
@@ -819,10 +873,18 @@ function commit(){
     if(drop.size)DB.txns=DB.txns.filter(x=>!drop.has(String(x.id)));
     DB.txns=DB.txns.concat(add);
     add.forEach(t=>{noTuGD(t,t._han,t._ng); ganNg(t,t._ng);}); add.forEach(t=>{delete t._han; delete t._ng;});
+    /* hóa đơn SPayLater dán cùng lần: giờ mới vào sổ; hóa đơn có khoản trả trong lần này thì ghi đã trả */
+    const hdMoi=splSeGhi();
+    DB.spl=splDS().filter(x=>!hdMoi.some(y=>y.k===x.k))
+      .concat(hdMoi.map(x=>({k:x.k,han:x.han,tong:x.tong,mon:x.mon,tra:null})))
+      .map(x=>splTra[x.k]&&!x.tra?Object.assign({},x,{tra:splTra[x.k]}):x);
     save();
-    const nDrop=drop.size;
-    pending=null; msg=''; cursor=new Date(); go('home'); autoBackup();
-    if(nDrop)flash('Đã thay '+nDrop+' khoản cũ bằng khoản mới.','ok');
+    const nDrop=drop.size, nTach=Object.keys(splTra).length;
+    pending=null; splCho=[]; msg=''; cursor=new Date(); go('home'); autoBackup();
+    const bao=[nDrop?'Đã thay '+nDrop+' khoản cũ bằng khoản mới.':'',
+      hdMoi.length?'Đã ghi '+hdMoi.map(x=>splTen(x.k)).join(', ')+' vào tab Nợ.':'',
+      nTach?'Đã tách '+nTach+' khoản thanh toán SPayLater theo món.':''].filter(Boolean).join(' ');
+    if(bao)flash(bao,'ok');
   });
 }
 
@@ -3747,10 +3809,21 @@ function vImport(){
           ask=pending.filter(needRep).length, hoiDu=pending.filter(needDu).length, hoiHoan=pending.filter(needHoan).length, hoiUng=pending.filter(needUng).length;
     const tatCa=pending.length&&on.length===pending.length;
     let h=`<h2>Kiểm tra trước khi lưu</h2>`;
-    if(splBao)h+=`<div class="ok">${esc(splBao)}</div><div class="sp"></div>`;
     h+=khoiBoQua();
+    /* hóa đơn SPayLater dán cùng lần: chờ bấm Lưu mới vào tab Nợ */
+    if(splCho.length){const seGhi=splSeGhi();
+      h+=`<div class="panel"><div class="daygroup dg-neu">HÓA ĐƠN SPAYLATER · GHI VÀO TAB NỢ KHI LƯU</div>
+        ${splCho.map(hd=>{const t=pending.find(x=>x.splK===hd.k), ghi=seGhi.includes(hd);
+          const m=!ghi?'chưa có hạn trả — chỉ ghi khi giữ khoản thanh toán của nó'
+            :t&&t.keep?'trả bằng khoản '+ddmm(t.d)+(t.tm?' '+t.tm:'')+' · tách thành '+hd.mon.length+' món khi lưu'
+            :'hạn trả '+ddmm(hd.han)+(hd.cu?' · thay hóa đơn cũ cùng tháng':'');
+          return `<div class="src" style="padding:10px 14px${ghi?'':';opacity:.55'}">
+            <div><div class="src-n" style="font-size:13.5px">${splTen(hd.k)} · ${hd.mon.length} món</div>
+              <div class="src-m">${esc(m)}</div></div>
+            <div class="src-a" style="font-size:15px;font-weight:700;color:var(--brick)">${money(hd.tong)}</div></div>`;}).join('')}
+        </div><div class="sp"></div>`;}
     if(boQua.length)h+=`<div class="sp"></div>`;
-    h+=`<div class="stack-note" style="margin-bottom:8px">
+    if(pending.length)h+=`<div class="stack-note" style="margin-bottom:8px">
         <span>${on.length}/${pending.length} giao dịch đang được chọn</span>
         <span><button class="chk-btn" style="padding:0" onclick="togAll(${tatCa?0:1})">${
           tatCa?'bỏ chọn tất cả':'chọn tất cả'}</button></span></div>
@@ -3771,6 +3844,9 @@ function vImport(){
                <button class="chk-btn" onclick="boDoiP(${i})">không phải đổi tiền mặt</button>`
           : t.t==='mv'
             ? `<div class="tag">${esc(srcOf(t.s).n)} → ${esc(srcOf(t.s2).n)} · tiền vẫn của Vy, chưa tính là chi</div>`
+          : splCuaP(t)
+            ? `<div class="spl-tag">SPayLater · trả ${esc(splTen(t.splK))} · tách ${splCuaP(t).mon.length} món theo hóa đơn khi lưu</div>
+               <button class="chk-btn" style="margin-left:8px" onclick="splBoP(${i})">không phải trả SPayLater</button>`
             : `${t.q?`<div class="hint">Quét QR nên không có tên nơi bán — Vy điền giúp.</div>`:''}
                <input class="rename" value="${esc(t.n)}" placeholder="${t.q?'Mua gì, ở đâu?':'Nội dung'}" onchange="setName(${i},this.value)">
                ${catBtn(t.c,t.t,'pending',i)}
@@ -3801,7 +3877,7 @@ function vImport(){
       {const du=t.keep?duCho(t):0;
         if(du)h+=`<div class="du-ngoai">${khoiDu(nguoiNo().find(q=>q.khoa===t.ng).ten,t.a-du,du,t.duC,'duChonP('+i+',','')}</div>`;}
     });
-    h+=`</div><div class="sp"></div>`;
+    if(pending.length)h+=`</div><div class="sp"></div>`;
     /* Tổng của những dòng ĐANG ĐƯỢC CHỌN, để đối chiếu với app ngân hàng trước khi lưu.
        Chuyển tiền tách riêng vì nó không phải chi cũng không phải thu. */
     {
@@ -3827,8 +3903,9 @@ function vImport(){
     if(hoiDu)h+=`<div class="err">Còn ${hoiDu} khoản thu nợ nhiều hơn số còn nợ — chọn phần dư là gì.</div><div class="sp"></div>`;
     if(hoiHoan)h+=`<div class="err">Còn ${hoiHoan} khoản hoàn tiền chưa chọn hoàn cho khoản chi nào.</div><div class="sp"></div>`;
     if(hoiUng)h+=`<div class="err">Còn ${hoiUng} khoản nhận lại tiền ứng chưa gắn khoản ứng (hoặc nhiều hơn số còn chờ).</div><div class="sp"></div>`;
-    h+=`<button class="btn" ${on.length&&!miss&&!ask&&!hoiDu&&!hoiHoan&&!hoiUng?'':'disabled'} onclick="commit()">Lưu ${on.length} giao dịch</button>
-      <div class="sp"></div><button class="btn ghost" onclick="pending=null;render()">Quay lại</button>`;
+    const nHD=splSeGhi().length;
+    h+=`<button class="btn" ${(on.length||nHD)&&!miss&&!ask&&!hoiDu&&!hoiHoan&&!hoiUng?'':'disabled'} onclick="commit()">Lưu ${[on.length||!nHD?on.length+' giao dịch':'',nHD?nHD+' hóa đơn SPayLater':''].filter(Boolean).join(' · ')}</button>
+      <div class="sp"></div><button class="btn ghost" onclick="pending=null;splCho=[];render()">Quay lại</button>`;
     return h;
   }
   let h=`<h2>Dán kết quả đọc chi tiêu từ A.I</h2>
@@ -5087,13 +5164,14 @@ function ungNhac(){
    Trả xong thì hóa đơn sang Lịch sử. Không có hóa đơn ước tính. Trường tùy chọn: sổ cũ không có = []. */
 const splDS=()=>DB.spl||[];
 const splTen=k=>'HĐ tháng '+(+k.slice(5))+(k.slice(0,4)!==String(new Date().getFullYear())?'/'+k.slice(0,4):'');
-function splDoc(txt){
+/* hanTrong: cho để trống hạn trả (hóa đơn đã trả, dán cùng khoản thanh toán ở tab Nhập) */
+function splDoc(txt,hanTrong){
   const out={k:'',han:'',tong:0,mon:[],loi:[]};
   String(txt||'').split(/\r?\n/).map(l=>l.trim()).filter(Boolean).forEach(l=>{
     const p=l.split('|').map(s=>s.trim()), ma=(p[0]||'').toLowerCase();
     if(ma==='splhd'){
       if(!/^\d{4}-\d{2}$/.test(p[1]||''))out.loi.push('Tháng hóa đơn phải dạng 2026-11: '+l);
-      if(!/^\d{4}-\d{2}-\d{2}$/.test(p[2]||''))out.loi.push('Hạn trả phải dạng 2026-12-10: '+l);
+      if(!(hanTrong&&!p[2])&&!/^\d{4}-\d{2}-\d{2}$/.test(p[2]||''))out.loi.push('Hạn trả phải dạng 2026-12-10: '+l);
       out.k=p[1]||''; out.han=p[2]||''; out.tong=+String(p[3]||'').replace(/[^0-9]/g,'')||0;
     }else if(ma==='spl'){
       /* mã nhóm luôn chữ thường; A.I hay đọc "ld" thành "Id" (I hoa) — sửa lại cho khớp */
@@ -5122,7 +5200,9 @@ function splLuuHD(){
 /* nợ SPayLater còn phải trả trong tháng d (vào debtDue → thanhKhoan) */
 const splChuaTra=()=>splDS().filter(x=>!x.tra).sort((a,b)=>a.han.localeCompare(b.han));
 /* tab Giao dịch: dòng chi BIDV / Ví chưa tách, không dính nợ */
-const coSpl=t=>t.t==='chi'&&t.s!=='tm'&&!t.sg&&!t.spl&&!['muon','trano','tk'].includes(groupOf(t.c).id);
+/* A.I hay gán "Trả nợ" cho dòng "Thanh toán SPayLater": vẫn cho tách nếu dòng đó chưa gắn khoản nợ nào (Vy 28/11/2026) */
+const coSpl=t=>t.t==='chi'&&t.s!=='tm'&&!t.sg&&!t.spl&&(!['muon','trano','tk'].includes(groupOf(t.c).id)
+  ||(groupOf(t.c).id==='trano'&&!t.debt&&/spaylater/.test(noAccent(t.n0||t.n||''))));
 let splMo=null;   /* id dòng đang mở hộp SPayLater */
 function splMoL(id){splMo=splMo===id?null:id; splNhap=''; splLoi=''; render();}
 function splTach(id,k){

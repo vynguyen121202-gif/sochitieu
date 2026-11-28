@@ -15,6 +15,7 @@ node kiemtra/chay-tat-ca.js
 | `kt-nhap-tong.js` | Tab Nhập: dòng tổng, chọn / bỏ chọn tất cả |
 | `kt-nhap-loi.js` | Tab Nhập: báo dòng dán hỏng, câu lệnh AI ở Cài đặt |
 | `kt-nhac-ghi-so.js` | Khối nhắc khi sổ lâu chưa cập nhật |
+| `kt-spl-nhap.js` | Tab Nhập: hóa đơn SPayLater chờ bấm Lưu, tự tách khoản thanh toán theo món, bắt trùng theo số dư |
 
 Mỗi bài dựng `Date` giả nên kết quả không đổi theo ngày chạy.
 `so-mau.js` sinh sổ mẫu bằng hạt giống cố định — chạy bao nhiêu lần cũng ra

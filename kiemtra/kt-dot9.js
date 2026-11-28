@@ -171,16 +171,20 @@ spl | Nước tẩy trang Cocoon | 89790 | ld | 2/3
 Sửa 3 dòng cũ (đây là chữ A.I tự thêm)`;
 F.doPaste(); el0.value=''; db=ctx.__db();
 ok(!ctx.__bq().some(b=>/spl/.test(b.goc)),'KHÔNG còn báo "không đọc được ngày từ spl"');
-eq(ctx.__bq().length,1,'chỉ dòng chữ A.I tự thêm bị bỏ qua');
-eq((db.spl||[]).find(x=>x.k==='2026-12').mon.length,9,'hóa đơn tháng 12 (9 món, 995.516) vào khối SPayLater');
+eq(ctx.__bq().length,0,'câu chữ A.I tự thêm (không mở đầu bằng ngày) bỏ qua lặng lẽ (đổi 28/11)');
+ok(!(db.spl||[]).length,'hóa đơn CHƯA vào sổ khi mới dán — chờ bấm Lưu (đổi 28/11)');
 eq((ctx.__pd()||[]).length,1,'giao dịch Trà sữa vẫn vào bước kiểm tra');
-ok(F.vImport().includes('Đã ghi hóa đơn SPayLater vào tab Nợ: HĐ tháng 12'),'màn kiểm tra báo đã ghi hóa đơn');
+ok(F.vImport().includes('HÓA ĐƠN SPAYLATER · GHI VÀO TAB NỢ KHI LƯU')&&F.vImport().includes('Lưu 1 giao dịch · 1 hóa đơn SPayLater'),'màn kiểm tra liệt kê hóa đơn, nút "Lưu 1 giao dịch · 1 hóa đơn SPayLater"');
+F.commit(); db=ctx.__db();
+eq((db.spl||[]).find(x=>x.k==='2026-12').mon.length,9,'bấm Lưu → hóa đơn tháng 12 (9 món, 995.516) vào khối SPayLater');
 db=so(); db.txns=db.txns.slice(0,1); ctx.__set(db,T11);
 el0.value='splhd | 2026-12 | 2027-01-11 | 995516\nspl | Worry Thỏ | 111354 | gt'; F.doPaste(); el0.value=''; db=ctx.__db();
 ok(!(db.spl||[]).length&&ctx.__bq().some(b=>b.ly.includes('khác tổng hóa đơn')),'hóa đơn thiếu món (tổng lệch) → KHÔNG ghi, báo lý do');
 db=so(); db.txns=db.txns.slice(0,1); ctx.__set(db,T11);
 el0.value=HD11; F.doPaste(); el0.value=''; db=ctx.__db();
-ok((db.spl||[]).length===1&&!ctx.__pd()&&ctx.__msg().includes('HĐ tháng 11 · 11 món · 1.311.850'),'chỉ dán hóa đơn → ghi luôn, báo "HĐ tháng 11 · 11 món · 1.311.850"');
+ok(!(db.spl||[]).length&&ctx.__pd()&&F.vImport().includes('Lưu 1 hóa đơn SPayLater'),'chỉ dán hóa đơn → vẫn qua màn kiểm tra, nút "Lưu 1 hóa đơn SPayLater"');
+F.commit(); db=ctx.__db();
+ok((db.spl||[]).length===1&&ctx.__msg().includes('Đã ghi HĐ tháng 11 vào tab Nợ'),'bấm Lưu → ghi, báo "Đã ghi HĐ tháng 11 vào tab Nợ"');
 ok(F.splDoc('splhd | 2026-12 | 2027-01-11 | 72757\nspl | Son kem Dinto | 72757 | Id | 2/3').mon[0].c==='ld','mã "Id" (I hoa) được hiểu là ld (Làm đẹp)');
 
 console.log('\nG · Câu lệnh A.I');

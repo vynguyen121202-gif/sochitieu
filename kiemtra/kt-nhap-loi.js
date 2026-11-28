@@ -26,11 +26,12 @@ const dan=`ngày | nguồn | loại | số tiền | nội dung | nhóm | số d�
 --- | --- | --- | --- | --- | --- | --- | ---
 2026-09-20 10:07 | bidv | chi | 120000 | Com trua | an_ngoai |  | 
 2026-09-20 11:00 | vi | chi | 80k | Xang | di_xang |  | 
-dong nay khong co dau gach dung nao ca
+2026-09-20 10:30 bidv chi 45000 dong nay khong co dau gach dung nao ca
 2026-09-20 | bidv | chi | mot tram nghin | Sai tien | an_ngoai |  | 
 khong-phai-ngay | bidv | chi | 50000 | Sai ngay | an_ngoai |  | 
 2026-09-19 | bidv | thu
-2026-09-19 | bidv | thu | 9000000 | Luong | luong |  | `;
+2026-09-19 | bidv | thu | 9000000 | Luong | luong |  | 
+Sua 3 dong cu (cau A.I tu viet them):`;
 
 console.log('\nA · Doc duoc bao nhieu, bo bao nhieu');
 const rows=ctx.__parse(dan);
@@ -42,6 +43,7 @@ bo.forEach(x=>console.log('      dong '+x.so+': '+x.ly));
 console.log('\nB · Dong tieu de va dong ke ngang KHONG bi bao nham');
 ok(!bo.some(x=>x.so===1),'dong tieu de bang bo lang le');
 ok(!bo.some(x=>x.so===2),'dong ke ngang bo lang le');
+ok(!bo.some(x=>x.so===10),'cau A.I tu viet (khong mo dau bang ngay) bo lang le (28/11/2026)');
 
 console.log('\nC · Dung ly do cho dung dong');
 const ly=s=>(bo.find(x=>x.so===s)||{}).ly||'(khong bao)';
